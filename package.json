@@ -2,6 +2,7 @@
   "name": "certtrack",
   "version": "1.0.0",
   "private": true,
+  "homepage": "https://YOUR_USERNAME.github.io/certtrack",
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
