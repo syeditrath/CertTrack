@@ -140,7 +140,7 @@ export default function App() {
             <button onClick={()=>setSideOpen(true)} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text,letterSpacing:"3px"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:T.textMuted,letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
+              <div style={{fontSize:11,color:T.textMuted,letterSpacing:"1.5px",marginTop:1}}>SCORION OPS HUB</div>
             </div>
             {allExpiries.length>0 && (
               <div style={{marginLeft:"auto",zIndex:1}}>
@@ -187,7 +187,7 @@ function Sidebar({page,go,sideOpen,alerts,data}) {
           <img src="logo.png" alt="Scorpion Arabia" style={{width:56,height:56,borderRadius:10,objectFit:"cover",background:"#000",flexShrink:0}}/>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,letterSpacing:".5px",lineHeight:1.1}}>SCORPION ARABIA</div>
-            <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"1.4px",marginTop:3}}>ASSET MANAGER</div>
+            <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"1.4px",marginTop:3}}>SCORPION OPS HUB</div>
           </div>
         </div>
       </div>
