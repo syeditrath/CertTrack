@@ -82,21 +82,22 @@ const MP_CERT_MAP = {
   "REMARKS":"remarks","NOTES":"remarks",
 };
 // Manpower file has headers on row 4 — handled by skipToHeaderRow below
-const MP_HEADER_ROW = 4;
+const MP_HEADER_ROW = 1;
 
 // Equipment certifications Excel map
 // Expected columns: EQUIPMENT, SERIAL NO, CERT NO, ISSUED BY, INSPECTION DATE, EXPIRY DATE
 const EQ_CERT_MAP = {
-  // Exact headers from Equipment_TUV_Tracker.xlsx Sheet3 (headers on row 1)
-  "ITEM TYPE":"itemType","ITEM NAME/ID":"eqName","EQUIPMENT NAME":"eqName","EQUIPMENT":"eqName","UNIT":"eqName",
-  "REG/SERIAL NO":"serialNo","SERIAL NO":"serialNo","SERIAL NUMBER":"serialNo","SERIAL NO.":"serialNo","S/N":"serialNo","REG NO":"serialNo",
-  "TUV PROVIDER":"issuedBy","ISSUED BY":"issuedBy","ISSUING AUTHORITY":"issuedBy","PROVIDER":"issuedBy",
-  "START DATE":"issueDate","ISSUE DATE":"issueDate","ISSUED DATE":"issueDate","INSPECTION DATE":"issueDate",
+  // TUV MASTERSHEET headers: Item Type, EQUIPMENT, Serial No, Issued By, Inspection Date, Expiry Date
+  // Sheet3 headers:          Item Type, Item Name/ID, Reg/Serial No, TUV Provider, Start Date, Expiry Date
+  "ITEM TYPE":"itemType",
+  "EQUIPMENT ":"eqName","EQUIPMENT":"eqName","ITEM NAME/ID":"eqName","EQUIPMENT NAME":"eqName","UNIT":"eqName",
+  "SERIAL NO":"serialNo","SERIAL NO.":"serialNo","REG/SERIAL NO":"serialNo","SERIAL NUMBER":"serialNo","S/N":"serialNo",
+  "ISSUED BY":"issuedBy","TUV PROVIDER":"issuedBy","PROVIDER":"issuedBy","ISSUING AUTHORITY":"issuedBy",
+  "INSPECTION DATE":"issueDate","START DATE":"issueDate","ISSUE DATE":"issueDate","ISSUED DATE":"issueDate",
   "EXPIRY DATE":"expiryDate","EXPIRY":"expiryDate","EXPIRE DATE":"expiryDate","EXPIRATION DATE":"expiryDate",
   "CERT NO":"certNo","CERTIFICATE NO":"certNo","CERT NO.":"certNo","CERTIFICATE NUMBER":"certNo",
   "REMARKS":"remarks","NOTES":"remarks",
 };
-// Equipment file has headers on row 1 — standard
 const EQ_HEADER_ROW = 1;
 
 function excelDateToStr(val) {
@@ -121,7 +122,8 @@ function parseExcelRows(rows, map) {
       const upper={};
       Object.entries(row).forEach(([k,v])=>{ upper[String(k).toUpperCase().trim()]=v; });
       Object.entries(map).forEach(([col,key])=>{
-        const val=upper[col];
+        // Strip map key too (handles "EQUIPMENT " trailing space etc.)
+        const val=upper[col.toUpperCase().trim()];
         if(val===undefined||val===null||val==="") return;
         const strVal=String(val);
         // Skip Excel formula cells
@@ -130,8 +132,8 @@ function parseExcelRows(rows, map) {
       });
       return rec;
     })
-    // Filter out rows where none of the mapped keys got a value
-    .filter(rec=>Object.keys(rec).length>1);
+    // Filter out rows where only id was set (no real data mapped)
+    .filter(rec=>Object.keys(rec).filter(k=>k!=="id").length>0);
 }
 
 // Parse Excel with a specific header row (1-based)
@@ -1056,7 +1058,7 @@ function EquipmentPage({data,setData,showToast}) {
     reader.onload = e => {
       try {
         const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
-        const sheetName=wb.SheetNames.includes("Sheet3")?"Sheet3":wb.SheetNames[0];
+        const sheetName=wb.SheetNames.includes("TUV MASTERSHEET")?"TUV MASTERSHEET":wb.SheetNames.includes("Sheet3")?"Sheet3":wb.SheetNames[0];
         const ws=wb.Sheets[sheetName];
         const rawRows=XLSX.utils.sheet_to_json(ws,{defval:""});
         // Normalize keys to uppercase for case-insensitive matching
@@ -1202,12 +1204,12 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
       try{
         // Headers on row 1 in Equipment_TUV_Tracker.xlsx (Sheet3)
         const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
-        const sheetName=wb.SheetNames.includes("Sheet3")?"Sheet3":wb.SheetNames[0];
+        const sheetName=wb.SheetNames.includes("TUV MASTERSHEET")?"TUV MASTERSHEET":wb.SheetNames.includes("Sheet3")?"Sheet3":wb.SheetNames[0];
         const ws=wb.Sheets[sheetName];
         const rawRows=XLSX.utils.sheet_to_json(ws,{defval:""});
         const rows=rawRows.map(row=>{const n={};Object.entries(row).forEach(([k,v])=>{n[k.toUpperCase().trim()]=v;});return n;});
         const parsed=parseExcelRows(rows,EQ_CERT_MAP);
-        if(!parsed.length){showToast("No valid rows found in file","del");return;}
+        if(!parsed.length){showToast(`No valid rows found in sheet: ${sheetName}`,"del");return;}
         const certs=parsed.map(r=>({
           id:uid(),
           equipmentName:r.eqName||eq.name||"",
