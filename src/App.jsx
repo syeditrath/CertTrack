@@ -101,40 +101,51 @@ const EQ_HEADER_ROW = 1;
 
 function excelDateToStr(val) {
   if (!val) return "";
+  // JS Date object (from cellDates:true)
+  if (val instanceof Date) { if(!isNaN(val)) return val.toISOString().slice(0,10); }
   if (typeof val==="number") { const d=new Date(Math.round((val-25569)*86400*1000)); return d.toISOString().slice(0,10); }
-  if (typeof val==="string") { const d=new Date(val); if(!isNaN(d)) return d.toISOString().slice(0,10); }
-  return String(val);
+  if (typeof val==="string") {
+    if(val.startsWith("=")) return ""; // skip formulas
+    const d=new Date(val); if(!isNaN(d)) return d.toISOString().slice(0,10);
+  }
+  return "";
 }
 
-function parseExcelRows(rows, map, headerRow) {
-  // headerRow: if >1, skip rows until we find the actual header row
+function parseExcelRows(rows, map) {
   const DATE_KEYS=["expiryDate","issueDate","inspectionDate","startDate"];
-  let dataRows = rows;
-  if (headerRow && headerRow > 1) {
-    // rows from sheet_to_json uses first row as header by default.
-    // For offset headers we re-parse using raw array mode — handled in callers.
-    // Here rows already have correct keys if caller used header:headerRow-1
-  }
-  return dataRows
+  return rows
     .filter(row=>Object.values(row).some(v=>v!==null&&v!==""))
     .map(row=>{
-      const rec={id:uid()}, upper={};
+      const rec={id:uid()};
+      // Uppercase all keys for case-insensitive matching
+      const upper={};
       Object.entries(row).forEach(([k,v])=>{ upper[String(k).toUpperCase().trim()]=v; });
       Object.entries(map).forEach(([col,key])=>{
         const val=upper[col];
-        if(val!==undefined&&val!==null&&val!=="")
-          rec[key]=DATE_KEYS.includes(key)?excelDateToStr(val):String(val).trim();
+        if(val===undefined||val===null||val==="") return;
+        const strVal=String(val);
+        // Skip Excel formula cells
+        if(strVal.startsWith("=")) return;
+        rec[key]=DATE_KEYS.includes(key)?excelDateToStr(val):strVal.trim();
       });
       return rec;
-    });
+    })
+    // Filter out rows where none of the mapped keys got a value
+    .filter(rec=>Object.keys(rec).length>1);
 }
 
 // Parse Excel with a specific header row (1-based)
 function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
   const wb = XLSX.read(arrayBuffer, {type:"array", cellDates:true});
   const ws = wb.Sheets[wb.SheetNames[0]];
-  // Use header row offset: range starts from headerRow
-  const rows = XLSX.utils.sheet_to_json(ws, {defval:"", range: headerRow - 1});
+  // range: headerRow-1 makes XLSX use that row as the header
+  const rawRows = XLSX.utils.sheet_to_json(ws, {defval:"", range: headerRow - 1});
+  // Normalize: uppercase all keys so map lookup always works
+  const rows = rawRows.map(row => {
+    const norm = {};
+    Object.entries(row).forEach(([k,v]) => { norm[k.toUpperCase().trim()] = v; });
+    return norm;
+  });
   return parseExcelRows(rows, map);
 }
 
@@ -1047,7 +1058,9 @@ function EquipmentPage({data,setData,showToast}) {
         const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
         const sheetName=wb.SheetNames.includes("Sheet3")?"Sheet3":wb.SheetNames[0];
         const ws=wb.Sheets[sheetName];
-        const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        const rawRows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        // Normalize keys to uppercase for case-insensitive matching
+        const rows=rawRows.map(row=>{const n={};Object.entries(row).forEach(([k,v])=>{n[k.toUpperCase().trim()]=v;});return n;});
         const parsed=parseExcelRows(rows,EQ_CERT_MAP);
         if(!parsed.length){showToast("No valid rows found","del");return;}
 
@@ -1189,10 +1202,10 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
       try{
         // Headers on row 1 in Equipment_TUV_Tracker.xlsx (Sheet3)
         const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
-        // Try Sheet3 first (the data sheet), fall back to first sheet
-        const sheetName = wb.SheetNames.includes("Sheet3") ? "Sheet3" : wb.SheetNames[0];
+        const sheetName=wb.SheetNames.includes("Sheet3")?"Sheet3":wb.SheetNames[0];
         const ws=wb.Sheets[sheetName];
-        const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        const rawRows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        const rows=rawRows.map(row=>{const n={};Object.entries(row).forEach(([k,v])=>{n[k.toUpperCase().trim()]=v;});return n;});
         const parsed=parseExcelRows(rows,EQ_CERT_MAP);
         if(!parsed.length){showToast("No valid rows found in file","del");return;}
         const certs=parsed.map(r=>({
