@@ -68,28 +68,36 @@ const DEFAULT_MANPOWER_CATS = [
 
 /* ─── Excel column maps ──────────────────────────────────────────────────── */
 // Manpower certifications Excel map
-// Expected columns: NAME, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
+// Expected columns: NAME, EMPLOYEE ID, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
 // (flexible - tries multiple common header names)
 const MP_CERT_MAP = {
+  // Exact headers from TUV_Manpower_Tracker.xlsx (headers on row 4)
   "NAME":"name","EMPLOYEE NAME":"name","EMPLOYEE":"name",
+  "ID":"idNo","EMPLOYEE ID":"idNo","EMPLOYEE NO":"idNo","EMP ID":"idNo","EMP NO":"idNo","ID NO":"idNo","ID NUMBER":"idNo","STAFF ID":"idNo",
   "CERTIFICATE":"certName","CERTIFICATE TYPE":"certName","CERT TYPE":"certName","CERTIFICATION":"certName",
+  "ISSUED BY":"issuedBy","ISSUING BODY":"issuedBy","ISSUING AUTHORITY":"issuedBy",
   "CERT NO":"certNo","CERTIFICATE NO":"certNo","CERT NO.":"certNo","CERTIFICATE NO.":"certNo","CERTIFICATE NUMBER":"certNo",
-  "ISSUE DATE":"issueDate","ISSUED DATE":"issueDate","DATE ISSUED":"issueDate",
+  "ISSUE DATE":"issueDate","ISSUED DATE":"issueDate","DATE ISSUED":"issueDate","START DATE":"issueDate",
   "EXPIRY DATE":"expiryDate","EXPIRY":"expiryDate","EXPIRE DATE":"expiryDate","EXPIRATION DATE":"expiryDate",
   "REMARKS":"remarks","NOTES":"remarks",
 };
+// Manpower file has headers on row 4 — handled by skipToHeaderRow below
+const MP_HEADER_ROW = 4;
 
 // Equipment certifications Excel map
 // Expected columns: EQUIPMENT, SERIAL NO, CERT NO, ISSUED BY, INSPECTION DATE, EXPIRY DATE
 const EQ_CERT_MAP = {
-  "EQUIPMENT":"eqName","EQUIPMENT NAME":"eqName","UNIT":"eqName",
-  "SERIAL NO":"serialNo","SERIAL NUMBER":"serialNo","SERIAL NO.":"serialNo","S/N":"serialNo",
-  "CERT NO":"certNo","CERTIFICATE NO":"certNo","CERT NO.":"certNo","CERTIFICATE NUMBER":"certNo",
-  "ISSUED BY":"issuedBy","ISSUING AUTHORITY":"issuedBy",
-  "INSPECTION DATE":"inspectionDate","INSP DATE":"inspectionDate","INSP. DATE":"inspectionDate",
+  // Exact headers from Equipment_TUV_Tracker.xlsx Sheet3 (headers on row 1)
+  "ITEM TYPE":"itemType","ITEM NAME/ID":"eqName","EQUIPMENT NAME":"eqName","EQUIPMENT":"eqName","UNIT":"eqName",
+  "REG/SERIAL NO":"serialNo","SERIAL NO":"serialNo","SERIAL NUMBER":"serialNo","SERIAL NO.":"serialNo","S/N":"serialNo","REG NO":"serialNo",
+  "TUV PROVIDER":"issuedBy","ISSUED BY":"issuedBy","ISSUING AUTHORITY":"issuedBy","PROVIDER":"issuedBy",
+  "START DATE":"issueDate","ISSUE DATE":"issueDate","ISSUED DATE":"issueDate","INSPECTION DATE":"issueDate",
   "EXPIRY DATE":"expiryDate","EXPIRY":"expiryDate","EXPIRE DATE":"expiryDate","EXPIRATION DATE":"expiryDate",
+  "CERT NO":"certNo","CERTIFICATE NO":"certNo","CERT NO.":"certNo","CERTIFICATE NUMBER":"certNo",
   "REMARKS":"remarks","NOTES":"remarks",
 };
+// Equipment file has headers on row 1 — standard
+const EQ_HEADER_ROW = 1;
 
 function excelDateToStr(val) {
   if (!val) return "";
@@ -98,13 +106,20 @@ function excelDateToStr(val) {
   return String(val);
 }
 
-function parseExcelRows(rows, map) {
-  const DATE_KEYS=["expiryDate","issueDate","inspectionDate"];
-  return rows
+function parseExcelRows(rows, map, headerRow) {
+  // headerRow: if >1, skip rows until we find the actual header row
+  const DATE_KEYS=["expiryDate","issueDate","inspectionDate","startDate"];
+  let dataRows = rows;
+  if (headerRow && headerRow > 1) {
+    // rows from sheet_to_json uses first row as header by default.
+    // For offset headers we re-parse using raw array mode — handled in callers.
+    // Here rows already have correct keys if caller used header:headerRow-1
+  }
+  return dataRows
     .filter(row=>Object.values(row).some(v=>v!==null&&v!==""))
     .map(row=>{
       const rec={id:uid()}, upper={};
-      Object.entries(row).forEach(([k,v])=>{ upper[k.toUpperCase().trim()]=v; });
+      Object.entries(row).forEach(([k,v])=>{ upper[String(k).toUpperCase().trim()]=v; });
       Object.entries(map).forEach(([col,key])=>{
         const val=upper[col];
         if(val!==undefined&&val!==null&&val!=="")
@@ -112,6 +127,15 @@ function parseExcelRows(rows, map) {
       });
       return rec;
     });
+}
+
+// Parse Excel with a specific header row (1-based)
+function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
+  const wb = XLSX.read(arrayBuffer, {type:"array", cellDates:true});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  // Use header row offset: range starts from headerRow
+  const rows = XLSX.utils.sheet_to_json(ws, {defval:"", range: headerRow - 1});
+  return parseExcelRows(rows, map);
 }
 
 const EMPTY_DATA = {
@@ -645,16 +669,14 @@ function ManpowerPage({data,setData,showToast}) {
   };
 
   // Import manpower certifications from Excel
-  // Each row: NAME, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
+  // Each row: NAME, EMPLOYEE ID, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
   // Finds matching person by name and appends certs; creates person if not found
   const importMpCerts = (file, defaultCat) => {
     const reader = new FileReader();
     reader.onload = e => {
       try {
-        const wb=XLSX.read(e.target.result,{type:"array"});
-        const ws=wb.Sheets[wb.SheetNames[0]];
-        const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
-        const parsed=parseExcelRows(rows, MP_CERT_MAP);
+        // Headers are on row 4 in TUV_Manpower_Tracker.xlsx
+        const parsed=parseExcelWithHeaderRow(e.target.result, MP_CERT_MAP, MP_HEADER_ROW);
         if(!parsed.length){showToast("No valid rows found","del");return;}
 
         setData(prev=>{
@@ -666,10 +688,11 @@ function ManpowerPage({data,setData,showToast}) {
             const cert={id:uid(),name:row.certName||"Certification",certNo:row.certNo||"",issueDate:row.issueDate||"",expiryDate:row.expiryDate||"",fileLink:""};
             const idx=manpower.findIndex(p=>p.name.toLowerCase()===personName.toLowerCase());
             if(idx>=0){
+              if(row.idNo&&!manpower[idx].idNo) manpower[idx]={...manpower[idx],idNo:row.idNo};
               manpower[idx]={...manpower[idx],certs:[...(manpower[idx].certs||[]),cert]};
               updated++;
             } else {
-              manpower.push({id:uid(),name:personName,category:defaultCat||"",certs:[cert],docs:[]});
+              manpower.push({id:uid(),name:personName,idNo:row.idNo||"",category:defaultCat||"",certs:[cert],docs:[]});
               added++;
             }
           });
@@ -699,7 +722,7 @@ function ManpowerPage({data,setData,showToast}) {
       <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
         <div>
           <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Manpower Certifications from Excel</div>
-          <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Required columns: <strong style={{color:T.textSub}}>NAME, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE</strong> — matches people by name, creates new if not found</div>
+          <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>NAME, ID, CERTIFICATE, ISSUED BY, ISSUE DATE, EXPIRY DATE</strong> (headers auto-detected from row 4) — matches people by name, creates new if not found</div>
         </div>
         <input ref={mpFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){setImpModal({file:e.target.files[0]});e.target.value="";}}}/>
         <button onClick={()=>mpFileRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
@@ -1014,7 +1037,47 @@ function EquipmentPage({data,setData,showToast}) {
     return <EquipmentDetail eq={fresh} projects={projects} onBack={()=>setSelEq(null)} onUpdate={updateEq} onDelete={()=>delEq(fresh.id)} onEdit={()=>setModal({mode:"edit",eq:fresh})} showToast={showToast}/>;
   }
 
+  const eqBulkRef = useRef();
   const STATUS_COLORS={"Active":T.green,"Under Maintenance":T.gold,"Inactive":T.red};
+
+  const importBulkEqCerts = file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
+        const sheetName=wb.SheetNames.includes("Sheet3")?"Sheet3":wb.SheetNames[0];
+        const ws=wb.Sheets[sheetName];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
+        const parsed=parseExcelRows(rows,EQ_CERT_MAP);
+        if(!parsed.length){showToast("No valid rows found","del");return;}
+
+        setData(prev=>{
+          const equipment=[...prev.equipment];
+          let matched=0, unmatched=0;
+          parsed.forEach(r=>{
+            const cert={id:uid(),equipmentName:r.eqName||"",itemType:r.itemType||"",certNo:r.certNo||"",issuedBy:r.issuedBy||"",issueDate:r.issueDate||"",expiryDate:r.expiryDate||"",serialNo:r.serialNo||"",fileLink:""};
+            // match by name or serial number
+            const idx=equipment.findIndex(eq=>{
+              const nameMatch=eq.name&&r.eqName&&(eq.name.toLowerCase().includes(r.eqName.toLowerCase())||r.eqName.toLowerCase().includes(eq.name.toLowerCase()));
+              const serialMatch=eq.serialNo&&r.serialNo&&eq.serialNo.toLowerCase()===r.serialNo.toLowerCase();
+              return nameMatch||serialMatch;
+            });
+            if(idx>=0){
+              equipment[idx]={...equipment[idx],certifications:[...(equipment[idx].certifications||[]),cert]};
+              matched++;
+            } else {
+              // Create new equipment entry for unmatched
+              equipment.push({id:uid(),name:r.eqName||"Unknown Equipment",model:"",serialNo:r.serialNo||"",project:"",status:"Active",operator:"",certifications:[cert],invoices:[],insurance:[],permits:[]});
+              unmatched++;
+            }
+          });
+          showToast(`✓ Imported ${parsed.length} certs — ${matched} matched, ${unmatched} new equipment created`);
+          return{...prev,equipment};
+        });
+      } catch(err){ showToast("Failed to read file","del"); console.error(err); }
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   return (
     <div style={{maxWidth:1100,margin:"0 auto"}}>
@@ -1027,8 +1090,19 @@ function EquipmentPage({data,setData,showToast}) {
           <option value="">All Statuses</option>
           <option>Active</option><option>Under Maintenance</option><option>Inactive</option>
         </select>
+        <input ref={eqBulkRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){importBulkEqCerts(e.target.files[0]);e.target.value="";}}}/>
+        <Btn color={T.gold} onClick={()=>eqBulkRef.current.click()}>⬆ Import Excel</Btn>
         <Btn color={T.gold} solid onClick={()=>setModal({mode:"add"})}>+ Add Equipment</Btn>
       </PageHeader>
+
+      {/* Excel import banner */}
+      <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Equipment Certifications from Excel</div>
+          <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>ITEM TYPE, ITEM NAME/ID, REG/SERIAL NO, TUV PROVIDER, START DATE, EXPIRY DATE</strong> — auto-detects Sheet3, matches equipment by name or serial no.</div>
+        </div>
+        <button onClick={()=>eqBulkRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
+      </div>
 
       {visible.length===0
         ?<Empty icon="◎" label="No equipment found" sub="Add your first asset" color={T.gold} onAdd={()=>setModal({mode:"add"})}/>
@@ -1113,23 +1187,28 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
     const reader=new FileReader();
     reader.onload=e=>{
       try{
-        const wb=XLSX.read(e.target.result,{type:"array"});
-        const ws=wb.Sheets[wb.SheetNames[0]];
+        // Headers on row 1 in Equipment_TUV_Tracker.xlsx (Sheet3)
+        const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
+        // Try Sheet3 first (the data sheet), fall back to first sheet
+        const sheetName = wb.SheetNames.includes("Sheet3") ? "Sheet3" : wb.SheetNames[0];
+        const ws=wb.Sheets[sheetName];
         const rows=XLSX.utils.sheet_to_json(ws,{defval:""});
         const parsed=parseExcelRows(rows,EQ_CERT_MAP);
-        if(!parsed.length){showToast("No valid rows found","del");return;}
+        if(!parsed.length){showToast("No valid rows found in file","del");return;}
         const certs=parsed.map(r=>({
           id:uid(),
+          equipmentName:r.eqName||eq.name||"",
+          itemType:r.itemType||"",
           certNo:r.certNo||"",
           issuedBy:r.issuedBy||"",
-          inspectionDate:r.inspectionDate||"",
-          issueDate:r.inspectionDate||"",
+          issueDate:r.issueDate||"",
           expiryDate:r.expiryDate||"",
+          serialNo:r.serialNo||eq.serialNo||"",
           fileLink:"",
         }));
         onUpdate({...eq,certifications:[...(eq.certifications||[]),...certs]});
-        showToast(`✓ Imported ${certs.length} certifications`);
-      }catch{showToast("Failed to read file","del");}
+        showToast(`✓ Imported ${certs.length} certifications from ${sheetName}`);
+      }catch(err){showToast("Failed to read file","del");console.error(err);}
     };
     reader.readAsArrayBuffer(file);
   };
@@ -1177,7 +1256,7 @@ function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}
         <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:12,padding:"12px 16px",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
           <div>
             <div style={{fontSize:13,fontWeight:600,color:T.blue}}>📂 Import Certifications from Excel</div>
-            <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>EQUIPMENT, SERIAL NO, CERT NO, ISSUED BY, INSPECTION DATE, EXPIRY DATE</strong></div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>ITEM TYPE, ITEM NAME/ID, REG/SERIAL NO, TUV PROVIDER, START DATE, EXPIRY DATE</strong> (Sheet3 auto-detected)</div>
           </div>
           <input ref={eqFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){importEqCerts(e.target.files[0]);e.target.value="";}}}/>
           <button onClick={()=>eqFileRef.current.click()} style={{background:T.blue,color:"#000",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
@@ -1211,6 +1290,8 @@ function SubRecordCard({r,type,color,delay,onEdit,onDel}) {
           {expDate&&<Tag color={s.color}>{s.label}</Tag>}
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {r.equipmentName&&r.equipmentName!==eq?.name&&<Chip>{r.equipmentName}</Chip>}
+          {r.itemType&&<Chip>{r.itemType}</Chip>}
           {r.issuedBy&&<Chip>{r.issuedBy}</Chip>}
           {r.supplier&&<Chip>{r.supplier}</Chip>}
           {r.insurer&&<Chip>{r.insurer}</Chip>}
