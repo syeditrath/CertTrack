@@ -8,7 +8,7 @@ const GLOBAL_CSS = `
   html, body, #root { height: 100%; }
   body { font-family: 'Barlow', sans-serif; background: #1e293b; color: #e8edf5; -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: #080b10; }
+  ::-webkit-scrollbar-track { background: #38BDF8; }
   ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
   input, select, textarea, button { font-family: 'Barlow', sans-serif; }
   button { cursor: pointer; }
@@ -24,7 +24,7 @@ const GLOBAL_CSS = `
 
 /* ─── Theme ──────────────────────────────────────────────────────────────── */
 const T = {
-  bg:"#080b10", sidebar:"#0e1117", card:"#0e1117", card2:"#111620", cardHover:"#131820",
+  bg:"#38BDF8", sidebar:"#0e1117", card:"#0e1117", card2:"#111620", cardHover:"#131820",
   border:"#1e293b", borderLight:"#253147",
   text:"#f1f5fb", textSub:"#8899b0", textMuted:"#3d5068",
   blue:"#38bdf8", green:"#34d399", gold:"#fbbf24", red:"#f87171",
