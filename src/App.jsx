@@ -6,7 +6,7 @@ const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body, #root { height: 100%; }
-  body { font-family: 'Barlow', sans-serif; background: #080b10; color: #e8edf5; -webkit-font-smoothing: antialiased; }
+  body { font-family: 'Barlow', sans-serif; background: #1e293b; color: #e8edf5; -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: #080b10; }
   ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
