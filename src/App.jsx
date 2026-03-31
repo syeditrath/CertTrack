@@ -188,15 +188,18 @@ export default function App() {
   }, []);
 
   const [data,     setData]     = useState(loadData);
-  const [page,     setPage]     = useState("dashboard"); // dashboard | scorpion | manpower | equipment
+  const [page,     setPage]     = useState("dashboard");
   const [sideOpen, setSideOpen] = useState(false);
   const [toast,    setToast]    = useState(null);
+  const [projMod,  setProjMod]  = useState(false);
 
   useEffect(() => { persist(data); }, [data]);
 
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(() => setToast(null), 3200); };
 
   const go = p => { setPage(p); setSideOpen(false); };
+
+  const saveProjects = projects => setData(prev=>({...prev,projects}));
 
   /* ── expiry alerts across everything ── */
   const allExpiries = [
@@ -220,7 +223,7 @@ export default function App() {
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg}}>
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:49}}/>}
 
-      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} />
+      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
@@ -250,6 +253,8 @@ export default function App() {
         </main>
       </div>
 
+      {projMod && <ProjectsModal projects={data.projects||[]} onSave={saveProjects} onClose={()=>setProjMod(false)}/>}
+
       {toast && (
         <div className="fade-up" style={{position:"fixed",bottom:24,right:24,zIndex:999,background:toast.type==="del"?"#130a0a":"#081310",border:`1px solid ${toast.type==="del"?T.red:T.green}`,color:toast.type==="del"?T.red:T.green,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:10}}>
           {toast.type==="del"?"✕":"✓"} {toast.msg}
@@ -262,7 +267,7 @@ export default function App() {
 /* ════════════════════════════════════════════════════════════════════════════
    SIDEBAR
 ════════════════════════════════════════════════════════════════════════════ */
-function Sidebar({page,go,sideOpen,alerts,data}) {
+function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
   const isMobile = window.innerWidth < 900;
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
@@ -298,8 +303,93 @@ function Sidebar({page,go,sideOpen,alerts,data}) {
           );
         })}
       </nav>
-      <div style={{padding:"12px 18px 20px",borderTop:`1px solid ${T.border}`,fontSize:10,color:T.textMuted,textAlign:"center"}}>Scorpion Arabia © 2025</div>
+      {/* Manage Projects */}
+      <div style={{padding:"10px 10px 0"}}>
+        <button onClick={onManageProjects} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,border:`1px solid ${T.border}`,background:"transparent",textAlign:"left",transition:"all .15s",marginBottom:4}}
+          onMouseEnter={e=>{e.currentTarget.style.background=T.cardHover;e.currentTarget.style.borderColor=T.blue;}}
+          onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=T.border;}}>
+          <span style={{fontSize:16,color:T.blue}}>⊕</span>
+          <div>
+            <div style={{fontSize:12,fontWeight:600,color:T.text}}>Manage Projects</div>
+            <div style={{fontSize:10,color:T.textMuted}}>Add, rename, delete</div>
+          </div>
+        </button>
+      </div>
+      <div style={{padding:"8px 18px 16px",fontSize:10,color:T.textMuted,textAlign:"center"}}>Scorpion Arabia © 2025</div>
     </aside>
+  );
+}
+
+/* ── Projects Manager Modal ──────────────────────────────────────────────── */
+function ProjectsModal({projects,onSave,onClose}) {
+  const [list,    setList]    = useState([...projects]);
+  const [newName, setNewName] = useState("");
+  const [editing, setEditing] = useState(null); // {idx, val}
+
+  const add = () => {
+    const n=newName.trim();
+    if(!n||list.includes(n)) return;
+    setList(l=>[...l,n]);
+    setNewName("");
+  };
+
+  const del = idx => setList(l=>l.filter((_,i)=>i!==idx));
+
+  const startEdit = (idx,val) => setEditing({idx,val});
+  const commitEdit = () => {
+    if(!editing) return;
+    const n=editing.val.trim();
+    if(n&&!list.some((x,i)=>x===n&&i!==editing.idx)){
+      setList(l=>l.map((x,i)=>i===editing.idx?n:x));
+    }
+    setEditing(null);
+  };
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:460,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+        <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>MANAGE PROJECTS</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Add, rename or delete projects</div>
+          </div>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>×</button>
+        </div>
+
+        {/* Add new */}
+        <div style={{padding:"14px 22px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+          <div style={{display:"flex",gap:8}}>
+            <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}
+              placeholder="New project name…"
+              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"dark"}}
+              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+            <button onClick={add} style={{background:T.green,color:"#000",border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>+ Add</button>
+          </div>
+        </div>
+
+        {/* List */}
+        <div style={{flex:1,overflowY:"auto",padding:"12px 22px"}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:10,letterSpacing:".5px"}}>PROJECTS ({list.length})</div>
+          {list.length===0&&<div style={{textAlign:"center",padding:"30px",color:T.textMuted,fontSize:13}}>No projects yet.</div>}
+          {list.map((p,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:T.bg,borderRadius:9,marginBottom:7,border:`1px solid ${T.border}`}}>
+              <div style={{width:7,height:7,borderRadius:"50%",background:T.blue,flexShrink:0}}/>
+              {editing&&editing.idx===i
+                ? <input autoFocus value={editing.val} onChange={e=>setEditing({...editing,val:e.target.value})} onKeyDown={e=>{if(e.key==="Enter")commitEdit();if(e.key==="Escape")setEditing(null);}} onBlur={commitEdit}
+                    style={{flex:1,background:T.inputBg,border:`1px solid ${T.blue}`,borderRadius:6,padding:"5px 9px",fontSize:13,color:T.text,outline:"none"}}/>
+                : <span style={{flex:1,fontSize:14,color:T.text,cursor:"text"}} onDoubleClick={()=>startEdit(i,p)}>{p}</span>
+              }
+              <button onClick={()=>startEdit(i,p)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>✎</button>
+              <button onClick={()=>del(i)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>✕</button>
+            </div>
+          ))}
+        </div>
+
+        <div style={{padding:"12px 22px 22px",flexShrink:0,borderTop:`1px solid ${T.border}`}}>
+          <button onClick={()=>{onSave(list);onClose();}} style={{width:"100%",background:T.blue,border:"none",color:"#000",borderRadius:10,padding:"12px",fontSize:14,fontWeight:700}}>Save Projects</button>
+        </div>
+      </div>
+    </Overlay>
   );
 }
 
@@ -800,23 +890,20 @@ function SubTabBar({tabs,active,counts,onChange}) {
 
 /* ── Invoice card ────────────────────────────────────────────────────────── */
 function InvoiceCard({doc,delay,onEdit,onDel}) {
-  const meters = parseFloat(doc.meters)||0;
-  const rate   = parseFloat(doc.rate)||0;
+  const due = daysUntil(doc.dueDate);
+  const ds  = getStatus(due);
   return (
-    <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:"4px solid "+T.green,borderRadius:12,padding:"16px 18px",animationDelay:`${delay}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+    <div className="fade-up" style={{background:T.card,border:`1px solid ${due!==null&&due<=30?ds.color+"44":T.border}`,borderLeft:"4px solid "+T.green,borderRadius:12,padding:"16px 18px",animationDelay:`${delay}s`,display:"flex",alignItems:"flex-start",gap:14}}>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
           <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{doc.name}</span>
           {doc.refNo&&<Tag color={T.green}>#{doc.refNo}</Tag>}
-          {doc.status&&<Tag color={doc.status==="Paid"?T.green:doc.status==="Overdue"?T.red:T.gold}>{doc.status}</Tag>}
+          {doc.dueDate&&due!==null&&due<=30&&<Tag color={ds.color}>{due<0?`${Math.abs(due)}d overdue`:`Due in ${due}d`}</Tag>}
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {doc.client&&<Chip>Client: {doc.client}</Chip>}
-          {doc.date&&<Chip>Date: {fmtDate(doc.date)}</Chip>}
-          {doc.dueDate&&<Chip color={getStatus(daysUntil(doc.dueDate)).color}>Due: {fmtDate(doc.dueDate)}</Chip>}
-          {meters>0&&<Chip>{meters.toLocaleString()} m drilled</Chip>}
-          {rate>0&&<Chip>Rate: SAR {rate.toLocaleString()}/m</Chip>}
-          {doc.amount&&<Chip color={T.green}>Total: SAR {Number(doc.amount).toLocaleString()}</Chip>}
+          {doc.dueDate&&<Chip color={ds.color}>Due: {fmtDate(doc.dueDate)}</Chip>}
+          {doc.amount&&<Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
           {doc.fileLink&&<FileLink href={doc.fileLink}/>}
         </div>
         {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
@@ -832,16 +919,7 @@ function InvoiceCard({doc,delay,onEdit,onDel}) {
 /* ── Invoice modal ───────────────────────────────────────────────────────── */
 function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
   const [f,setF]=useState(doc||{project:defaultProject||""});
-  const set=k=>v=>{
-    const upd={...f,[k]:v};
-    // auto-calc amount from meters × rate
-    if(k==="meters"||k==="rate"){
-      const m=parseFloat(k==="meters"?v:upd.meters)||0;
-      const r=parseFloat(k==="rate"?v:upd.rate)||0;
-      if(m&&r) upd.amount=String(Math.round(m*r));
-    }
-    setF(upd);
-  };
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} INVOICE`} color={T.green} onClose={onClose}
       onSave={()=>{if(!f.name){alert("Invoice title required");return;}onSave(f,mode);}}>
@@ -854,20 +932,8 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
       </FieldRow>
       <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
       <FieldRow label="Client"><FInput value={f.client||""} onChange={set("client")} color={T.green}/></FieldRow>
-      <FieldRow label="Invoice Date *"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.green}/></FieldRow>
       <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
-      <FieldRow label="Meters Drilled"><FInput type="number" value={f.meters||""} onChange={set("meters")} color={T.green}/></FieldRow>
-      <FieldRow label="Rate per Meter (SAR)"><FInput type="number" value={f.rate||""} onChange={set("rate")} color={T.green}/></FieldRow>
-      <FieldRow label="Invoice Amount (SAR)">
-        <FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/>
-        {f.meters&&f.rate&&<div style={{fontSize:11,color:T.green,marginTop:3}}>Auto-calc: {parseFloat(f.meters).toLocaleString()} m × SAR {parseFloat(f.rate).toLocaleString()}/m = SAR {(parseFloat(f.meters)*parseFloat(f.rate)).toLocaleString()}</div>}
-      </FieldRow>
-      <FieldRow label="Payment Status">
-        <FSelect value={f.status||""} onChange={set("status")} color={T.green}>
-          <option value="">Select…</option>
-          <option>Pending</option><option>Paid</option><option>Overdue</option><option>Disputed</option>
-        </FSelect>
-      </FieldRow>
+      <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/></FieldRow>
       <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
       <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.green}/></FieldRow>
     </FormModal>
