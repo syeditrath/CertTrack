@@ -167,6 +167,7 @@ const EMPTY_DATA = {
                       //   permits:       [{id,permitNo,type,issuedBy,issueDate,expiryDate,fileLink}] }
   scorpionDocCats: DEFAULT_SCORPION_CATS,
   projects: ["NEOM Phase 1","NEOM Phase 2","Riyadh Metro"],
+  projectDocs: [],  // { id, project, subTab, name, refNo, date, expiryDate, amount, fileLink, notes }
 };
 
 function loadData() {
@@ -200,6 +201,7 @@ export default function App() {
   /* ── expiry alerts across everything ── */
   const allExpiries = [
     ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Company Doc",days:daysUntil(d.expiryDate)})),
+    ...(data.projectDocs||[]).filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Project Doc",days:daysUntil(d.expiryDate)})),
     ...data.manpower.flatMap(p=>[
       p.passportExpiry && {label:p.name,src:"Passport",    days:daysUntil(p.passportExpiry)},
       p.visaExpiry     && {label:p.name,src:"Visa",        days:daysUntil(p.visaExpiry)},
@@ -242,6 +244,7 @@ export default function App() {
         <main style={{flex:1,overflowY:"auto",padding:"24px 20px"}}>
           {page==="dashboard" && <Dashboard data={data} alerts={allExpiries} go={go}/>}
           {page==="scorpion"  && <ScorpionDocs data={data} setData={setData} showToast={showToast}/>}
+          {page==="projects"  && <ProjectDocs data={data} setData={setData} showToast={showToast}/>}
           {page==="manpower"  && <ManpowerPage data={data} setData={setData} showToast={showToast}/>}
           {page==="equipment" && <EquipmentPage data={data} setData={setData} showToast={showToast}/>}
         </main>
@@ -264,6 +267,7 @@ function Sidebar({page,go,sideOpen,alerts,data}) {
   const NAV = [
     {id:"dashboard", icon:"▦", label:"Dashboard",          desc:"Overview"},
     {id:"scorpion",  icon:"◉", label:"Scorpion Documents", desc:"Company docs & licenses"},
+    {id:"projects",  icon:"◆", label:"Project Docs",       desc:"Invoices, certs & orders"},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
   ];
@@ -400,6 +404,34 @@ function Dashboard({data,alerts,go}) {
           <div style={{fontSize:12,color:T.blue,fontWeight:600,textAlign:"right"}}>Open Documents →</div>
         </div>
 
+        {/* Project Docs */}
+        <div className="fade-up" onClick={()=>go("projects")}
+          style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",cursor:"pointer",animationDelay:".40s",transition:"border-color .2s,transform .2s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.teal;e.currentTarget.style.transform="translateY(-2px)";}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+            <div style={{width:38,height:38,background:T.tealDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.teal}}>◆</div>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>PROJECT DOCS</div>
+              <div style={{fontSize:11,color:T.textMuted}}>Invoices, completion certs & work orders</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            {[
+              ["Total",(data.projectDocs||[]).length,T.teal],
+              ["Invoices",(data.projectDocs||[]).filter(d=>d.subTab==="invoices").length,T.green],
+              ["Job Certs",(data.projectDocs||[]).filter(d=>d.subTab==="certificates").length,T.blue],
+              ["Work Orders",(data.projectDocs||[]).filter(d=>d.subTab==="workorders").length,T.purple],
+            ].map(([l,v,c])=>(
+              <div key={l} style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:c,lineHeight:1}}>{v}</div>
+                <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>{l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:12,color:T.teal,fontWeight:600,textAlign:"right"}}>Open Project Docs →</div>
+        </div>
+
         {/* Manpower */}
         <div className="fade-up" onClick={()=>go("manpower")}
           style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px",cursor:"pointer",animationDelay:".42s",transition:"border-color .2s,transform .2s"}}
@@ -525,6 +557,371 @@ function AlertRow({a}) {
         <div style={{fontSize:8,color:T.textMuted,fontWeight:600,letterSpacing:".3px"}}>{a.days<0?"OVERDUE":"DAYS LEFT"}</div>
       </div>
     </div>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PROJECT DOCS
+════════════════════════════════════════════════════════════════════════════ */
+const PD_TABS = [
+  {id:"invoices",     label:"Invoices",                    icon:"🧾", color:T.green,  dim:T.greenDim},
+  {id:"certificates", label:"Job Completion Certificates", icon:"📜", color:T.blue,   dim:T.blueDim},
+  {id:"workorders",   label:"Work Orders / Agreements",    icon:"📋", color:T.purple, dim:T.purpleDim},
+];
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PROJECT DOCS
+════════════════════════════════════════════════════════════════════════════ */
+function ProjectDocs({data,setData,showToast}) {
+  const [subTab,    setSubTab]    = useState("invoices");
+  const [selProj,   setSelProj]   = useState(null);  // selected project for invoices drill-down
+  const [modal,     setModal]     = useState(null);
+  const [fProj,     setFProj]     = useState("");
+  const [projModal, setProjModal] = useState(false); // add/rename project for invoices
+
+  const docs     = data.projectDocs || [];
+  const projects = data.projects    || [];
+  const cur      = PD_TABS.find(t=>t.id===subTab);
+
+  const saveDoc = (doc, mode) => {
+    setData(prev=>{
+      const list=[...prev.projectDocs];
+      if(mode==="add") list.push({...doc,id:uid(),subTab});
+      else { const i=list.findIndex(d=>d.id===doc.id); if(i>=0) list[i]={...doc,subTab}; }
+      return{...prev,projectDocs:list};
+    });
+    showToast(mode==="add"?"Document added":"Updated");
+    setModal(null);
+  };
+
+  const delDoc = id => {
+    setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}));
+    showToast("Deleted","del");
+  };
+
+  const counts = Object.fromEntries(PD_TABS.map(t=>[t.id, docs.filter(d=>d.subTab===t.id).length]));
+
+  // ── Invoices tab: project-grouped view ──────────────────────────────────
+  if(subTab==="invoices") {
+    const invDocs = docs.filter(d=>d.subTab==="invoices");
+    // if a project is selected, show its invoices
+    if(selProj) {
+      const projInvs = invDocs.filter(d=>d.project===selProj);
+      const totalAmt = projInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+      return (
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          {/* Sub-tabs */}
+          <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={t=>{setSubTab(t);setSelProj(null);setFProj("");}}/>
+          {/* Back + header */}
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+            <button onClick={()=>setSelProj(null)} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600}}>← Back</button>
+            <div style={{flex:1}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>{selProj}</div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{projInvs.length} invoice{projInvs.length!==1?"s":""} · Total: <span style={{color:T.green,fontWeight:700}}>SAR {totalAmt.toLocaleString()}</span></div>
+            </div>
+            <Btn color={T.green} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>+ Add Invoice</Btn>
+          </div>
+          {projInvs.length===0
+            ?<Empty icon="🧾" label="No invoices yet" sub="Add the first invoice for this project" color={T.green} onAdd={()=>setModal({mode:"add",doc:{project:selProj}})}/>
+            :<div style={{display:"grid",gap:10}}>
+              {projInvs.map((doc,i)=><InvoiceCard key={doc.id} doc={doc} delay={i*.03} onEdit={()=>setModal({mode:"edit",doc})} onDel={()=>delDoc(doc.id)}/>)}
+            </div>
+          }
+          {modal&&<InvoiceModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selProj} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+        </div>
+      );
+    }
+
+    // project list view
+    const usedProjects = projects.filter(p=>true); // show all projects, even empty
+    return (
+      <div style={{maxWidth:1100,margin:"0 auto"}}>
+        <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={t=>{setSubTab(t);setFProj("");}}/>
+        <PageHeader title="INVOICES" sub="Select a project to view and manage its invoices" color={T.green}>
+          <Btn color={T.green} solid onClick={()=>setModal({mode:"add"})}>+ Add Invoice</Btn>
+        </PageHeader>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+          {usedProjects.map((p,i)=>{
+            const pinvs=invDocs.filter(d=>d.project===p);
+            const total=pinvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+            return (
+              <div key={p} className="fade-up" onClick={()=>setSelProj(p)}
+                style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"20px",cursor:"pointer",animationDelay:`${i*.05}s`,transition:"border-color .2s,transform .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                  <div style={{width:38,height:38,background:T.greenDim,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,color:T.green}}>🧾</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p}</div>
+                    <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{pinvs.length} invoice{pinvs.length!==1?"s":""}</div>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                  <div style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
+                    <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>Invoices</div>
+                  </div>
+                  <div style={{background:T.bg,borderRadius:8,padding:"10px 12px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:16,fontWeight:800,color:T.green,lineHeight:1}}>{total>0?`SAR ${(total/1000).toFixed(0)}K`:"—"}</div>
+                    <div style={{fontSize:10,color:T.textMuted,marginTop:3}}>Total Value</div>
+                  </div>
+                </div>
+                <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right"}}>View Invoices →</div>
+              </div>
+            );
+          })}
+        </div>
+        {modal&&<InvoiceModal mode={modal.mode} doc={modal.doc} projects={projects} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      </div>
+    );
+  }
+
+  // ── Certificates tab ────────────────────────────────────────────────────
+  if(subTab==="certificates") {
+    const certDocs=docs.filter(d=>d.subTab==="certificates"&&(!fProj||d.project===fProj));
+    return (
+      <div style={{maxWidth:1100,margin:"0 auto"}}>
+        <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={t=>{setSubTab(t);setFProj("");}}/>
+        <PageHeader title="JOB COMPLETION CERTIFICATES" sub="Certificates issued upon completion of drilling work" color={T.blue}>
+          <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"dark"}}>
+            <option value="">All Projects</option>
+            {projects.map(p=><option key={p} value={p}>{p}</option>)}
+          </select>
+          <Btn color={T.blue} solid onClick={()=>setModal({mode:"add"})}>+ Add Certificate</Btn>
+        </PageHeader>
+        <div style={{fontSize:13,color:T.textMuted,marginBottom:12}}>{certDocs.length} record{certDocs.length!==1?"s":""}</div>
+        {certDocs.length===0
+          ?<Empty icon="📜" label="No certificates yet" sub="Add your first job completion certificate" color={T.blue} onAdd={()=>setModal({mode:"add"})}/>
+          :<div style={{display:"grid",gap:10}}>
+            {certDocs.map((doc,i)=>(
+              <div key={doc.id} className="fade-up"
+                style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:"4px solid "+T.blue,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{doc.name}</span>
+                    {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
+                    {doc.jobNo&&<Tag color={T.blue}>Job #{doc.jobNo}</Tag>}
+                  </div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {doc.client&&<Chip>Client: {doc.client}</Chip>}
+                    {doc.startDate&&<Chip>Start: {fmtDate(doc.startDate)}</Chip>}
+                    {doc.completionDate&&<Chip color={T.green}>Completed: {fmtDate(doc.completionDate)}</Chip>}
+                    {doc.amount&&<Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
+                    {doc.refNo&&<Chip>Cert No: {doc.refNo}</Chip>}
+                    {doc.fileLink&&<FileLink href={doc.fileLink}/>}
+                  </div>
+                  {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
+                  <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
+                </div>
+              </div>
+            ))}
+          </div>
+        }
+        {modal&&<CertificateModal mode={modal.mode} doc={modal.doc} projects={projects} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      </div>
+    );
+  }
+
+  // ── Work Orders tab ─────────────────────────────────────────────────────
+  const woDocs=docs.filter(d=>d.subTab==="workorders"&&(!fProj||d.project===fProj));
+  return (
+    <div style={{maxWidth:1100,margin:"0 auto"}}>
+      <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={t=>{setSubTab(t);setFProj("");}}/>
+      <PageHeader title="WORK ORDERS / AGREEMENTS" sub="Contracts and work orders with clients" color={T.purple}>
+        <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"dark"}}>
+          <option value="">All Projects</option>
+          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+        </select>
+        <Btn color={T.purple} solid onClick={()=>setModal({mode:"add"})}>+ Add Work Order</Btn>
+      </PageHeader>
+      <div style={{fontSize:13,color:T.textMuted,marginBottom:12}}>{woDocs.length} record{woDocs.length!==1?"s":""}</div>
+      {woDocs.length===0
+        ?<Empty icon="📋" label="No work orders yet" sub="Add your first work order or agreement" color={T.purple} onAdd={()=>setModal({mode:"add"})}/>
+        :<div style={{display:"grid",gap:10}}>
+          {woDocs.map((doc,i)=>{
+            const hasExp=!!doc.expiryDate;
+            const s=getStatus(daysUntil(doc.expiryDate));
+            return (
+              <div key={doc.id} className="fade-up"
+                style={{background:T.card,border:`1px solid ${hasExp&&daysUntil(doc.expiryDate)<=90?s.color+"44":T.border}`,borderLeft:"4px solid "+T.purple,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+                    <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{doc.name}</span>
+                    {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
+                    {hasExp&&<Tag color={s.color}>{s.label}</Tag>}
+                  </div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
+                    {doc.supplier&&<Chip>Client: {doc.supplier}</Chip>}
+                    {doc.amount&&<Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
+                    {doc.date&&<Chip>Signed: {fmtDate(doc.date)}</Chip>}
+                    {hasExp&&<Chip color={s.color}>Expires: {fmtDate(doc.expiryDate)}</Chip>}
+                    {hasExp&&daysUntil(doc.expiryDate)!==null&&daysUntil(doc.expiryDate)<=90&&(
+                      <Chip color={s.color}>{daysUntil(doc.expiryDate)>=0?`${daysUntil(doc.expiryDate)}d left`:`${Math.abs(daysUntil(doc.expiryDate))}d overdue`}</Chip>
+                    )}
+                    {doc.fileLink&&<FileLink href={doc.fileLink}/>}
+                  </div>
+                  {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
+                  <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      }
+      {modal&&<WorkOrderModal mode={modal.mode} doc={modal.doc} projects={projects} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+    </div>
+  );
+}
+
+/* ── Shared sub-tab bar ──────────────────────────────────────────────────── */
+function SubTabBar({tabs,active,counts,onChange}) {
+  return (
+    <div style={{display:"flex",gap:8,marginBottom:20,overflowX:"auto",paddingBottom:4}}>
+      {tabs.map(t=>{
+        const isActive=active===t.id;
+        return (
+          <button key={t.id} onClick={()=>onChange(t.id)} style={{flexShrink:0,padding:"9px 18px",borderRadius:999,border:`1px solid ${isActive?t.color:T.border}`,background:isActive?t.dim:"transparent",color:isActive?t.color:T.textSub,fontSize:13,fontWeight:isActive?700:500,display:"flex",alignItems:"center",gap:8,transition:"all .2s"}}>
+            <span>{t.icon}</span>{t.label}
+            <span style={{background:isActive?t.color:T.border,color:isActive?"#000":T.textMuted,borderRadius:999,padding:"1px 8px",fontSize:11,fontWeight:700}}>{counts[t.id]}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Invoice card ────────────────────────────────────────────────────────── */
+function InvoiceCard({doc,delay,onEdit,onDel}) {
+  const meters = parseFloat(doc.meters)||0;
+  const rate   = parseFloat(doc.rate)||0;
+  return (
+    <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:"4px solid "+T.green,borderRadius:12,padding:"16px 18px",animationDelay:`${delay}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{doc.name}</span>
+          {doc.refNo&&<Tag color={T.green}>#{doc.refNo}</Tag>}
+          {doc.status&&<Tag color={doc.status==="Paid"?T.green:doc.status==="Overdue"?T.red:T.gold}>{doc.status}</Tag>}
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {doc.client&&<Chip>Client: {doc.client}</Chip>}
+          {doc.date&&<Chip>Date: {fmtDate(doc.date)}</Chip>}
+          {doc.dueDate&&<Chip color={getStatus(daysUntil(doc.dueDate)).color}>Due: {fmtDate(doc.dueDate)}</Chip>}
+          {meters>0&&<Chip>{meters.toLocaleString()} m drilled</Chip>}
+          {rate>0&&<Chip>Rate: SAR {rate.toLocaleString()}/m</Chip>}
+          {doc.amount&&<Chip color={T.green}>Total: SAR {Number(doc.amount).toLocaleString()}</Chip>}
+          {doc.fileLink&&<FileLink href={doc.fileLink}/>}
+        </div>
+        {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
+      </div>
+      <div style={{display:"flex",gap:6,flexShrink:0}}>
+        <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>
+        <ABtn color={T.red}  onClick={onDel}>✕</ABtn>
+      </div>
+    </div>
+  );
+}
+
+/* ── Invoice modal ───────────────────────────────────────────────────────── */
+function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
+  const [f,setF]=useState(doc||{project:defaultProject||""});
+  const set=k=>v=>{
+    const upd={...f,[k]:v};
+    // auto-calc amount from meters × rate
+    if(k==="meters"||k==="rate"){
+      const m=parseFloat(k==="meters"?v:upd.meters)||0;
+      const r=parseFloat(k==="rate"?v:upd.rate)||0;
+      if(m&&r) upd.amount=String(Math.round(m*r));
+    }
+    setF(upd);
+  };
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} INVOICE`} color={T.green} onClose={onClose}
+      onSave={()=>{if(!f.name){alert("Invoice title required");return;}onSave(f,mode);}}>
+      <FieldRow label="Invoice Title *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
+      <FieldRow label="Project *">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
+          <option value="">Select project…</option>
+          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Client"><FInput value={f.client||""} onChange={set("client")} color={T.green}/></FieldRow>
+      <FieldRow label="Invoice Date *"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.green}/></FieldRow>
+      <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
+      <FieldRow label="Meters Drilled"><FInput type="number" value={f.meters||""} onChange={set("meters")} color={T.green}/></FieldRow>
+      <FieldRow label="Rate per Meter (SAR)"><FInput type="number" value={f.rate||""} onChange={set("rate")} color={T.green}/></FieldRow>
+      <FieldRow label="Invoice Amount (SAR)">
+        <FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/>
+        {f.meters&&f.rate&&<div style={{fontSize:11,color:T.green,marginTop:3}}>Auto-calc: {parseFloat(f.meters).toLocaleString()} m × SAR {parseFloat(f.rate).toLocaleString()}/m = SAR {(parseFloat(f.meters)*parseFloat(f.rate)).toLocaleString()}</div>}
+      </FieldRow>
+      <FieldRow label="Payment Status">
+        <FSelect value={f.status||""} onChange={set("status")} color={T.green}>
+          <option value="">Select…</option>
+          <option>Pending</option><option>Paid</option><option>Overdue</option><option>Disputed</option>
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
+      <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.green}/></FieldRow>
+    </FormModal>
+  );
+}
+
+/* ── Job Completion Certificate modal ────────────────────────────────────── */
+function CertificateModal({mode,doc,projects,onClose,onSave}) {
+  const [f,setF]=useState(doc||{});
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} JOB COMPLETION CERTIFICATE`} color={T.blue} onClose={onClose}
+      onSave={()=>{if(!f.name){alert("Certificate title required");return;}onSave(f,mode);}}>
+      <FieldRow label="Certificate Title *"><FInput value={f.name||""} onChange={set("name")} color={T.blue}/></FieldRow>
+      <FieldRow label="Project *">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.blue}>
+          <option value="">Select project…</option>
+          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Job Number"><FInput value={f.jobNo||""} onChange={set("jobNo")} color={T.blue}/></FieldRow>
+      <FieldRow label="Client"><FInput value={f.client||""} onChange={set("client")} color={T.blue}/></FieldRow>
+      <FieldRow label="Certificate No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.blue}/></FieldRow>
+      <FieldRow label="Start Date"><FInput type="date" value={f.startDate||""} onChange={set("startDate")} color={T.blue}/></FieldRow>
+      <FieldRow label="Completion Date"><FInput type="date" value={f.completionDate||""} onChange={set("completionDate")} color={T.blue}/></FieldRow>
+      <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.blue}/></FieldRow>
+      <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
+      <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.blue}/></FieldRow>
+    </FormModal>
+  );
+}
+
+/* ── Work Order modal ────────────────────────────────────────────────────── */
+function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
+  const [f,setF]=useState(doc||{});
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} WORK ORDER / AGREEMENT`} color={T.purple} onClose={onClose}
+      onSave={()=>{if(!f.name){alert("Title required");return;}onSave(f,mode);}}>
+      <FieldRow label="Title *"><FInput value={f.name||""} onChange={set("name")} color={T.purple}/></FieldRow>
+      <FieldRow label="Project *">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.purple}>
+          <option value="">Select project…</option>
+          {projects.map(p=><option key={p} value={p}>{p}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Reference No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.purple}/></FieldRow>
+      <FieldRow label="Client / Counterparty"><FInput value={f.supplier||""} onChange={set("supplier")} color={T.purple}/></FieldRow>
+      <FieldRow label="Contract Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.purple}/></FieldRow>
+      <FieldRow label="Date Signed"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.purple}/></FieldRow>
+      <FieldRow label="Expiry / End Date"><FInput type="date" value={f.expiryDate||""} onChange={set("expiryDate")} color={T.purple}/></FieldRow>
+      <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
+      <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.purple}/></FieldRow>
+    </FormModal>
   );
 }
 
