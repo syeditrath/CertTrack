@@ -6,10 +6,10 @@ const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body, #root { height: 100%; }
-  body { font-family: 'Barlow', sans-serif; background: #e8edf5; color: #0d1f35; -webkit-font-smoothing: antialiased; }
+  body { font-family: 'Barlow', sans-serif; background: #fdf8f0; color: #1a0a00; -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: #e8edf5; }
-  ::-webkit-scrollbar-thumb { background: #b8cce0; border-radius: 3px; }
+  ::-webkit-scrollbar-track { background: #fdf8f0; }
+  ::-webkit-scrollbar-thumb { background: #e8d5b7; border-radius: 3px; }
   input, select, textarea, button { font-family: 'Barlow', sans-serif; }
   button { cursor: pointer; }
   @keyframes fadeUp  { from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
@@ -20,36 +20,45 @@ const GLOBAL_CSS = `
   .slide-up { animation: slideUp 0.35s cubic-bezier(0.34,1.3,0.64,1) both; }
   .fade-in  { animation: fadeIn  0.2s ease both; }
   .slide-in { animation: slideIn 0.3s ease both; }
+  @keyframes spinSlow   { from{transform:rotate(0deg);}to{transform:rotate(360deg);} }
+  @keyframes pulse      { 0%,100%{transform:scale(1);}50%{transform:scale(1.06);} }
+  @keyframes glowRing   { 0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,0);}50%{box-shadow:0 0 0 18px rgba(251,191,36,0.18);} }
+  @keyframes textReveal { from{opacity:0;letter-spacing:12px;}to{opacity:1;letter-spacing:4px;} }
+  @keyframes subReveal  { from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);} }
+  @keyframes fadeOut    { from{opacity:1;}to{opacity:0;} }
+  .spin-slow  { animation: spinSlow 8s linear infinite; }
+  .pulse-logo { animation: pulse 3s ease-in-out infinite; }
+  .glow-ring  { animation: glowRing 2.5s ease-in-out infinite; }
 `;
 
 /* ─── Theme ──────────────────────────────────────────────────────────────── */
 const T = {
-  bg:"#e8edf5",
-  sidebar:"#1e3a5f",
-  card:"#f4f7fb",
-  card2:"#d4dff0",
-  cardHover:"#d4dff0",
-  border:"#b8cce0",
-  borderLight:"#b8cce0",
-  text:"#0d1f35",
-  textSub:"#2d4a6b",
-  textMuted:"#5a7a9a",
-  blue:"#1d6fce",
-  green:"#0d9e6e",
-  gold:"#d97706",
-  red:"#dc2626",
-  purple:"#7c3aed",
-  teal:"#0891b2",
-  orange:"#ea580c",
-  blueDim:"rgba(29,111,206,0.12)",
-  greenDim:"rgba(13,158,110,0.12)",
-  goldDim:"rgba(217,119,6,0.12)",
-  redDim:"rgba(220,38,38,0.12)",
-  purpleDim:"rgba(124,58,237,0.12)",
-  tealDim:"rgba(8,145,178,0.12)",
-  orangeDim:"rgba(234,88,12,0.12)",
-  inputBg:"#f4f7fb",
-  shadow:"0 4px 16px rgba(13,31,53,0.10)",
+  bg:"#fdf8f0",
+  sidebar:"#080b10",
+  card:"#fdf8f0",
+  card2:"#f5ede0",
+  cardHover:"#f0e6d3",
+  border:"#e8d5b7",
+  borderLight:"#dcc9a0",
+  text:"#1a0a00",
+  textSub:"#5c3d1e",
+  textMuted:"#a07850",
+  blue:"#38bdf8",
+  green:"#34d399",
+  gold:"#fbbf24",
+  red:"#f87171",
+  purple:"#a78bfa",
+  teal:"#2dd4bf",
+  orange:"#fb923c",
+  blueDim:"rgba(56,189,248,0.12)",
+  greenDim:"rgba(52,211,153,0.12)",
+  goldDim:"rgba(251,191,36,0.12)",
+  redDim:"rgba(248,113,113,0.12)",
+  purpleDim:"rgba(167,139,250,0.12)",
+  tealDim:"rgba(45,212,191,0.12)",
+  orangeDim:"rgba(251,146,60,0.12)",
+  inputBg:"#fdf8f0",
+  shadow:"0 4px 16px rgba(26,10,0,0.10)",
 };
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -195,6 +204,152 @@ function persist(data) { try { localStorage.setItem("cta_v1", JSON.stringify(dat
 /* ════════════════════════════════════════════════════════════════════════════
    ROOT APP
 ════════════════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════
+   WELCOME SCREEN
+════════════════════════════════════════════════════════════════════════════ */
+function WelcomeScreen({onEnter}) {
+  const [leaving, setLeaving] = useState(false);
+
+  const handleEnter = () => {
+    setLeaving(true);
+    setTimeout(onEnter, 600);
+  };
+
+  return (
+    <div style={{
+      position:"fixed", inset:0, zIndex:9999,
+      background:"linear-gradient(135deg,#080b10 0%,#0e1520 50%,#080b10 100%)",
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      opacity: leaving ? 0 : 1,
+      transition: leaving ? "opacity 0.6s ease" : "none",
+    }}>
+
+      {/* Animated background rings */}
+      <div style={{position:"absolute",inset:0,overflow:"hidden",pointerEvents:"none"}}>
+        {[300,450,600,750].map((s,i)=>(
+          <div key={i} style={{
+            position:"absolute",top:"50%",left:"50%",
+            width:s,height:s,
+            transform:`translate(-50%,-50%)`,
+            border:`1px solid rgba(251,191,36,${0.06-i*0.01})`,
+            borderRadius:"50%",
+            animation:`spinSlow ${12+i*4}s linear infinite ${i%2===0?"":"reverse"}`,
+          }}/>
+        ))}
+      </div>
+
+      {/* Logo container */}
+      <div style={{position:"relative",marginBottom:40}}>
+
+        {/* Outer glow ring */}
+        <div className="glow-ring" style={{
+          width:180, height:180, borderRadius:"50%",
+          border:"2px solid rgba(251,191,36,0.4)",
+          position:"absolute", top:-14, left:-14,
+          zIndex:0,
+        }}/>
+
+        {/* Spinning accent ring */}
+        <div className="spin-slow" style={{
+          position:"absolute", top:-8, left:-8,
+          width:168, height:168, borderRadius:"50%",
+          border:"2px dashed rgba(56,189,248,0.3)",
+          zIndex:0,
+        }}/>
+
+        {/* Logo */}
+        <div className="pulse-logo" style={{
+          width:152, height:152, borderRadius:"50%",
+          overflow:"hidden", position:"relative", zIndex:1,
+          boxShadow:"0 0 40px rgba(251,191,36,0.3), 0 0 80px rgba(251,191,36,0.1)",
+          border:"3px solid rgba(251,191,36,0.6)",
+        }}>
+          <img src="logo.png" alt="Scorpion Arabia"
+            style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
+        </div>
+      </div>
+
+      {/* Welcome text */}
+      <div style={{textAlign:"center",marginBottom:48}}>
+        <div style={{
+          fontFamily:"'Barlow Condensed',sans-serif",
+          fontWeight:800,
+          fontSize:"clamp(18px,3vw,28px)",
+          color:"#fbbf24",
+          letterSpacing:"4px",
+          animation:"textReveal 1.2s cubic-bezier(0.16,1,0.3,1) 0.3s both",
+          textTransform:"uppercase",
+          marginBottom:12,
+        }}>
+          WELCOME TO
+        </div>
+        <div style={{
+          fontFamily:"'Barlow Condensed',sans-serif",
+          fontWeight:800,
+          fontSize:"clamp(26px,5vw,48px)",
+          color:"#ffffff",
+          letterSpacing:"4px",
+          animation:"textReveal 1.4s cubic-bezier(0.16,1,0.3,1) 0.5s both",
+          textTransform:"uppercase",
+          lineHeight:1.1,
+          marginBottom:8,
+        }}>
+          SCORPION ARABIA
+        </div>
+        <div style={{
+          fontFamily:"'Barlow Condensed',sans-serif",
+          fontWeight:600,
+          fontSize:"clamp(14px,2.5vw,20px)",
+          color:"#38bdf8",
+          letterSpacing:"6px",
+          animation:"textReveal 1.4s cubic-bezier(0.16,1,0.3,1) 0.7s both",
+          textTransform:"uppercase",
+        }}>
+          PORTAL
+        </div>
+        <div style={{
+          width:80, height:2,
+          background:"linear-gradient(90deg,transparent,#fbbf24,transparent)",
+          margin:"18px auto 0",
+          animation:"subReveal 1s ease 1.2s both",
+        }}/>
+      </div>
+
+      {/* Enter button */}
+      <button onClick={handleEnter} style={{
+        background:"linear-gradient(135deg,#fbbf24,#f59e0b)",
+        border:"none", borderRadius:999,
+        padding:"14px 48px",
+        fontFamily:"'Barlow Condensed',sans-serif",
+        fontWeight:800, fontSize:16,
+        color:"#080b10",
+        letterSpacing:"2px",
+        textTransform:"uppercase",
+        cursor:"pointer",
+        boxShadow:"0 4px 24px rgba(251,191,36,0.4)",
+        animation:"subReveal 1s ease 1.5s both",
+        transition:"transform 0.2s, box-shadow 0.2s",
+      }}
+        onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.05)";e.currentTarget.style.boxShadow="0 6px 32px rgba(251,191,36,0.6)";}}
+        onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="0 4px 24px rgba(251,191,36,0.4)";}}
+      >
+        ENTER PORTAL
+      </button>
+
+      {/* Bottom tagline */}
+      <div style={{
+        position:"absolute", bottom:32,
+        fontSize:11, color:"rgba(255,255,255,0.3)",
+        letterSpacing:"2px", textTransform:"uppercase",
+        fontFamily:"'Barlow Condensed',sans-serif",
+        animation:"subReveal 1s ease 2s both",
+      }}>
+        Document & Asset Management System
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
@@ -203,11 +358,12 @@ export default function App() {
     }
   }, []);
 
-  const [data,     setData]     = useState(loadData);
-  const [page,     setPage]     = useState("dashboard");
-  const [sideOpen, setSideOpen] = useState(false);
-  const [toast,    setToast]    = useState(null);
-  const [projMod,  setProjMod]  = useState(false);
+  const [data,        setData]       = useState(loadData);
+  const [page,        setPage]       = useState("dashboard");
+  const [sideOpen,    setSideOpen]   = useState(false);
+  const [toast,       setToast]      = useState(null);
+  const [projMod,     setProjMod]    = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true);
 
   useEffect(() => { persist(data); }, [data]);
 
@@ -237,15 +393,16 @@ export default function App() {
 
   return (
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg}}>
+      {showWelcome && <WelcomeScreen onEnter={()=>setShowWelcome(false)}/>}
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
 
       <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
-        <header style={{background:"#1e3a5f",borderBottom:"1px solid #b8cce0",padding:"0 20px",flexShrink:0,boxShadow:"0 2px 8px rgba(13,31,53,0.2)"}}>
+        <header style={{background:T.sidebar,borderBottom:`1px solid ${T.border}`,padding:"0 20px",flexShrink:0,boxShadow:"0 2px 8px rgba(13,31,53,0.2)"}}>
           <div style={{display:"flex",alignItems:"center",height:64,position:"relative"}}>
-            <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
+            <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:"#ffffff",letterSpacing:"3px"}}>SCORPION ARABIA</div>
               <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
@@ -296,7 +453,9 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
     <aside style={{width:255,flexShrink:0,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
       <div style={{padding:"22px 20px 18px",borderBottom:`1px solid ${T.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
-          <img src="logo.png" alt="Scorpion Arabia" style={{width:56,height:56,borderRadius:10,objectFit:"cover",background:"#000",flexShrink:0}}/>
+          <div style={{width:56,height:56,borderRadius:"50%",background:"#000",flexShrink:0,overflow:"hidden",boxShadow:"0 0 0 2px rgba(251,191,36,0.5)"}}>
+          <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
+        </div>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:"#ffffff",letterSpacing:".5px",lineHeight:1.1}}>SCORPION ARABIA</div>
             <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
