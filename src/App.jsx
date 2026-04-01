@@ -6,10 +6,10 @@ const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html, body, #root { height: 100%; }
-  body { font-family: 'Barlow', sans-serif; background: #F9FAFB; color: #F9FAFB; -webkit-font-smoothing: antialiased; }
+  body { font-family: 'Barlow', sans-serif; background: #e8edf5; color: #0d1f35; -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: #F9FAFB; }
-  ::-webkit-scrollbar-thumb { background: #F9FAFB; border-radius: 3px; }
+  ::-webkit-scrollbar-track { background: #e8edf5; }
+  ::-webkit-scrollbar-thumb { background: #b8cce0; border-radius: 3px; }
   input, select, textarea, button { font-family: 'Barlow', sans-serif; }
   button { cursor: pointer; }
   @keyframes fadeUp  { from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
@@ -24,16 +24,32 @@ const GLOBAL_CSS = `
 
 /* ─── Theme ──────────────────────────────────────────────────────────────── */
 const T = {
-  bg:"#38BDF8", sidebar:"#22C55E", card:"#0e1117", card2:"#111620", cardHover:"#131820",
-  border:"#1e293b", borderLight:"#253147",
-  text:"#f1f5fb", textSub:"#8899b0", textMuted:"#3d5068",
-  blue:"#38bdf8", green:"#34d399", gold:"#fbbf24", red:"#f87171",
-  purple:"#a78bfa", teal:"#2dd4bf", orange:"#fb923c",
-  blueDim:"rgba(56,189,248,0.1)", greenDim:"rgba(52,211,153,0.1)",
-  goldDim:"rgba(251,191,36,0.1)", redDim:"rgba(248,113,113,0.1)",
-  purpleDim:"rgba(167,139,250,0.1)", tealDim:"rgba(45,212,191,0.1)",
-  orangeDim:"rgba(251,146,60,0.1)",
-  inputBg:"#080b10", shadow:"0 4px 24px rgba(0,0,0,0.5)",
+  bg:"#e8edf5",
+  sidebar:"#1e3a5f",
+  card:"#f4f7fb",
+  card2:"#d4dff0",
+  cardHover:"#d4dff0",
+  border:"#b8cce0",
+  borderLight:"#b8cce0",
+  text:"#0d1f35",
+  textSub:"#2d4a6b",
+  textMuted:"#5a7a9a",
+  blue:"#1d6fce",
+  green:"#0d9e6e",
+  gold:"#d97706",
+  red:"#dc2626",
+  purple:"#7c3aed",
+  teal:"#0891b2",
+  orange:"#ea580c",
+  blueDim:"rgba(29,111,206,0.12)",
+  greenDim:"rgba(13,158,110,0.12)",
+  goldDim:"rgba(217,119,6,0.12)",
+  redDim:"rgba(220,38,38,0.12)",
+  purpleDim:"rgba(124,58,237,0.12)",
+  tealDim:"rgba(8,145,178,0.12)",
+  orangeDim:"rgba(234,88,12,0.12)",
+  inputBg:"#f4f7fb",
+  shadow:"0 4px 16px rgba(13,31,53,0.10)",
 };
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
@@ -221,22 +237,22 @@ export default function App() {
 
   return (
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg}}>
-      {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:49}}/>}
+      {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
 
       <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
-        <header style={{background:T.sidebar,borderBottom:`1px solid ${T.border}`,padding:"0 20px",flexShrink:0}}>
+        <header style={{background:"#1e3a5f",borderBottom:"1px solid #b8cce0",padding:"0 20px",flexShrink:0,boxShadow:"0 2px 8px rgba(13,31,53,0.2)"}}>
           <div style={{display:"flex",alignItems:"center",height:64,position:"relative"}}>
-            <button onClick={()=>setSideOpen(true)} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
+            <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text,letterSpacing:"3px"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:T.textMuted,letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:"#ffffff",letterSpacing:"3px"}}>SCORPION ARABIA</div>
+              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
             </div>
             {allExpiries.length>0 && (
               <div style={{marginLeft:"auto",zIndex:1}}>
-                <div style={{background:T.redDim,border:`1px solid ${T.red}44`,color:T.red,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                <div style={{background:"rgba(220,38,38,0.25)",border:"1px solid rgba(220,38,38,0.5)",color:"#fca5a5",borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
                   ▲ <span style={{background:T.red,color:"#fff",borderRadius:999,padding:"1px 7px",fontSize:11,fontWeight:700}}>{allExpiries.length}</span> alerts
                 </div>
               </div>
@@ -256,7 +272,7 @@ export default function App() {
       {projMod && <ProjectsModal projects={data.projects||[]} onSave={saveProjects} onClose={()=>setProjMod(false)}/>}
 
       {toast && (
-        <div className="fade-up" style={{position:"fixed",bottom:24,right:24,zIndex:999,background:toast.type==="del"?"#130a0a":"#081310",border:`1px solid ${toast.type==="del"?T.red:T.green}`,color:toast.type==="del"?T.red:T.green,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:10}}>
+        <div className="fade-up" style={{position:"fixed",bottom:24,right:24,zIndex:999,background:toast.type==="del"?"#fee2e2":"#d1fae5",border:`1px solid ${toast.type==="del"?T.red:T.green}`,color:toast.type==="del"?T.red:T.green,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:10}}>
           {toast.type==="del"?"✕":"✓"} {toast.msg}
         </div>
       )}
@@ -277,13 +293,13 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
   ];
   return (
-    <aside style={{width:255,flexShrink:0,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease"}}>
+    <aside style={{width:255,flexShrink:0,background:T.sidebar,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
       <div style={{padding:"22px 20px 18px",borderBottom:`1px solid ${T.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <img src="logo.png" alt="Scorpion Arabia" style={{width:56,height:56,borderRadius:10,objectFit:"cover",background:"#000",flexShrink:0}}/>
           <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,letterSpacing:".5px",lineHeight:1.1}}>SCORPION ARABIA</div>
-            <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"1.4px",marginTop:3}}>ASSET MANAGER</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:"#ffffff",letterSpacing:".5px",lineHeight:1.1}}>SCORPION ARABIA</div>
+            <div style={{fontSize:11,color:T.textMuted,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
           </div>
         </div>
       </div>
@@ -292,11 +308,11 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
           const active=page===n.id;
           const badge=n.id==="dashboard"?alerts:0;
           return (
-            <button key={n.id} onClick={()=>go(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderRadius:8,border:"none",marginBottom:3,textAlign:"left",background:active?T.blueDim:"transparent",borderLeft:`2px solid ${active?T.blue:"transparent"}`,transition:"all .15s"}}>
-              <span style={{fontSize:20,color:active?T.blue:T.textMuted}}>{n.icon}</span>
+            <button key={n.id} onClick={()=>go(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderRadius:8,border:"none",marginBottom:3,textAlign:"left",background:active?"rgba(59,130,246,0.15)":"transparent",borderLeft:`2px solid ${active?"#93c5fd":"transparent"}`,transition:"all .15s"}}>
+              <span style={{fontSize:20,color:active?"#93c5fd":"#94a3b8"}}>{n.icon}</span>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:600,color:active?T.blue:T.text}}>{n.label}</div>
-                <div style={{fontSize:10,color:T.textMuted,marginTop:1}}>{n.desc}</div>
+                <div style={{fontSize:13,fontWeight:600,color:active?"#93c5fd":"#e2e8f0"}}>{n.label}</div>
+                <div style={{fontSize:10,color:"#64748b",marginTop:1}}>{n.desc}</div>
               </div>
               {badge>0&&<span style={{background:T.red,color:"#fff",borderRadius:999,padding:"1px 7px",fontSize:10,fontWeight:700}}>{badge}</span>}
             </button>
@@ -305,13 +321,13 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects}) {
       </nav>
       {/* Manage Projects */}
       <div style={{padding:"10px 10px 0"}}>
-        <button onClick={onManageProjects} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,border:`1px solid ${T.border}`,background:"transparent",textAlign:"left",transition:"all .15s",marginBottom:4}}
-          onMouseEnter={e=>{e.currentTarget.style.background=T.cardHover;e.currentTarget.style.borderColor=T.blue;}}
-          onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=T.border;}}>
+        <button onClick={onManageProjects} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"transparent",textAlign:"left",transition:"all .15s",marginBottom:4}}
+          onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.1)";e.currentTarget.style.borderColor="#93c5fd";}}
+          onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#334155";}}>
           <span style={{fontSize:16,color:T.blue}}>⊕</span>
           <div>
-            <div style={{fontSize:12,fontWeight:600,color:T.text}}>Manage Projects</div>
-            <div style={{fontSize:10,color:T.textMuted}}>Add, rename, delete</div>
+            <div style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>Manage Projects</div>
+            <div style={{fontSize:10,color:"#64748b"}}>Add, rename, delete</div>
           </div>
         </button>
       </div>
@@ -361,7 +377,7 @@ function ProjectsModal({projects,onSave,onClose}) {
           <div style={{display:"flex",gap:8}}>
             <input value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}
               placeholder="New project name…"
-              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"dark"}}
+              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
               onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
             <button onClick={add} style={{background:T.green,color:"#000",border:"none",borderRadius:8,padding:"9px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>+ Add</button>
           </div>
@@ -787,7 +803,7 @@ function ProjectDocs({data,setData,showToast}) {
               <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Certificates issued upon completion of drilling work</div>
             </div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"dark"}}>
+              <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
                 <option value="">All Projects</option>
                 {projects.map(p=><option key={p} value={p}>{p}</option>)}
               </select>
@@ -837,7 +853,7 @@ function ProjectDocs({data,setData,showToast}) {
               <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Contracts and work orders with clients</div>
             </div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"dark"}}>
+              <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
                 <option value="">All Projects</option>
                 {projects.map(p=><option key={p} value={p}>{p}</option>)}
               </select>
@@ -1331,7 +1347,7 @@ function MpImportModal({file,cats,onClose,onImport}) {
         <div style={{marginBottom:18}}>
           <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:".5px"}}>ASSIGN TO CATEGORY (for new people)</label>
           <select value={selCat} onChange={e=>setSelCat(e.target.value)}
-            style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:selCat?T.text:T.textMuted,outline:"none",colorScheme:"dark"}}>
+            style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:selCat?T.text:T.textMuted,outline:"none",colorScheme:"light"}}>
             <option value="">No category / assign manually later</option>
             {cats.map(c=><option key={c} value={c}>{c}</option>)}
           </select>
@@ -1619,11 +1635,11 @@ function EquipmentPage({data,setData,showToast}) {
       {/* Show list when nothing selected */}
       {!eqFresh && <>
       <PageHeader title="EQUIPMENT" sub="Assets with certifications, invoices, insurance & permits" color={T.gold}>
-        <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"dark"}}>
+        <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
           <option value="">All Projects</option>
           {projects.map(p=><option key={p} value={p}>{p}</option>)}
         </select>
-        <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"dark"}}>
+        <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
           <option value="">All Statuses</option>
           <option>Active</option><option>Under Maintenance</option><option>Inactive</option>
         </select>
@@ -1972,7 +1988,7 @@ function Empty({icon,label,sub,color,onAdd}) {
 function Overlay({children,onClose}) {
   return (
     <div className="fade-in" onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflowY:"auto"}}>
+      style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.55)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflowY:"auto"}}>
       {children}
     </div>
   );
@@ -2010,7 +2026,7 @@ function CatManagerModal({title,cats,onSave,onClose}) {
         <div style={{padding:"14px 22px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
           <div style={{display:"flex",gap:8}}>
             <input value={newCat} onChange={e=>setNewCat(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="New category name…"
-              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"dark"}}
+              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
               onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
             <button onClick={add} style={{background:T.green,color:"#000",border:"none",borderRadius:8,padding:"9px 16px",fontSize:13,fontWeight:700,flexShrink:0}}>+ Add</button>
           </div>
@@ -2049,19 +2065,19 @@ function SectionDivider({label}) {
 
 function FInput({type,value,onChange,color,placeholder}) {
   return <input type={type||"text"} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"dark"}}
+    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
     onFocus={e=>e.target.style.borderColor=color||T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>;
 }
 
 function FTextarea({value,onChange,color}) {
   return <textarea value={value} onChange={e=>onChange(e.target.value)} rows={2}
-    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",resize:"vertical",colorScheme:"dark"}}
+    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",resize:"vertical",colorScheme:"light"}}
     onFocus={e=>e.target.style.borderColor=color||T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>;
 }
 
 function FSelect({value,onChange,color,children}) {
   return <select value={value} onChange={e=>onChange(e.target.value)}
-    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:value?T.text:T.textMuted,outline:"none",colorScheme:"dark"}}
+    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:value?T.text:T.textMuted,outline:"none",colorScheme:"light"}}
     onFocus={e=>e.target.style.borderColor=color||T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
     {children}
   </select>;
@@ -2071,7 +2087,7 @@ function FLink({value,onChange}) {
   return (
     <div>
       <input type="url" value={value} onChange={e=>onChange(e.target.value)} placeholder="https://drive.google.com/… or sharepoint.com/…"
-        style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.blue,outline:"none",colorScheme:"dark"}}
+        style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.blue,outline:"none",colorScheme:"light"}}
         onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
       {value&&<a href={value} target="_blank" rel="noreferrer" style={{fontSize:11,color:T.blue,marginTop:4,display:"inline-block"}}>📎 Test link →</a>}
     </div>
