@@ -70,7 +70,7 @@ const GLOBAL_CSS = `
 `;
 
 /* ─── Theme ──────────────────────────────────────────────────────────────── */
-const T = {
+const LIGHT = {
   bg:"#f0e6d3",
   sidebar:"#080b10",
   card:"#fdf8f0",
@@ -117,6 +117,10 @@ const DARK = {
 const uid       = () => Math.random().toString(36).slice(2,9);
 const daysUntil = d  => d ? Math.ceil((new Date(d) - new Date()) / 86400000) : null;
 const fmtDate   = d  => d ? new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+
+/* ─── Active theme (module-level, updated by App) ───────────────────────── */
+let T = LIGHT; // default to light, App.setTheme() updates this
+function setTheme(dark) { T = dark ? DARK : LIGHT; }
 
 /* ─── Export utilities ───────────────────────────────────────────────────── */
 function exportToExcel(rows, filename) {
@@ -549,13 +553,16 @@ export default function App() {
   const [globalSearch,setGlobalSearch] = useState("");
   const [showSearch,  setShowSearch] = useState(false);
 
-  // Apply dark mode class to body
+  // Apply dark mode — update module-level T so all components re-render with correct colors
   useEffect(()=>{
     document.body.classList.toggle("dark-mode", darkMode);
+    document.body.style.background = darkMode ? DARK.bg : LIGHT.bg;
     try{localStorage.setItem("cta_dark", darkMode);}catch{}
   },[darkMode]);
 
-  const TH = darkMode ? DARK : T; // active theme
+  // Keep T in sync every render (React re-renders all children so T is always fresh)
+  setTheme(darkMode);
+
   const logout = () => { try{localStorage.removeItem(AUTH_KEY);}catch{} setAuthed(false); };
 
   useEffect(() => { persist(data); }, [data]);
@@ -596,7 +603,7 @@ export default function App() {
   })() : [];
 
   return (
-    <div style={{display:"flex",height:"100vh",overflow:"hidden",background:darkMode?DARK.bg:T.bg}}>
+    <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg}}>
       {!authed && <LoginPage onLogin={(pw)=>{ if(pw===COMPANY_PASSWORD){localStorage.setItem(AUTH_KEY,"true");setAuthed(true);}else{return false;}return true; }}/>}
       {authed && showWelcome && <WelcomeScreen onEnter={()=>setShowWelcome(false)}/>}
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
@@ -623,15 +630,15 @@ export default function App() {
                   : <button onClick={()=>setShowSearch(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⌕</button>
                 }
                 {searchResults.length>0&&showSearch&&(
-                  <div style={{position:"absolute",top:42,right:0,background:darkMode?DARK.card:T.card,border:`1px solid ${darkMode?DARK.border:T.border}`,borderRadius:12,width:320,maxHeight:380,overflowY:"auto",boxShadow:T.shadow,zIndex:200}}>
+                  <div style={{position:"absolute",top:42,right:0,background:T.card,border:`1px solid ${T.border}`,borderRadius:12,width:320,maxHeight:380,overflowY:"auto",boxShadow:T.shadow,zIndex:200}}>
                     {searchResults.map((r,i)=>(
                       <div key={i} onClick={()=>{go(r.page);setShowSearch(false);setGlobalSearch("");}}
                         style={{padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${darkMode?DARK.border:T.border}`,transition:"background .15s"}}
                         onMouseEnter={e=>e.currentTarget.style.background=darkMode?DARK.cardHover:T.cardHover}
                         onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                        <div style={{fontSize:13,fontWeight:600,color:darkMode?DARK.text:T.text}}>{r.label}</div>
-                        <div style={{fontSize:11,color:darkMode?DARK.textMuted:T.textMuted,marginTop:2,display:"flex",gap:6}}>
-                          <span style={{background:darkMode?DARK.blueDim:T.blueDim,color:darkMode?DARK.blue:T.blue,borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700}}>{r.type}</span>
+                        <div style={{fontSize:13,fontWeight:600,color:T.text}}>{r.label}</div>
+                        <div style={{fontSize:11,color:T.textMuted,marginTop:2,display:"flex",gap:6}}>
+                          <span style={{background:T.blueDim,color:T.blue,borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700}}>{r.type}</span>
                           <span>{r.sub}</span>
                         </div>
                       </div>
