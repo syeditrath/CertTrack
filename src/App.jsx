@@ -286,6 +286,48 @@ function parseExcelWithHeaderRow(arrayBuffer, map, headerRow) {
 const COMPANY_PASSWORD = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY = "cta_auth";
 
+/* ─── Supabase config — paste your values here after setup ──────────────── */
+const SUPABASE_URL    = "https://kojtmdvzkrkdkorsulss.supabase.co";    // e.g. https://xxxx.supabase.co
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk"; // your anon/public key
+const STORAGE_BUCKET  = "portal-files";
+
+async function uploadToSupabase(file, folder) {
+  const ext   = file.name.split(".").pop();
+  const path  = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+  const res   = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
+    method:"POST",
+    headers:{"Authorization":`Bearer ${SUPABASE_ANON}`,"Content-Type":file.type,"x-upsert":"true"},
+    body: file,
+  });
+  if (!res.ok) { const e=await res.json(); throw new Error(e.message||"Upload failed"); }
+  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
+}
+
+function isSupabaseConfigured() {
+  return SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON !== "YOUR_SUPABASE_ANON_KEY";
+}
+
+function getPreviewUrl(url) {
+  if (!url) return null;
+  // OneDrive: convert share link to embed
+  if (url.includes("1drv.ms") || url.includes("onedrive.live.com")) {
+    const encoded = encodeURIComponent(url);
+    return `https://view.officeapps.live.com/op/embed.aspx?src=${encoded}`;
+  }
+  // SharePoint
+  if (url.includes("sharepoint.com")) {
+    return url.includes("?") ? url + "&action=embedview" : url + "?action=embedview";
+  }
+  // Google Drive: convert to embed
+  if (url.includes("drive.google.com")) {
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+  }
+  // Supabase public URL (PDF/image — direct embed)
+  if (url.includes("supabase.co/storage")) return url;
+  return url;
+}
+
 function isAuthenticated() {
   try { return localStorage.getItem(AUTH_KEY) === "true"; } catch { return false; }
 }
@@ -2537,13 +2579,127 @@ function FSelect({value,onChange,color,children}) {
   </select>;
 }
 
-function FLink({value,onChange}) {
+function FLink({value,onChange,folder}) {
+  const [uploading,setUploading] = useState(false);
+  const [uploadErr,setUploadErr] = useState("");
+  const [preview,  setPreview]   = useState(false);
+  const fileRef = useRef();
+  const configured = isSupabaseConfigured();
+
+  const handleUpload = async e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    if(file.size > 50*1024*1024) { setUploadErr("File too large (max 50MB)"); return; }
+    setUploading(true); setUploadErr("");
+    try {
+      const url = await uploadToSupabase(file, folder||"general");
+      onChange(url);
+      setUploadErr("");
+    } catch(err) {
+      setUploadErr("Upload failed: " + err.message);
+    } finally { setUploading(false); }
+    e.target.value="";
+  };
+
   return (
-    <div>
-      <input type="url" value={value} onChange={e=>onChange(e.target.value)} placeholder="https://drive.google.com/… or sharepoint.com/…"
-        style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.blue,outline:"none",colorScheme:"light"}}
-        onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
-      {value&&<a href={value} target="_blank" rel="noreferrer" style={{fontSize:11,color:T.blue,marginTop:4,display:"inline-block"}}>📎 Test link →</a>}
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{display:"flex",gap:6}}>
+        <input type="url" value={value} onChange={e=>onChange(e.target.value)}
+          placeholder="Paste link or upload file below…"
+          style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.blue,outline:"none",colorScheme:"light"}}
+          onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
+        {value&&(
+          <button type="button" onClick={()=>setPreview(true)}
+            style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"0 12px",fontSize:12,fontWeight:600,flexShrink:0,cursor:"pointer"}}>
+            👁 Preview
+          </button>
+        )}
+      </div>
+      {configured && (
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <input ref={fileRef} type="file" style={{display:"none"}} onChange={handleUpload}/>
+          <button type="button" onClick={()=>fileRef.current.click()} disabled={uploading}
+            style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,opacity:uploading?0.6:1}}>
+            {uploading ? "⏳ Uploading…" : "⬆ Upload File"}
+          </button>
+          <span style={{fontSize:11,color:T.textMuted}}>PDF, Word, Excel, images up to 50MB</span>
+        </div>
+      )}
+      {!configured && (
+        <div style={{fontSize:11,color:T.textMuted,padding:"5px 8px",background:T.goldDim,borderRadius:6,border:`1px solid ${T.gold}33`}}>
+          💡 Add your Supabase keys to enable direct file upload
+        </div>
+      )}
+      {uploadErr && <div style={{fontSize:11,color:T.red}}>{uploadErr}</div>}
+      {preview && <FilePreviewModal url={value} onClose={()=>setPreview(false)}/>}
+    </div>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════════
+   FILE PREVIEW MODAL
+════════════════════════════════════════════════════════════════════════════ */
+function FilePreviewModal({url,onClose}) {
+  const previewUrl = getPreviewUrl(url);
+  const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(url);
+  const isPdf   = /\.pdf$/i.test(url) || url.includes("supabase.co/storage");
+  const isOffice= /\.(doc|docx|xls|xlsx|ppt|pptx)$/i.test(url);
+  const isViewable = isImage || isPdf || isOffice ||
+    url.includes("drive.google.com") ||
+    url.includes("1drv.ms") || url.includes("onedrive.live.com") ||
+    url.includes("sharepoint.com");
+
+  return (
+    <div className="fade-in" onClick={e=>e.target===e.currentTarget&&onClose()}
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:16,width:"100%",maxWidth:900,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        {/* Header */}
+        <div style={{padding:"14px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"70%"}}>
+            📎 {url.split("/").pop().split("?")[0] || "File Preview"}
+          </div>
+          <div style={{display:"flex",gap:8,flexShrink:0}}>
+            <a href={url} target="_blank" rel="noreferrer"
+              style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:5}}>
+              ↗ Open in new tab
+            </a>
+            <button onClick={onClose}
+              style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,padding:"6px 12px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Preview area */}
+        <div style={{flex:1,overflow:"hidden",position:"relative",minHeight:400}}>
+          {isImage ? (
+            <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:T.bg}}>
+              <img src={url} alt="Preview" style={{maxWidth:"100%",maxHeight:"70vh",objectFit:"contain",borderRadius:8}}/>
+            </div>
+          ) : isViewable ? (
+            <iframe
+              src={previewUrl}
+              style={{width:"100%",height:"100%",border:"none",minHeight:500}}
+              title="File Preview"
+              allow="autoplay"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            />
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:300,gap:16,padding:20}}>
+              <div style={{fontSize:48}}>📄</div>
+              <div style={{fontSize:15,color:T.text,fontWeight:600}}>Preview not available for this file type</div>
+              <div style={{fontSize:13,color:T.textMuted,textAlign:"center",maxWidth:400}}>
+                This file format can't be previewed directly. Click "Open in new tab" to download or view it.
+              </div>
+              <a href={url} target="_blank" rel="noreferrer"
+                style={{background:T.blue,color:"#000",borderRadius:8,padding:"10px 24px",fontSize:13,fontWeight:700,textDecoration:"none"}}>
+                ↗ Open File
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2551,5 +2707,17 @@ function FLink({value,onChange}) {
 const Chip     = ({children,color}) => <span style={{background:T.bg,border:`1px solid ${T.borderLight}`,borderRadius:6,padding:"2px 9px",fontSize:12,color:color||T.textSub,fontWeight:500}}>{children}</span>;
 const Tag      = ({children,color}) => <span style={{background:`${color}18`,border:`1px solid ${color}33`,borderRadius:5,padding:"2px 8px",fontSize:11,color,fontWeight:700}}>{children}</span>;
 const ABtn     = ({onClick,color,children}) => <button onClick={onClick} style={{width:30,height:30,borderRadius:7,border:`1px solid ${color}33`,background:`${color}18`,color,fontSize:13,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{children}</button>;
-const FileLink = ({href}) => <a href={href} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:6,padding:"2px 9px",fontSize:12,color:T.blue,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>📎 Open File</a>;
+function FileLink({href}) {
+  const [preview,setPreview] = useState(false);
+  if(!href) return null;
+  return (
+    <>
+      <button onClick={e=>{e.stopPropagation();setPreview(true);}}
+        style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:6,padding:"2px 9px",fontSize:12,color:T.blue,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+        📎 View File
+      </button>
+      {preview && <FilePreviewModal url={href} onClose={()=>setPreview(false)}/>}
+    </>
+  );
+}
 const Btn      = ({children,onClick,color,solid}) => <button onClick={onClick} style={{background:solid?color:T.bg,border:`1px solid ${solid?color:T.border}`,color:solid?"#000":color||T.textSub,borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,transition:"all .15s"}}>{children}</button>;
