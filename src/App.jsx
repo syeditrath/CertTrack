@@ -23,30 +23,60 @@ const GLOBAL_CSS = `
   .resp-grid-3 { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr)); gap:clamp(10px,1.5vw,18px); }
   .resp-grid-4 { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,200px),1fr)); gap:clamp(8px,1.2vw,16px); }
 
-  @keyframes fadeUp  { from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
-  @keyframes slideUp { from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:translateY(0);} }
-  @keyframes fadeIn  { from{opacity:0;}to{opacity:1;} }
-  @keyframes slideIn { from{opacity:0;transform:translateX(30px);}to{opacity:1;transform:translateX(0);} }
-  .fade-up  { animation: fadeUp  0.3s ease both; }
-  .slide-up { animation: slideUp 0.35s cubic-bezier(0.34,1.3,0.64,1) both; }
-  .fade-in  { animation: fadeIn  0.2s ease both; }
-  /* Card distinct from background */
-  .app-card {
-    background: #fdf8f0;
-    border: 1px solid #e8d5b7;
-    border-radius: 14px;
-    box-shadow: 0 2px 8px rgba(26,10,0,0.06), 0 0 0 1px rgba(232,213,183,0.4);
-  }
-  .slide-in { animation: slideIn 0.3s ease both; }
+  @keyframes fadeUp    { from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);} }
+  @keyframes fadeDown  { from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);} }
+  @keyframes slideUp   { from{opacity:0;transform:translateY(32px) scale(0.97);}to{opacity:1;transform:translateY(0) scale(1);} }
+  @keyframes fadeIn    { from{opacity:0;}to{opacity:1;} }
+  @keyframes slideIn   { from{opacity:0;transform:translateX(24px);}to{opacity:1;transform:translateX(0);} }
+  @keyframes popIn     { 0%{opacity:0;transform:scale(0.88);}70%{transform:scale(1.03);}100%{opacity:1;transform:scale(1);} }
+  @keyframes shimmer   { 0%{background-position:-200% center;}100%{background-position:200% center;} }
+  @keyframes floatUp   { 0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);} }
+  @keyframes logoSpin  { from{transform:rotate(0deg);}to{transform:rotate(360deg);} }
+  @keyframes logoPulse { 0%,100%{transform:scale(1);}25%{transform:scale(1.04);}75%{transform:scale(0.97);} }
+  @keyframes gradShift { 0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;} }
+  @keyframes countUp   { from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);} }
   @keyframes spinSlow   { from{transform:rotate(0deg);}to{transform:rotate(360deg);} }
   @keyframes pulse      { 0%,100%{transform:scale(1);}50%{transform:scale(1.06);} }
   @keyframes glowRing   { 0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,0);}50%{box-shadow:0 0 0 18px rgba(251,191,36,0.18);} }
   @keyframes textReveal { from{opacity:0;letter-spacing:12px;}to{opacity:1;letter-spacing:4px;} }
   @keyframes subReveal  { from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);} }
   @keyframes fadeOut    { from{opacity:1;}to{opacity:0;} }
+
+  .fade-up   { animation: fadeUp   0.35s cubic-bezier(0.22,1,0.36,1) both; }
+  .fade-down { animation: fadeDown 0.3s ease both; }
+  .slide-up  { animation: slideUp  0.42s cubic-bezier(0.34,1.3,0.64,1) both; }
+  .fade-in   { animation: fadeIn   0.22s ease both; }
+  .slide-in  { animation: slideIn  0.32s cubic-bezier(0.22,1,0.36,1) both; }
+  .pop-in    { animation: popIn    0.4s  cubic-bezier(0.34,1.3,0.64,1) both; }
   .spin-slow  { animation: spinSlow 8s linear infinite; }
   .pulse-logo { animation: pulse 3s ease-in-out infinite; }
   .glow-ring  { animation: glowRing 2.5s ease-in-out infinite; }
+
+  /* Logo animations */
+  .logo-animate      { animation: logoPulse 5s ease-in-out infinite; }
+  .logo-ring-spin    { animation: logoSpin 12s linear infinite; }
+  .logo-ring-spin-rev{ animation: logoSpin 18s linear infinite reverse; }
+
+  /* Card hover lift */
+  .card-hover { transition: transform 0.22s ease, box-shadow 0.22s ease; }
+  .card-hover:hover { transform: translateY(-4px) !important; box-shadow: 0 10px 32px rgba(26,10,0,0.16) !important; }
+
+  /* Nav item hover indent */
+  .nav-item { transition: background 0.15s, padding-left 0.18s; }
+  .nav-item:hover { padding-left: 18px !important; }
+
+  /* Gold shimmer text */
+  .gold-text {
+    background: linear-gradient(90deg,#d97706,#fbbf24,#fde68a,#fbbf24,#d97706);
+    background-size: 200% auto;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; animation: shimmer 3s linear infinite;
+  }
+  /* App card base */
+  .app-card {
+    background: #fdf8f0; border: 1px solid #e8d5b7; border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(26,10,0,0.06), 0 0 0 1px rgba(232,213,183,0.4);
+  }
 
   /* Dark mode */
   body.dark-mode { background: #0d1117 !important; color: #e8edf5 !important; }
@@ -334,7 +364,7 @@ function LoginPage({onLogin}) {
           <div style={{width:72,height:72,borderRadius:"50%",overflow:"hidden",margin:"0 auto 16px",border:"2px solid rgba(251,191,36,0.5)",boxShadow:"0 0 24px rgba(251,191,36,0.2)"}}>
             <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
           </div>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:"#ffffff",letterSpacing:"2px"}}>SCORPION ARABIA</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,letterSpacing:"2px",background:"linear-gradient(90deg,#fbbf24,#fde68a,#f97316,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 3s linear infinite"}}>SCORPION ARABIA</div>
           <div style={{fontSize:12,color:"#38bdf8",letterSpacing:"3px",marginTop:4,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:600}}>PORTAL ACCESS</div>
         </div>
 
@@ -471,12 +501,16 @@ function WelcomeScreen({onEnter}) {
           fontFamily:"'Barlow Condensed',sans-serif",
           fontWeight:800,
           fontSize:"clamp(26px,5vw,48px)",
-          color:"#ffffff",
           letterSpacing:"4px",
-          animation:"textReveal 1.4s cubic-bezier(0.16,1,0.3,1) 0.5s both",
+          animation:"textReveal 1.4s cubic-bezier(0.16,1,0.3,1) 0.5s both, shimmer 3s linear infinite",
           textTransform:"uppercase",
           lineHeight:1.1,
           marginBottom:8,
+          background:"linear-gradient(90deg,#fbbf24,#fde68a,#f97316,#fbbf24)",
+          backgroundSize:"200% auto",
+          WebkitBackgroundClip:"text",
+          WebkitTextFillColor:"transparent",
+          backgroundClip:"text",
         }}>
           SCORPION ARABIA
         </div>
@@ -612,11 +646,11 @@ export default function App() {
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
-        <header style={{background:T.sidebar,borderBottom:`1px solid ${T.border}`,padding:"0 20px",flexShrink:0,boxShadow:"0 2px 8px rgba(13,31,53,0.2)"}}>
+        <header style={{background:T.sidebar,borderBottom:"2px solid transparent",backgroundImage:`linear-gradient(${T.sidebar},${T.sidebar}), linear-gradient(90deg,#fbbf24,#38bdf8,#34d399,#fbbf24)`,backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",padding:"0 20px",flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
           <div style={{display:"flex",alignItems:"center",height:56,position:"relative"}}>
             <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:"#ffffff",letterSpacing:"3px"}}>SCORPION ARABIA</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"3px",background:"linear-gradient(90deg,#fbbf24,#fde68a,#f97316,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 3s linear infinite"}}>SCORPION ARABIA</div>
               <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
             </div>
             <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
@@ -656,18 +690,18 @@ export default function App() {
         </header>
 
         <main style={{flex:1,overflowY:"auto",padding:"clamp(14px,2vw,28px) clamp(14px,2.5vw,32px)"}}>
-          {page==="dashboard" && <Dashboard data={data} alerts={allExpiries} go={go}/>}
-          {page==="scorpion"  && <ScorpionDocs data={data} setData={setData} showToast={showToast}/>}
-          {page==="projects"  && <ProjectDocs data={data} setData={setData} showToast={showToast}/>}
-          {page==="manpower"  && <ManpowerPage data={data} setData={setData} showToast={showToast}/>}
-          {page==="equipment" && <EquipmentPage data={data} setData={setData} showToast={showToast}/>}
+          {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go}/></div>}
+          {page==="scorpion"  && <div className="slide-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="projects"  && <div className="slide-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="manpower"  && <div className="slide-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="equipment" && <div className="slide-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
         </main>
       </div>
 
       {projMod && <ProjectsModal projects={data.projects||[]} onSave={saveProjects} onClose={()=>setProjMod(false)}/>}
 
       {toast && (
-        <div className="fade-up" style={{position:"fixed",bottom:24,right:24,zIndex:999,background:toast.type==="del"?"#fee2e2":"#d1fae5",border:`1px solid ${toast.type==="del"?T.red:T.green}`,color:toast.type==="del"?T.red:T.green,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:10}}>
+        <div className="pop-in" style={{position:"fixed",bottom:24,right:24,zIndex:999,background:toast.type==="del"?"#fee2e2":"#d1fae5",border:`1px solid ${toast.type==="del"?T.red:T.green}`,color:toast.type==="del"?T.red:T.green,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:10}}>
           {toast.type==="del"?"✕":"✓"} {toast.msg}
         </div>
       )}
@@ -691,11 +725,17 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
     <aside style={{width:"clamp(220px,18vw,280px)",flexShrink:0,background:T.sidebar,borderRight:"none",display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
       <div style={{padding:"22px 20px 18px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
-          <div style={{width:56,height:56,borderRadius:"50%",background:"#000",flexShrink:0,overflow:"hidden",boxShadow:"0 0 0 2px rgba(251,191,36,0.5)"}}>
-          <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
+          <div style={{position:"relative",flexShrink:0,width:56,height:56}}>
+          {/* Spinning rings behind logo */}
+          <div className="logo-ring-spin" style={{position:"absolute",inset:-5,borderRadius:"50%",border:"1.5px solid rgba(251,191,36,0.35)",pointerEvents:"none"}}/>
+          <div className="logo-ring-spin-rev" style={{position:"absolute",inset:-10,borderRadius:"50%",border:"1px dashed rgba(56,189,248,0.2)",pointerEvents:"none"}}/>
+          {/* Logo */}
+          <div className="logo-animate" style={{width:56,height:56,borderRadius:"50%",background:"#000",overflow:"hidden",boxShadow:"0 0 12px rgba(251,191,36,0.4)",border:"2px solid rgba(251,191,36,0.5)",position:"relative",zIndex:1}}>
+            <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
+          </div>
         </div>
           <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",color:"#ffffff",letterSpacing:".5px",lineHeight:1.1}}>SCORPION ARABIA</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",letterSpacing:".5px",lineHeight:1.1,background:"linear-gradient(90deg,#fbbf24,#fde68a,#f97316,#fbbf24)",backgroundSize:"200% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 3s linear infinite"}}>SCORPION ARABIA</div>
             <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>ASSET MANAGER</div>
           </div>
         </div>
@@ -705,7 +745,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
           const active=page===n.id;
           const badge=n.id==="dashboard"?alerts:0;
           return (
-            <button key={n.id} onClick={()=>go(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderRadius:8,border:"none",marginBottom:3,textAlign:"left",background:active?"rgba(59,130,246,0.15)":"transparent",borderLeft:`2px solid ${active?"#93c5fd":"transparent"}`,transition:"all .15s"}}>
+            <button key={n.id} onClick={()=>go(n.id)} className="nav-item" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderRadius:8,border:"none",marginBottom:3,textAlign:"left",background:active?"rgba(59,130,246,0.15)":"transparent",borderLeft:`2px solid ${active?"#93c5fd":"transparent"}`,transition:"all .15s",cursor:"pointer"}}>
               <span style={{fontSize:20,color:active?"#93c5fd":"#94a3b8"}}>{n.icon}</span>
               <div style={{flex:1}}>
                 <div style={{fontSize:"clamp(12px,1vw,14px)",fontWeight:600,color:active?"#93c5fd":"#e2e8f0"}}>{n.label}</div>
@@ -874,7 +914,7 @@ function Dashboard({data,alerts,go}) {
         ].map((k,i)=>(
           <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,boxShadow:"0 1px 6px rgba(26,10,0,0.06),0 0 0 1px rgba(232,213,183,0.4)",padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:10,right:14,fontSize:26,color:k.color,opacity:.08,fontWeight:800}}>{k.icon}</div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(28px,3vw,42px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(28px,3vw,42px)",fontWeight:800,color:k.color,lineHeight:1,animation:"countUp 0.6s ease both"}}>{k.v}</div>
             <div style={{fontSize:12,color:T.textSub,marginTop:5,fontWeight:500}}>{k.label}</div>
           </div>
         ))}
@@ -887,7 +927,7 @@ function Dashboard({data,alerts,go}) {
           <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(18px,2vw,26px)",color:pct>=80?T.green:pct>=60?T.gold:T.red}}>{pct}%</span>
         </div>
         <div style={{height:8,background:T.border,borderRadius:999}}>
-          <div style={{height:"100%",width:`${pct}%`,borderRadius:999,transition:"width .8s ease",background:pct>=80?`linear-gradient(90deg,${T.green},#059669)`:pct>=60?`linear-gradient(90deg,${T.gold},#d97706)`:`linear-gradient(90deg,${T.red},#dc2626)`}}/>
+          <div style={{height:"100%",width:`${pct}%`,borderRadius:999,transition:"width 1.2s cubic-bezier(0.22,1,0.36,1)",background:pct>=80?`linear-gradient(90deg,${T.green},#059669,${T.green})`:pct>=60?`linear-gradient(90deg,${T.gold},#d97706,${T.gold})`:`linear-gradient(90deg,${T.red},#dc2626,${T.red})`,backgroundSize:"200% 100%",animation:"shimmer 2s linear infinite"}}/>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:12,color:T.textSub}}>
           <span>{validCount} valid of {allTracked.length} tracked items</span>
@@ -899,7 +939,7 @@ function Dashboard({data,alerts,go}) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12,marginBottom:16}}>
 
         {/* Scorpion Documents */}
-        <div className="fade-up" onClick={()=>go("scorpion")}
+        <div className="fade-up card-hover" onClick={()=>go("scorpion")}
           style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".35s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.blue;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
@@ -922,7 +962,7 @@ function Dashboard({data,alerts,go}) {
         </div>
 
         {/* Project Docs */}
-        <div className="fade-up" onClick={()=>go("projects")}
+        <div className="fade-up card-hover" onClick={()=>go("projects")}
           style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".40s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.teal;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
@@ -950,7 +990,7 @@ function Dashboard({data,alerts,go}) {
         </div>
 
         {/* Manpower */}
-        <div className="fade-up" onClick={()=>go("manpower")}
+        <div className="fade-up card-hover" onClick={()=>go("manpower")}
           style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".42s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
@@ -981,7 +1021,7 @@ function Dashboard({data,alerts,go}) {
         </div>
 
         {/* Equipment */}
-        <div className="fade-up" onClick={()=>go("equipment")}
+        <div className="fade-up card-hover" onClick={()=>go("equipment")}
           style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"20px",cursor:"pointer",animationDelay:".49s",transition:"border-color .2s,transform .2s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=T.gold;e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.transform="none";}}>
