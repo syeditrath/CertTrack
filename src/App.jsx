@@ -772,7 +772,7 @@ function Sidebar({page,go,sideOpen,alerts,data,onManageProjects,darkMode,onToggl
           <div className="logo-ring-spin" style={{position:"absolute",inset:-5,borderRadius:"50%",border:"1.5px solid rgba(251,191,36,0.35)",pointerEvents:"none"}}/>
           <div className="logo-ring-spin-rev" style={{position:"absolute",inset:-10,borderRadius:"50%",border:"1px dashed rgba(56,189,248,0.2)",pointerEvents:"none"}}/>
           {/* Logo */}
-          <div className="logo-animate" style={{width:60,height:60,borderRadius:"60%",background:"#000",overflow:"hidden",boxShadow:"0 0 12px rgba(251,191,36,0.4)",border:"2px solid rgba(251,191,36,0.5)",position:"relative",zIndex:1}}>
+          <div className="logo-animate" style={{width:60,height:60,borderRadius:"50%",background:"#000",overflow:"hidden",boxShadow:"0 0 12px rgba(251,191,36,0.4)",border:"2px solid rgba(251,191,36,0.5)",position:"relative",zIndex:1}}>
             <img src="logo.png" alt="Scorpion Arabia" style={{width:"110%",height:"110%",objectFit:"cover",mixBlendMode:"lighten"}}/>
           </div>
         </div>
