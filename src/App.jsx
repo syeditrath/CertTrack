@@ -294,17 +294,17 @@ const STORAGE_BUCKET  = "portal-files";
 async function uploadToSupabase(file, folder) {
   const ext   = file.name.split(".").pop();
   const path  = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
-  const res   = await fetch(`${"https://kojtmdvzkrkdkorsulss.supabase.co"}/storage/v1/object/${"portal-files"}/${"scorpion-portal"}`, {
+  const res   = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
     method:"POST",
-    headers:{"Authorization":`Bearer ${"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk"}`,"Content-Type":file.type,"x-upsert":"true"},
+    headers:{"Authorization":`Bearer ${SUPABASE_ANON}`,"Content-Type":file.type,"x-upsert":"true"},
     body: file,
   });
   if (!res.ok) { const e=await res.json(); throw new Error(e.message||"Upload failed"); }
-  return `${"https://kojtmdvzkrkdkorsulss.supabase.co"}/storage/v1/object/public/${"portal-files"}/${"scorpion-portal"}`;
+  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
 }
 
 function isSupabaseConfigured() {
-  return SUPABASE_URL !== "https://kojtmdvzkrkdkorsulss.supabase.co" && SUPABASE_ANON !== "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk";
+  return SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON !== "YOUR_SUPABASE_ANON_KEY";
 }
 
 function getPreviewUrl(url) {
@@ -2641,64 +2641,84 @@ function FLink({value,onChange,folder}) {
    FILE PREVIEW MODAL
 ════════════════════════════════════════════════════════════════════════════ */
 function FilePreviewModal({url,onClose}) {
-  const previewUrl = getPreviewUrl(url);
-  const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(url);
-  const isPdf   = /\.pdf$/i.test(url) || url.includes("supabase.co/storage");
-  const isOffice= /\.(doc|docx|xls|xlsx|ppt|pptx)$/i.test(url);
-  const isViewable = isImage || isPdf || isOffice ||
-    url.includes("drive.google.com") ||
-    url.includes("1drv.ms") || url.includes("onedrive.live.com") ||
-    url.includes("sharepoint.com");
+  // Detect file type from URL
+  const clean   = url.split("?")[0].toLowerCase();
+  const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/.test(clean);
+  const isPdf   = /\.pdf$/.test(clean);
+  const isOffice= /\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(clean);
+  const isSupabase   = url.includes("supabase.co/storage");
+  const isGDrive     = url.includes("drive.google.com");
+  const isOneDrive   = url.includes("1drv.ms") || url.includes("onedrive.live.com");
+  const isSharePoint = url.includes("sharepoint.com");
+
+  // Build the best embed URL for each case
+  const embedUrl = (() => {
+    if (isImage) return url;
+    // PDFs from Supabase — use Google PDF viewer as proxy (avoids X-Frame-Options)
+    if (isPdf || isSupabase) return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+    // Office files — Microsoft Office Online viewer
+    if (isOffice) return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+    // Google Drive — convert to preview embed
+    if (isGDrive) {
+      const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if (m) return `https://drive.google.com/file/d/${m[1]}/preview`;
+    }
+    // OneDrive
+    if (isOneDrive) return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+    // SharePoint
+    if (isSharePoint) return url + (url.includes("?") ? "&action=embedview" : "?action=embedview");
+    return url;
+  })();
+
+  const filename = url.split("/").pop().split("?")[0] || "File";
 
   return (
     <div className="fade-in" onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:16,width:"100%",maxWidth:900,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-        {/* Header */}
-        <div style={{padding:"14px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-          <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"70%"}}>
-            📎 {url.split("/").pop().split("?")[0] || "File Preview"}
-          </div>
-          <div style={{display:"flex",gap:8,flexShrink:0}}>
-            <a href={url} target="_blank" rel="noreferrer"
-              style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:5}}>
-              ↗ Open in new tab
-            </a>
-            <button onClick={onClose}
-              style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,padding:"6px 12px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-              ✕
-            </button>
-          </div>
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:9000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"16px"}}>
+      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:16,width:"min(96vw,1000px)",height:"min(92vh,800px)",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,0.6)"}}>
+
+        {/* ── Header ── */}
+        <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          <span style={{fontSize:18}}>{isImage?"🖼️":isPdf||isSupabase?"📄":isOffice?"📊":"📎"}</span>
+          <div style={{flex:1,fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{decodeURIComponent(filename)}</div>
+          <a href={url} download target="_blank" rel="noreferrer"
+            style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+            ⬇ Download
+          </a>
+          <a href={url} target="_blank" rel="noreferrer"
+            style={{background:T.blueDim,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+            ↗ New Tab
+          </a>
+          <button onClick={onClose}
+            style={{background:T.redDim,border:`1px solid ${T.red}44`,color:T.red,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,cursor:"pointer",flexShrink:0}}>
+            ✕
+          </button>
         </div>
 
-        {/* Preview area */}
-        <div style={{flex:1,overflow:"hidden",position:"relative",minHeight:400}}>
+        {/* ── Preview ── */}
+        <div style={{flex:1,overflow:"hidden",background:T.bg,position:"relative"}}>
           {isImage ? (
-            <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:T.bg}}>
-              <img src={url} alt="Preview" style={{maxWidth:"100%",maxHeight:"70vh",objectFit:"contain",borderRadius:8}}/>
+            <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+              <img src={url} alt="Preview"
+                style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",borderRadius:8,boxShadow:"0 4px 24px rgba(0,0,0,0.3)"}}/>
             </div>
-          ) : isViewable ? (
-            <iframe
-              src={previewUrl}
-              style={{width:"100%",height:"100%",border:"none",minHeight:500}}
-              title="File Preview"
-              allow="autoplay"
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-            />
           ) : (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:300,gap:16,padding:20}}>
-              <div style={{fontSize:48}}>📄</div>
-              <div style={{fontSize:15,color:T.text,fontWeight:600}}>Preview not available for this file type</div>
-              <div style={{fontSize:13,color:T.textMuted,textAlign:"center",maxWidth:400}}>
-                This file format can't be previewed directly. Click "Open in new tab" to download or view it.
-              </div>
-              <a href={url} target="_blank" rel="noreferrer"
-                style={{background:T.blue,color:"#000",borderRadius:8,padding:"10px 24px",fontSize:13,fontWeight:700,textDecoration:"none"}}>
-                ↗ Open File
-              </a>
-            </div>
+            <iframe
+              key={embedUrl}
+              src={embedUrl}
+              style={{width:"100%",height:"100%",border:"none"}}
+              title="File Preview"
+              allow="autoplay; fullscreen"
+            />
           )}
         </div>
+
+        {/* ── Footer tip for Google Viewer ── */}
+        {(isPdf||isSupabase)&&!isImage&&(
+          <div style={{padding:"8px 16px",background:T.goldDim,borderTop:`1px solid ${T.gold}33`,fontSize:11,color:T.gold,display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+            💡 If preview doesn't load, click <strong>↗ New Tab</strong> to open directly — or <strong>⬇ Download</strong> to save the file.
+          </div>
+        )}
       </div>
     </div>
   );
