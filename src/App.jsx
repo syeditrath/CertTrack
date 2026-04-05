@@ -2518,18 +2518,6 @@ function FormModal({
   const isTablet = screenWidth > 640 && screenWidth <= 1024;
   const isShortScreen = screenHeight <= 760;
 
-  const modalWidth = isMobile
-    ? "100%"
-    : isTablet
-    ? "92vw"
-    : "min(88vw, 900px)";
-
-  const modalMaxHeight = isMobile
-    ? "92vh"
-    : isShortScreen
-    ? "90vh"
-    : "auto";
-
   return (
     <div
       onClick={onClose}
@@ -2537,8 +2525,8 @@ function FormModal({
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(4px)",
+        background: "rgba(0,0,0,0.25)",
+        backdropFilter: "blur(2px)",
         display: "flex",
         justifyContent: "center",
         alignItems: isMobile || isShortScreen ? "flex-start" : "center",
@@ -2550,9 +2538,9 @@ function FormModal({
         className="slide-up"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: modalWidth,
-          maxWidth: isMobile ? "100%" : isTablet ? "820px" : "980px",
-          maxHeight: modalMaxHeight,
+          width: isMobile ? "96vw" : isTablet ? "88vw" : "min(92vw, 1100px)",
+          maxWidth: isMobile ? "96vw" : isTablet ? "900px" : "1100px",
+          maxHeight: isMobile ? "94vh" : "92vh",
           marginTop: isMobile || isShortScreen ? "12px" : "0",
           background: T.sidebar,
           border: `1px solid ${color}33`,
@@ -2595,6 +2583,7 @@ function FormModal({
               padding: isMobile ? "7px 10px" : "8px 12px",
               fontSize: 14,
               lineHeight: 1,
+              cursor: "pointer",
             }}
           >
             ✕
@@ -2606,7 +2595,7 @@ function FormModal({
             padding: isMobile ? "16px" : "22px",
             display: "grid",
             gap: isMobile ? 14 : 16,
-            overflowY: modalMaxHeight === "auto" ? "visible" : "auto",
+            overflowY: "auto",
           }}
         >
           {children}
@@ -2633,6 +2622,7 @@ function FormModal({
               padding: "10px 16px",
               fontWeight: 600,
               minWidth: isMobile ? "calc(50% - 5px)" : "auto",
+              cursor: "pointer",
             }}
           >
             Cancel
@@ -2648,6 +2638,7 @@ function FormModal({
               padding: "10px 18px",
               fontWeight: 800,
               minWidth: isMobile ? "calc(50% - 5px)" : "auto",
+              cursor: "pointer",
             }}
           >
             Save
