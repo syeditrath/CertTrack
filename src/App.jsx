@@ -2516,7 +2516,7 @@ function FormModal({
         className="slide-up"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "min(92vw, 900px)",
+          width: "min(94vw, 980px)",
           background: T.sidebar,
           border: `1px solid ${color}33`,
           borderRadius: 18,
