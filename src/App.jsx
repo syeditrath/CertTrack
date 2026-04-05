@@ -287,8 +287,8 @@ const COMPANY_PASSWORD = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY = "cta_auth";
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
-const SUPABASE_URL    = "YOUR_SUPABASE_URL";    // e.g. https://xxxx.supabase.co
-const SUPABASE_ANON   = "YOUR_SUPABASE_ANON_KEY"; // your anon/public key
+const SUPABASE_URL    = "https://kojtmdvzkrkdkorsulss.supabase.co";    // e.g. https://xxxx.supabase.co
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk"; // your anon/public key
 const STORAGE_BUCKET  = "portal-files";
 
 async function uploadToSupabase(file, folder) {
