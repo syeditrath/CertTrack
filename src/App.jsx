@@ -2497,10 +2497,14 @@ function FormModal({
   onSave,
   children
 }) {
-  const [screenWidth, setScreenWidth] = React.useState(window.innerWidth);
-  const [screenHeight, setScreenHeight] = React.useState(window.innerHeight);
+  const [screenWidth, setScreenWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1200
+  );
+  const [screenHeight, setScreenHeight] = useState(
+    typeof window !== "undefined" ? window.innerHeight : 900
+  );
 
-  React.useEffect(() => {
+  useEffect(() => {
     const onResize = () => {
       setScreenWidth(window.innerWidth);
       setScreenHeight(window.innerHeight);
