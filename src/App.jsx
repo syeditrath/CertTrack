@@ -2518,17 +2518,17 @@ function FormModal({
         className="slide-up"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "min(96vw, 1100px)",
-          maxWidth,
-          background: T.sidebar,
-          border: `1px solid ${color}33`,
-          borderRadius: 18,
-          boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
-          overflow: "hidden",
-          maxHeight: fullHeight ? "92vh" : "auto",
-          display: "flex",
-          flexDirection: "column",
-        }}
+  width: "min(90vw, 700px)",
+  maxWidth: "720px",
+  background: T.sidebar,
+  border: `1px solid ${color}33`,
+  borderRadius: 18,
+  boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
+  overflow: "hidden",
+  maxHeight: "90vh",
+  display: "flex",
+  flexDirection: "column",
+}}
       >
         {/* Header */}
         <div
