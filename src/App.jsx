@@ -2490,21 +2490,137 @@ function Overlay({children,onClose}) {
   );
 }
 
-function FormModal({title,color,children,onClose,onSave}) {
+function FormModal({
+  title,
+  color,
+  onClose,
+  onSave,
+  children,
+  maxWidth = "1100px",   // make modal wide by default
+  fullHeight = true
+}) {
   return (
-    <Overlay onClose={onClose}>
-      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:500,maxHeight:"90vh",overflow:"auto"}}>
-        <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:T.sidebar,zIndex:1}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{title}</div>
-          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>×</button>
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.45)",
+        backdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+      }}
+    >
+      <div
+        className="slide-up"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(96vw, 1100px)",
+          maxWidth,
+          background: T.sidebar,
+          border: `1px solid ${color}33`,
+          borderRadius: 18,
+          boxShadow: "0 30px 80px rgba(0,0,0,0.35)",
+          overflow: "hidden",
+          maxHeight: fullHeight ? "92vh" : "auto",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: "20px 22px",
+            borderBottom: `1px solid ${T.border}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "rgba(255,255,255,0.02)",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Barlow Condensed', sans-serif",
+              fontWeight: 800,
+              fontSize: 24,
+              letterSpacing: "1px",
+              color: color,
+            }}
+          >
+            {title}
+          </div>
+
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: `1px solid ${T.border}`,
+              color: T.textSub,
+              borderRadius: 10,
+              padding: "8px 12px",
+              fontSize: 14,
+            }}
+          >
+            ✕
+          </button>
         </div>
-        <div style={{padding:"18px 22px"}}>{children}</div>
-        <div style={{padding:"0 22px 22px",display:"flex",gap:10,position:"sticky",bottom:0,background:T.sidebar,paddingTop:12,borderTop:`1px solid ${T.border}`}}>
-          <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"11px",fontSize:13,fontWeight:600}}>Cancel</button>
-          <button onClick={onSave}  style={{flex:2,background:color,border:"none",color:"#000",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700}}>Save</button>
+
+        {/* Body */}
+        <div
+          style={{
+            padding: "22px",
+            overflowY: "auto",
+            display: "grid",
+            gap: 16,
+          }}
+        >
+          {children}
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: "18px 22px",
+            borderTop: `1px solid ${T.border}`,
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+            background: "rgba(255,255,255,0.02)",
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: `1px solid ${T.border}`,
+              color: T.textSub,
+              borderRadius: 10,
+              padding: "10px 16px",
+              fontWeight: 600,
+            }}
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={onSave}
+            style={{
+              background: color,
+              border: "none",
+              color: "#081018",
+              borderRadius: 10,
+              padding: "10px 18px",
+              fontWeight: 800,
+            }}
+          >
+            Save
+          </button>
         </div>
       </div>
-    </Overlay>
+    </div>
   );
 }
 
