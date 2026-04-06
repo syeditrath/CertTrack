@@ -294,17 +294,17 @@ const STORAGE_BUCKET  = "portal-files";
 async function uploadToSupabase(file, folder) {
   const ext   = file.name.split(".").pop();
   const path  = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
-  const res   = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
+  const res   = await fetch(`${https://kojtmdvzkrkdkorsulss.supabase.co}/storage/v1/object/${portal-files}/${scorpion-portal}`, {
     method:"POST",
-    headers:{"Authorization":`Bearer ${SUPABASE_ANON}`,"Content-Type":file.type,"x-upsert":"true"},
+    headers:{"Authorization":`Bearer ${eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk}`,"Content-Type":file.type,"x-upsert":"true"},
     body: file,
   });
   if (!res.ok) { const e=await res.json(); throw new Error(e.message||"Upload failed"); }
-  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
+  return `${https://kojtmdvzkrkdkorsulss.supabase.co}/storage/v1/object/public/${portal-files}/${scorpion-portal}`;
 }
 
 function isSupabaseConfigured() {
-  return SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON !== "YOUR_SUPABASE_ANON_KEY";
+  return SUPABASE_URL !== "https://kojtmdvzkrkdkorsulss.supabase.co" && SUPABASE_ANON !== "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk";
 }
 
 function getPreviewUrl(url) {
@@ -1608,7 +1608,7 @@ function ScorpionDocs({data,setData,showToast}) {
 function DocModal({mode,doc,cats,onClose,onSave}) {
   const [f,setF]=useState(doc||{});
   const F=(k,label,type)=>({key:k,label,type:type||"text"});
-  const fields=[F("category","Category","select")];
+  const fields=[F("name","Document Name"),F("category","Category","select"),F("docNo","Reference / Doc No."),F("issueDate","Issue Date","date"),F("expiryDate","Expiry Date","date"),F("fileLink","File Link (Google Drive / SharePoint)","link"),F("notes","Notes","textarea")];
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} DOCUMENT`} color={T.blue} onClose={onClose}
       onSave={()=>{if(!f.name){alert("Document name is required");return;}onSave(f,mode);}}>
@@ -2484,7 +2484,7 @@ function Empty({icon,label,sub,color,onAdd}) {
 function Overlay({children,onClose}) {
   return (
     <div className="fade-in" onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"32px 16px",overflowY:"auto"}}>
+      style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.55)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16,overflowY:"auto"}}>
       {children}
     </div>
   );
@@ -2493,18 +2493,15 @@ function Overlay({children,onClose}) {
 function FormModal({title,color,children,onClose,onSave}) {
   return (
     <Overlay onClose={onClose}>
-      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:600,overflow:"hidden",display:"flex",flexDirection:"column"}}>
-        {/* Header — sticky */}
-        <div style={{padding:"20px 24px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text,letterSpacing:".5px"}}>{title}</div>
-          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>×</button>
+      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:500,maxHeight:"90vh",overflow:"auto"}}>
+        <div style={{padding:"20px 22px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:T.sidebar,zIndex:1}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{title}</div>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>×</button>
         </div>
-        {/* Scrollable body */}
-        <div style={{padding:"20px 24px",overflowY:"auto",maxHeight:"calc(85vh - 140px)"}}>{children}</div>
-        {/* Footer — sticky */}
-        <div style={{padding:"14px 24px 24px",display:"flex",gap:10,borderTop:`1px solid ${T.border}`,flexShrink:0,background:T.sidebar}}>
-          <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"12px",fontSize:14,fontWeight:600}}>Cancel</button>
-          <button onClick={onSave}  style={{flex:2,background:color,border:"none",color:"#000",borderRadius:10,padding:"12px",fontSize:15,fontWeight:700}}>Save</button>
+        <div style={{padding:"18px 22px"}}>{children}</div>
+        <div style={{padding:"0 22px 22px",display:"flex",gap:10,position:"sticky",bottom:0,background:T.sidebar,paddingTop:12,borderTop:`1px solid ${T.border}`}}>
+          <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"11px",fontSize:13,fontWeight:600}}>Cancel</button>
+          <button onClick={onSave}  style={{flex:2,background:color,border:"none",color:"#000",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700}}>Save</button>
         </div>
       </div>
     </Overlay>
@@ -2551,8 +2548,8 @@ function CatManagerModal({title,cats,onSave,onClose}) {
 
 function FieldRow({label,children}) {
   return (
-    <div style={{marginBottom:14}}>
-      <label style={{display:"block",fontSize:12,fontWeight:700,color:T.textSub,marginBottom:6,letterSpacing:".3px"}}>{label}</label>
+    <div style={{marginBottom:13}}>
+      <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:".5px"}}>{label.toUpperCase()}</label>
       {children}
     </div>
   );
@@ -2564,19 +2561,19 @@ function SectionDivider({label}) {
 
 function FInput({type,value,onChange,color,placeholder}) {
   return <input type={type||"text"} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 13px",fontSize:14,color:T.text,outline:"none",colorScheme:"light",transition:"border-color .15s"}}
+    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
     onFocus={e=>e.target.style.borderColor=color||T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>;
 }
 
 function FTextarea({value,onChange,color}) {
-  return <textarea value={value} onChange={e=>onChange(e.target.value)} rows={3}
-    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 13px",fontSize:14,color:T.text,outline:"none",resize:"vertical",colorScheme:"light",transition:"border-color .15s"}}
+  return <textarea value={value} onChange={e=>onChange(e.target.value)} rows={2}
+    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",resize:"vertical",colorScheme:"light"}}
     onFocus={e=>e.target.style.borderColor=color||T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>;
 }
 
 function FSelect({value,onChange,color,children}) {
   return <select value={value} onChange={e=>onChange(e.target.value)}
-    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 13px",fontSize:14,color:value?T.text:T.textMuted,outline:"none",colorScheme:"light",transition:"border-color .15s"}}
+    style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:value?T.text:T.textMuted,outline:"none",colorScheme:"light"}}
     onFocus={e=>e.target.style.borderColor=color||T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
     {children}
   </select>;
@@ -2585,6 +2582,7 @@ function FSelect({value,onChange,color,children}) {
 function FLink({value,onChange,folder}) {
   const [uploading,setUploading] = useState(false);
   const [uploadErr,setUploadErr] = useState("");
+  const [preview,  setPreview]   = useState(false);
   const fileRef = useRef();
   const configured = isSupabaseConfigured();
 
@@ -2611,10 +2609,10 @@ function FLink({value,onChange,folder}) {
           style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.blue,outline:"none",colorScheme:"light"}}
           onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
         {value&&(
-          <a href={value} target="_blank" rel="noreferrer"
-            style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"0 12px",fontSize:12,fontWeight:600,flexShrink:0,cursor:"pointer",textDecoration:"none",display:"flex",alignItems:"center",whiteSpace:"nowrap"}}>
-            ↗ Open
-          </a>
+          <button type="button" onClick={()=>setPreview(true)}
+            style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"0 12px",fontSize:12,fontWeight:600,flexShrink:0,cursor:"pointer"}}>
+            👁 Preview
+          </button>
         )}
       </div>
       {configured && (
@@ -2633,7 +2631,7 @@ function FLink({value,onChange,folder}) {
         </div>
       )}
       {uploadErr && <div style={{fontSize:11,color:T.red}}>{uploadErr}</div>}
-
+      {preview && <FilePreviewModal url={value} onClose={()=>setPreview(false)}/>}
     </div>
   );
 }
@@ -2643,84 +2641,64 @@ function FLink({value,onChange,folder}) {
    FILE PREVIEW MODAL
 ════════════════════════════════════════════════════════════════════════════ */
 function FilePreviewModal({url,onClose}) {
-  // Detect file type from URL
-  const clean   = url.split("?")[0].toLowerCase();
-  const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/.test(clean);
-  const isPdf   = /\.pdf$/.test(clean);
-  const isOffice= /\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(clean);
-  const isSupabase   = url.includes("supabase.co/storage");
-  const isGDrive     = url.includes("drive.google.com");
-  const isOneDrive   = url.includes("1drv.ms") || url.includes("onedrive.live.com");
-  const isSharePoint = url.includes("sharepoint.com");
-
-  // Build the best embed URL for each case
-  const embedUrl = (() => {
-    if (isImage) return url;
-    // PDFs from Supabase — use Google PDF viewer as proxy (avoids X-Frame-Options)
-    if (isPdf || isSupabase) return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
-    // Office files — Microsoft Office Online viewer
-    if (isOffice) return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
-    // Google Drive — convert to preview embed
-    if (isGDrive) {
-      const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-      if (m) return `https://drive.google.com/file/d/${m[1]}/preview`;
-    }
-    // OneDrive
-    if (isOneDrive) return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
-    // SharePoint
-    if (isSharePoint) return url + (url.includes("?") ? "&action=embedview" : "?action=embedview");
-    return url;
-  })();
-
-  const filename = url.split("/").pop().split("?")[0] || "File";
+  const previewUrl = getPreviewUrl(url);
+  const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(url);
+  const isPdf   = /\.pdf$/i.test(url) || url.includes("supabase.co/storage");
+  const isOffice= /\.(doc|docx|xls|xlsx|ppt|pptx)$/i.test(url);
+  const isViewable = isImage || isPdf || isOffice ||
+    url.includes("drive.google.com") ||
+    url.includes("1drv.ms") || url.includes("onedrive.live.com") ||
+    url.includes("sharepoint.com");
 
   return (
     <div className="fade-in" onClick={e=>e.target===e.currentTarget&&onClose()}
-      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:9000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"16px"}}>
-      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:16,width:"min(96vw,1000px)",height:"min(92vh,800px)",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 64px rgba(0,0,0,0.6)"}}>
-
-        {/* ── Header ── */}
-        <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          <span style={{fontSize:18}}>{isImage?"🖼️":isPdf||isSupabase?"📄":isOffice?"📊":"📎"}</span>
-          <div style={{flex:1,fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{decodeURIComponent(filename)}</div>
-          <a href={url} download target="_blank" rel="noreferrer"
-            style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
-            ⬇ Download
-          </a>
-          <a href={url} target="_blank" rel="noreferrer"
-            style={{background:T.blueDim,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
-            ↗ New Tab
-          </a>
-          <button onClick={onClose}
-            style={{background:T.redDim,border:`1px solid ${T.red}44`,color:T.red,borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,cursor:"pointer",flexShrink:0}}>
-            ✕
-          </button>
+      style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9000,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:16,width:"100%",maxWidth:900,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        {/* Header */}
+        <div style={{padding:"14px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"70%"}}>
+            📎 {url.split("/").pop().split("?")[0] || "File Preview"}
+          </div>
+          <div style={{display:"flex",gap:8,flexShrink:0}}>
+            <a href={url} target="_blank" rel="noreferrer"
+              style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:5}}>
+              ↗ Open in new tab
+            </a>
+            <button onClick={onClose}
+              style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,padding:"6px 12px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+              ✕
+            </button>
+          </div>
         </div>
 
-        {/* ── Preview ── */}
-        <div style={{flex:1,overflow:"hidden",background:T.bg,position:"relative"}}>
+        {/* Preview area */}
+        <div style={{flex:1,overflow:"hidden",position:"relative",minHeight:400}}>
           {isImage ? (
-            <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-              <img src={url} alt="Preview"
-                style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",borderRadius:8,boxShadow:"0 4px 24px rgba(0,0,0,0.3)"}}/>
+            <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",padding:20,background:T.bg}}>
+              <img src={url} alt="Preview" style={{maxWidth:"100%",maxHeight:"70vh",objectFit:"contain",borderRadius:8}}/>
             </div>
-          ) : (
+          ) : isViewable ? (
             <iframe
-              key={embedUrl}
-              src={embedUrl}
-              style={{width:"100%",height:"100%",border:"none"}}
+              src={previewUrl}
+              style={{width:"100%",height:"100%",border:"none",minHeight:500}}
               title="File Preview"
-              allow="autoplay; fullscreen"
+              allow="autoplay"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
             />
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:300,gap:16,padding:20}}>
+              <div style={{fontSize:48}}>📄</div>
+              <div style={{fontSize:15,color:T.text,fontWeight:600}}>Preview not available for this file type</div>
+              <div style={{fontSize:13,color:T.textMuted,textAlign:"center",maxWidth:400}}>
+                This file format can't be previewed directly. Click "Open in new tab" to download or view it.
+              </div>
+              <a href={url} target="_blank" rel="noreferrer"
+                style={{background:T.blue,color:"#000",borderRadius:8,padding:"10px 24px",fontSize:13,fontWeight:700,textDecoration:"none"}}>
+                ↗ Open File
+              </a>
+            </div>
           )}
         </div>
-
-        {/* ── Footer tip for Google Viewer ── */}
-        {(isPdf||isSupabase)&&!isImage&&(
-          <div style={{padding:"8px 16px",background:T.goldDim,borderTop:`1px solid ${T.gold}33`,fontSize:11,color:T.gold,display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-            💡 If preview doesn't load, click <strong>↗ New Tab</strong> to open directly — or <strong>⬇ Download</strong> to save the file.
-          </div>
-        )}
       </div>
     </div>
   );
@@ -2729,13 +2707,17 @@ function FilePreviewModal({url,onClose}) {
 const Chip     = ({children,color}) => <span style={{background:T.bg,border:`1px solid ${T.borderLight}`,borderRadius:6,padding:"2px 9px",fontSize:12,color:color||T.textSub,fontWeight:500}}>{children}</span>;
 const Tag      = ({children,color}) => <span style={{background:`${color}18`,border:`1px solid ${color}33`,borderRadius:5,padding:"2px 8px",fontSize:11,color,fontWeight:700}}>{children}</span>;
 const ABtn     = ({onClick,color,children}) => <button onClick={onClick} style={{width:30,height:30,borderRadius:7,border:`1px solid ${color}33`,background:`${color}18`,color,fontSize:13,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{children}</button>;
-const FileLink = ({href}) => {
+function FileLink({href}) {
+  const [preview,setPreview] = useState(false);
   if(!href) return null;
   return (
-    <a href={href} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
-      style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:6,padding:"3px 10px",fontSize:12,color:T.blue,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>
-      📎 View File
-    </a>
+    <>
+      <button onClick={e=>{e.stopPropagation();setPreview(true);}}
+        style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:6,padding:"2px 9px",fontSize:12,color:T.blue,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+        📎 View File
+      </button>
+      {preview && <FilePreviewModal url={href} onClose={()=>setPreview(false)}/>}
+    </>
   );
-};
+}
 const Btn      = ({children,onClick,color,solid}) => <button onClick={onClick} style={{background:solid?color:T.bg,border:`1px solid ${solid?color:T.border}`,color:solid?"#000":color||T.textSub,borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,transition:"all .15s"}}>{children}</button>;
