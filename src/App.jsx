@@ -1608,7 +1608,7 @@ function ScorpionDocs({data,setData,showToast}) {
 function DocModal({mode,doc,cats,onClose,onSave}) {
   const [f,setF]=useState(doc||{});
   const F=(k,label,type)=>({key:k,label,type:type||"text"});
-  const fields=[F("name","Document Name"),F("category","Category","select"),F("docNo","Reference / Doc No."),F("issueDate","Issue Date","date"),F("expiryDate","Expiry Date","date"),F("fileLink","File Link (Google Drive / SharePoint)","link"),F("notes","Notes","textarea")];
+  const fields=[F("category","Category","select")];
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} DOCUMENT`} color={T.blue} onClose={onClose}
       onSave={()=>{if(!f.name){alert("Document name is required");return;}onSave(f,mode);}}>
