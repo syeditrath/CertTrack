@@ -49,9 +49,9 @@ const GLOBAL_CSS = `
   .fade-in   { animation: fadeIn   0.22s ease both; }
   .slide-in  { animation: slideIn  0.32s cubic-bezier(0.22,1,0.36,1) both; }
   .pop-in    { animation: popIn    0.4s  cubic-bezier(0.34,1.3,0.64,1) both; }
-  .spin-slow  { animation: spinSlow 8s linear infinite; }
+  .spin-slow  { animation: spinSlow 3s linear infinite; }
   .pulse-logo { animation: pulse 3s ease-in-out infinite; }
-  .glow-ring  { animation: glowRing 2.5s ease-in-out infinite; }
+  .glow-ring  { animation: glowRing 5s ease-in-out infinite; }
 
   /* Logo animations */
   .logo-animate      { animation: logoPulse 5s ease-in-out infinite; }
