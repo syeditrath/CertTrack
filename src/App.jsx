@@ -52,7 +52,18 @@ const GLOBAL_CSS = `
   .spin-slow  { animation: spinSlow 8s linear infinite; }
   .pulse-logo { animation: pulse 3s ease-in-out infinite; }
   .glow-ring  { animation: glowRing 2.5s ease-in-out infinite; }
+  .shimmer-hover {
+  background: linear-gradient(90deg,#92400e,#fbbf24,#fde68a,#fbbf24,#92400e);
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  transition: all 0.3s ease;
+}
 
+  .shimmer-hover:hover {
+  animation: shimmer 6s ease-in-out infinite;
+}
   /* Logo animations */
   .logo-animate      { animation: logoPulse 5s ease-in-out infinite; }
   .logo-ring-spin    { animation: logoSpin 12s linear infinite; }
@@ -71,7 +82,7 @@ const GLOBAL_CSS = `
     background: linear-gradient(90deg,#d97706,#fbbf24,#fde68a,#fbbf24,#d97706);
     background-size: 200% auto;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text; animation: shimmer 10s ease-in-out infinite;
+    background-clip: text;
   }
   /* App card base */
   .app-card {
@@ -694,7 +705,14 @@ export default function App() {
           <div style={{display:"flex",alignItems:"center",height:56,position:"relative"}}>
             <button onClick={()=>setSideOpen(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>☰</button>
             <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"3px",background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 4s linear infinite",filter:"drop-shadow(0 0 10px rgba(251,191,36,0.7))"}}>SCORPION ARABIA</div>
+              <div className="shimmer-hover" style={{
+  fontFamily:"'Barlow Condensed',sans-serif",
+  fontWeight:800,
+  fontSize:24,
+  letterSpacing:"3px",
+}}>
+  SCORPION ARABIA
+</div>
               <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>DOCUMENT & ASSET MANAGER</div>
             </div>
             <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
