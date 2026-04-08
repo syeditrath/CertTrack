@@ -2508,16 +2508,17 @@ function Overlay({ children, onClose }) {
         alignItems: "center",
         justifyContent: "center",
         padding: "16px",
-        overflow: "hidden",
+        overflow: "auto",
       }}
     >
       <div
         style={{
           width: "100%",
           maxWidth: 560,
-          maxHeight: "calc(100vh - 32px)",
           display: "flex",
           justifyContent: "center",
+          alignItems: "center",
+          minHeight: "100%",
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -2538,12 +2539,10 @@ function FormModal({ title, color, children, onClose, onSave }) {
           borderRadius: 18,
           width: "100%",
           maxWidth: 560,
-          height: "auto",
-          maxHeight: "calc(100vh - 32px)",
+          maxHeight: "90vh",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          minHeight: 0,
           boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
         }}
       >
