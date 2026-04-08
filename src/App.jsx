@@ -2499,7 +2499,7 @@ function FormModal({title,color,children,onClose,onSave}) {
         borderRadius:18,
         width:"80%",
         maxWidth:480,
-        maxHeight:"78vh",
+        maxHeight:"50vh",
         display:"flex",
         flexDirection:"column",
         boxShadow:"0 24px 64px rgba(0,0,0,0.6)",
