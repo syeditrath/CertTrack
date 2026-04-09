@@ -2493,6 +2493,11 @@ function Empty({icon,label,sub,color,onAdd}) {
 }
 
 function Overlay({ children, onClose }) {
+  const vh = window.innerHeight;
+
+  // Smart centering logic
+  const isShortScreen = vh < 700;
+
   return (
     <div
       className="fade-in"
@@ -2500,16 +2505,32 @@ function Overlay({ children, onClose }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.78)",
+        background: "rgba(0,0,0,0.75)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
         zIndex: 200,
         display: "flex",
-        alignItems: "flex-start",
         justifyContent: "center",
-        padding: "24px 16px",
+
+        // 👇 KEY CHANGE
+        alignItems: isShortScreen ? "flex-start" : "center",
+
+        // 👇 dynamic spacing
+        padding: isShortScreen ? "20px 16px" : "32px 16px",
+
         overflowY: "auto",
       }}
     >
-      {children}
+      <div
+        style={{
+          width: "100%",
+          display: "flex",
+          justifyContent: "center",
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {children}
+      </div>
     </div>
   );
 }
