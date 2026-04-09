@@ -746,10 +746,10 @@ export default function App() {
 
         <main style={{flex:1,overflowY:"auto",padding:"clamp(14px,2vw,28px) clamp(14px,2.5vw,32px)"}}>
           {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go}/></div>}
-          {page==="scorpion"  && <div className="slide-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="projects"  && <div className="slide-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="manpower"  && <div className="slide-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="equipment" && <div className="slide-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
         </main>
       </div>
 
