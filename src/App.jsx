@@ -1384,9 +1384,14 @@ const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
               >
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-                    <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>
-                      {doc.refNo || "Job Completion Certificate"}
-                    </span>
+                    <span style={{
+  fontFamily:"'Barlow Condensed',sans-serif",
+  fontWeight:800,
+  fontSize:"clamp(14px,1.1vw,17px)",
+  color:T.text
+}}>
+  {doc.jobNo ? `JOB ${doc.jobNo}` : "Job Completion Certificate"}
+</span>
                     {doc.project && <Tag color={T.blue}>{doc.project}</Tag>}
                   </div>
 
