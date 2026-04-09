@@ -316,6 +316,9 @@ const COMPANY_PASSWORD = "scorpion2025"; // Change this to your desired password
 const AUTH_KEY = "cta_auth";
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
+const SUPABASE_URL    = "https://rgjyvbcqstkteprfrgnu.supabase.co";
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnanl2YmNxc3RrdGVwcmZyZ251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NzI5MDEsImV4cCI6MjA5MTA0ODkwMX0.kzVvgeuCx001S-POe-pQANmz84ddUGuNzKEt8gpv1R8";
+const STORAGE_BUCKET  = "portal-files";
 async function fetchAppData() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
     headers: {
@@ -331,7 +334,17 @@ async function fetchAppData() {
 
   return { ...EMPTY_DATA, ...rows[0].data };
 }
-
+async function uploadToSupabase(file, folder) {
+  const ext   = file.name.split(".").pop();
+  const path  = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+  const res   = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
+    method:"POST",
+    headers:{"Authorization":`Bearer ${SUPABASE_ANON}`,"Content-Type":file.type,"x-upsert":"true"},
+    body: file,
+  });
+  if (!res.ok) { const e=await res.json(); throw new Error(e.message||"Upload failed"); }
+  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
+}
 async function saveAppData(data) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main`, {
     method: "PATCH",
@@ -349,22 +362,6 @@ async function saveAppData(data) {
 
   if (!res.ok) throw new Error("Failed to save app data");
 }
-const SUPABASE_URL    = "https://rgjyvbcqstkteprfrgnu.supabase.co";
-const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnanl2YmNxc3RrdGVwcmZyZ251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NzI5MDEsImV4cCI6MjA5MTA0ODkwMX0.kzVvgeuCx001S-POe-pQANmz84ddUGuNzKEt8gpv1R8";
-const STORAGE_BUCKET  = "portal-files";
-
-async function uploadToSupabase(file, folder) {
-  const ext   = file.name.split(".").pop();
-  const path  = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
-  const res   = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
-    method:"POST",
-    headers:{"Authorization":`Bearer ${SUPABASE_ANON}`,"Content-Type":file.type,"x-upsert":"true"},
-    body: file,
-  });
-  if (!res.ok) { const e=await res.json(); throw new Error(e.message||"Upload failed"); }
-  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
-}
-
 function isSupabaseConfigured() {
   return SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON !== "YOUR_SUPABASE_ANON_KEY";
 }
@@ -413,11 +410,6 @@ const EMPTY_DATA = {
   projectDocs: [],  // { id, project, subTab, name, refNo, date, expiryDate, amount, fileLink, notes }
 };
 
-function loadData() {
-  try { const d = localStorage.getItem("cta_v1"); return d ? JSON.parse(d) : EMPTY_DATA; }
-  catch { return EMPTY_DATA; }
-}
-function persist(data) { try { localStorage.setItem("cta_v1", JSON.stringify(data)); } catch {} }
 
 /* ════════════════════════════════════════════════════════════════════════════
    ROOT APP
@@ -674,79 +666,89 @@ function WelcomeScreen({onEnter}) {
 }
 
 export default function App() {
-  if (loadingData) {
-  return (
-    <div style={{
-      height: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: T.bg,
-      color: T.text,
-      fontFamily: "'Barlow Condensed',sans-serif",
-      fontSize: 24,
-      fontWeight: 700
-    }}>
-      Loading shared data...
-    </div>
-  );
-}
-  useEffect(() => {
-  (async () => {
-    try {
-      const cloudData = await fetchAppData();
-      setData(cloudData);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to load shared data from Supabase");
-    } finally {
-      setLoadingData(false);
-    }
-  })();
-}, []);
+  const [data, setData] = useState(EMPTY_DATA);
+  const [loadingData, setLoadingData] = useState(true);
+  const [page, setPage] = useState("dashboard");
+  const [sideOpen, setSideOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [projMod, setProjMod] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [authed, setAuthed] = useState(isAuthenticated);
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem("cta_dark") === "true"; }
+    catch { return false; }
+  });
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
-      const s = document.createElement("style"); s.id = "ct-g";
-      s.textContent = GLOBAL_CSS; document.head.appendChild(s);
+      const s = document.createElement("style");
+      s.id = "ct-g";
+      s.textContent = GLOBAL_CSS;
+      document.head.appendChild(s);
     }
   }, []);
 
-  const [data,        setData]       = useState(EMPTY_DATA);
-  const [loadingData, setLoadingData] = useState(true);
-  const [page,        setPage]       = useState("dashboard");
-  const [sideOpen,    setSideOpen]   = useState(false);
-  const [toast,       setToast]      = useState(null);
-  const [projMod,     setProjMod]    = useState(false);
-  const [showWelcome, setShowWelcome] = useState(true);
-  const [authed,      setAuthed]     = useState(isAuthenticated);
-  const [darkMode,    setDarkMode]   = useState(()=>{ try{return localStorage.getItem("cta_dark")==="true";}catch{return false;} });
-  const [globalSearch,setGlobalSearch] = useState("");
-  const [showSearch,  setShowSearch] = useState(false);
-
-  // Apply dark mode — update module-level T so all components re-render with correct colors
-  useEffect(()=>{
-    document.body.classList.toggle("dark-mode", darkMode);
-    document.body.style.background = darkMode ? DARK.bg : LIGHT.bg;
-    try{localStorage.setItem("cta_dark", darkMode);}catch{}
-  },[darkMode]);
-
-  // Keep T in sync every render (React re-renders all children so T is always fresh)
-  setTheme(darkMode);
-
-  const logout = () => { try{localStorage.removeItem(AUTH_KEY);}catch{} setAuthed(false); };
+  useEffect(() => {
+    (async () => {
+      try {
+        const cloudData = await fetchAppData();
+        setData(cloudData);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to load shared data from Supabase");
+      } finally {
+        setLoadingData(false);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
-  if (loadingData) return;
+    document.body.classList.toggle("dark-mode", darkMode);
+    document.body.style.background = darkMode ? DARK.bg : LIGHT.bg;
+    try { localStorage.setItem("cta_dark", darkMode); } catch {}
+  }, [darkMode]);
 
-  const t = setTimeout(() => {
-    saveAppData(data).catch(err => {
-      console.error(err);
-      alert("Failed to save shared data");
-    });
-  }, 400);
+  useEffect(() => {
+    if (loadingData) return;
 
-  return () => clearTimeout(t);
-}, [data, loadingData]);
+    const t = setTimeout(() => {
+      saveAppData(data).catch(err => {
+        console.error(err);
+        alert("Failed to save shared data");
+      });
+    }, 400);
+
+    return () => clearTimeout(t);
+  }, [data, loadingData]);
+
+  setTheme(darkMode);
+
+  if (loadingData) {
+    return (
+      <div style={{
+        height: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: T.bg,
+        color: T.text,
+        fontFamily: "'Barlow Condensed',sans-serif",
+        fontSize: 24,
+        fontWeight: 700
+      }}>
+        Loading shared data...
+      </div>
+    );
+  }
+
+  const logout = () => {
+    try { localStorage.removeItem(AUTH_KEY); } catch {}
+    setAuthed(false);
+  };
+
+  // ...rest of your App code continues here
 
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(() => setToast(null), 3200); };
 
