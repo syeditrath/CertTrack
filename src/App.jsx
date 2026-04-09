@@ -1282,12 +1282,12 @@ function ProjectDocs({data,setData,showToast}) {
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
                         <div style={{background:T.bg,borderRadius:8,padding:"6px 6px"}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>{pinvs.length}</div>
                           <div style={{fontSize:12,color:T.textSub,marginTop:3,fontWeight:600}}>Total Invoices</div>
                         </div>
                         <div style={{background:T.bg,borderRadius:8,padding:"10px 10px"}}>
                           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.green,lineHeight:1}}>{total>0?`SAR ${(total/1000).toFixed(0)}K`:"—"}</div>
-                          <div style={{fontSize:11,color:T.textSub,marginTop:2,fontWeight:600}}>Total Value</div>
+                          <div style={{fontSize:12,color:T.textSub,marginTop:3,fontWeight:800}}>Total Value</div>
                         </div>
                       </div>
                       <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right"}}>View Invoices →</div>
