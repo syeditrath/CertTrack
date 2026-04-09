@@ -2500,29 +2500,16 @@ function Overlay({ children, onClose }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.72)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        zIndex: 999,
+        background: "rgba(0,0,0,0.78)",
+        zIndex: 200,
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "center",
-        padding: "16px",
-        overflow: "hidden",
+        padding: "24px 16px",
+        overflowY: "auto",
       }}
     >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 560,
-          maxHeight: "calc(100vh - 32px)",
-          display: "flex",
-          justifyContent: "center",
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   );
 }
@@ -2538,8 +2525,7 @@ function FormModal({ title, color, children, onClose, onSave }) {
           borderRadius: 18,
           width: "100%",
           maxWidth: 560,
-          height: "auto",
-          maxHeight: "calc(100vh - 32px)",
+          maxHeight: "calc(100vh - 48px)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -2549,7 +2535,7 @@ function FormModal({ title, color, children, onClose, onSave }) {
       >
         <div
           style={{
-            padding: "18px 22px 14px",
+            padding: "20px 24px 16px",
             borderBottom: `1px solid ${T.border}`,
             display: "flex",
             alignItems: "center",
@@ -2592,7 +2578,7 @@ function FormModal({ title, color, children, onClose, onSave }) {
 
         <div
           style={{
-            padding: "18px 22px",
+            padding: "20px 24px",
             overflowY: "auto",
             flex: 1,
             minHeight: 0,
@@ -2603,7 +2589,7 @@ function FormModal({ title, color, children, onClose, onSave }) {
 
         <div
           style={{
-            padding: "14px 22px 18px",
+            padding: "14px 24px 22px",
             display: "flex",
             gap: 10,
             borderTop: `1px solid ${T.border}`,
