@@ -1308,7 +1308,7 @@ function ProjectDocs({data,setData,showToast}) {
     <div style={{fontSize:12,color:T.textSub,marginTop:4,fontWeight:800}}>Total Value</div>
   </div>
 </div>
-                      </div>
+                      
                       <div style={{fontSize:12,color:T.green,fontWeight:600,textAlign:"right"}}>View Invoices →</div>
                     </div>
                   );
