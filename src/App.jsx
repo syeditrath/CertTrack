@@ -392,22 +392,22 @@ function isAuthenticated() {
 }
 
 const EMPTY_DATA = {
-  scorpionDocs: [],   // { id, category, name, docNo, issueDate, expiryDate, fileLink, notes }
+  scorpionDocs: [],   // { id, category, name, docNo, issueDate, expiryDate, fileLinks: [], notes }
   manpowerCats: DEFAULT_MANPOWER_CATS,
   manpower: [],       // { id, category, name, idNo, nationality, designation,
                       //   passportNo, passportExpiry, visaNo, visaExpiry,
                       //   iqamaNo, iqamaExpiry, muqeemNo, muqeemExpiry,
-                      //   certs: [{id,name,certNo,issueDate,expiryDate,fileLink}],
-                      //   docs:  [{id,type,docNo,expiryDate,fileLink}]  }
+                      //   certs: [{id,name,certNo,issueDate,expiryDate,fileLinks: []}],
+                      //   docs:  [{id,type,docNo,expiryDate,fileLinks: []}]  }
   equipment: [],      // { id, name, model, serialNo, status, operator, project,
                       //   purchaseDate, notes,
-                      //   certifications:[{id,certNo,issuedBy,issueDate,expiryDate,fileLink}],
-                      //   invoices:      [{id,invoiceNo,supplier,amount,date,fileLink}],
-                      //   insurance:     [{id,policyNo,insurer,type,issueDate,expiryDate,fileLink}],
-                      //   permits:       [{id,permitNo,type,issuedBy,issueDate,expiryDate,fileLink}] }
+                      //   certifications:[{id,certNo,issuedBy,issueDate,expiryDate,fileLinks: []}],
+                      //   invoices:      [{id,invoiceNo,supplier,amount,date,fileLinks: []}],
+                      //   insurance:     [{id,policyNo,insurer,type,issueDate,expiryDate,fileLinks: []}],
+                      //   permits:       [{id,permitNo,type,issuedBy,issueDate,expiryDate,fileLinks: []}] }
   scorpionDocCats: DEFAULT_SCORPION_CATS,
   projects: ["NEOM Phase 1","NEOM Phase 2","Riyadh Metro"],
-  projectDocs: [],  // { id, project, subTab, name, refNo, date, expiryDate, amount, fileLink, notes }
+  projectDocs: [],  // { id, project, subTab, name, refNo, date, expiryDate, amount, fileLinks: [], notes }
 };
 
 
@@ -1477,7 +1477,7 @@ const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
                     {doc.client && <Chip>Client: {doc.client}</Chip>}
                     {doc.amount && <Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
                     {doc.date && <Chip>Date: {fmtDate(doc.date)}</Chip>}
-                    {doc.fileLink && <FileLink href={doc.fileLink}/>}
+                    {doc.fileLinks: [] && <fileLinks: [] href={doc.fileLinks: []}/>}
                   </div>
 
                   {doc.notes && (
@@ -1622,7 +1622,7 @@ const projWOs   = selProj ? woAll.filter(d=>d.project===selProj) : [];
                         {doc.date&&<Chip>Signed: {fmtDate(doc.date)}</Chip>}
                         {hasExp&&<Chip color={s.color}>Expires: {fmtDate(doc.expiryDate)}</Chip>}
                         {hasExp&&daysUntil(doc.expiryDate)!==null&&daysUntil(doc.expiryDate)<=90&&<Chip color={s.color}>{daysUntil(doc.expiryDate)>=0?`${daysUntil(doc.expiryDate)}d left`:`${Math.abs(daysUntil(doc.expiryDate))}d overdue`}</Chip>}
-                        {doc.fileLink&&<FileLink href={doc.fileLink}/>}
+                        {doc.fileLinks: []&&<fileLinks: [] href={doc.fileLinks: []}/>}
                       </div>
                       {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
                     </div>
@@ -1678,7 +1678,7 @@ function InvoiceCard({doc,delay,onEdit,onDel}) {
           {doc.client&&<Chip>Client: {doc.client}</Chip>}
           {doc.dueDate&&<Chip color={ds.color}>Due: {fmtDate(doc.dueDate)}</Chip>}
           {doc.amount&&<Chip color={T.green}>SAR {Number(doc.amount).toLocaleString()}</Chip>}
-          {doc.fileLink&&<FileLink href={doc.fileLink}/>}
+          {doc.fileLinks: []&&<fileLinks: [] href={doc.fileLinks: []}/>}
         </div>
         {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
       </div>
@@ -1707,7 +1707,7 @@ function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
       <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
       <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
       <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/></FieldRow>
-      <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
+      <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||[]} onChange={set("fileLink")}/></FieldRow>
       <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.green}/></FieldRow>
     </FormModal>
   );
@@ -2967,20 +2967,30 @@ function FLink({value,onChange,folder}) {
   const fileRef = useRef();
   const configured = isSupabaseConfigured();
 
-  const handleUpload = async e => {
-    const file = e.target.files[0];
-    if(!file) return;
-    if(file.size > 50*1024*1024) { setUploadErr("File too large (max 50MB)"); return; }
-    setUploading(true); setUploadErr("");
-    try {
-      const url = await uploadToSupabase(file, folder||"general");
-      onChange(url);
-      setUploadErr("");
-    } catch(err) {
-      setUploadErr("Upload failed: " + err.message);
-    } finally { setUploading(false); }
-    e.target.value="";
-  };
+  const handleUpload = async (e) => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+
+  setUploading(true);
+  setUploadErr("");
+
+  try {
+    let uploadedUrls = [];
+
+    for (const file of files) {
+      const url = await uploadToSupabase(file, folder || "general");
+      uploadedUrls.push(url);
+    }
+
+    onChange([...(value || []), ...uploadedUrls]);
+
+  } catch (err) {
+    setUploadErr("Upload failed: " + err.message);
+  } finally {
+    setUploading(false);
+    e.target.value = "";
+  }
+};
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -2998,7 +3008,11 @@ function FLink({value,onChange,folder}) {
       </div>
       {configured && (
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <input ref={fileRef} type="file" style={{display:"none"}} onChange={handleUpload}/>
+          <input ref={fileRef}
+  type="file"
+  multiple
+  style={{ display: "none" }}
+  onChange={handleUpload}/>
           <button type="button" onClick={()=>fileRef.current.click()} disabled={uploading}
             style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,opacity:uploading?0.6:1}}>
             {uploading ? "⏳ Uploading…" : "⬆ Upload File"}
