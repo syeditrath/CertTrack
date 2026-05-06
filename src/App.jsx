@@ -547,8 +547,8 @@ const ANALYSIS_PASSWORD = "analysis2025";
 const COST_PASSWORD     = "cost2025"; // Change this to your desired cost control password
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
-const SUPABASE_URL    = "https://kojtmdvzkrkdkorsulss.supabase.co";
-const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk";
+const SUPABASE_URL    = "https://mmvuqyupaxhlcqabvvad.supabase.co";
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdnVxeXVwYXhobGNxYWJ2dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMzUxNzYsImV4cCI6MjA5MzYxMTE3Nn0.PFhW-KtWx_BqF0SzVNu7mpHUrKX7sYcx2nmhkUVka6c";
 const STORAGE_BUCKET  = "portal-files";
 async function fetchAppData() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
