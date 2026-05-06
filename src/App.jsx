@@ -8320,7 +8320,7 @@ function MultiPdfCertUpload({ project, projects, onClose, onImport }) {
             <div style={{flex:1, minWidth:200}}>
               <label style={{display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:".5px"}}>PROJECT *</label>
               <select
-                value={selectedProject}
+                value={selProj}
                 onChange={e => setSelProj(e.target.value)}
                 style={{width:"100%", background:T.inputBg, border:`1px solid ${selProj ? T.blue+"66" : T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:selProj ? T.text : T.textMuted, outline:"none", colorScheme:"light"}}
               >
