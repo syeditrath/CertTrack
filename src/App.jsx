@@ -2449,7 +2449,7 @@ export default function App() {
     (async () => {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
+        const timeout = setTimeout(() => controller.abort(), 12000);
         const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
           headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
           signal: controller.signal,
@@ -2457,10 +2457,24 @@ export default function App() {
         clearTimeout(timeout);
         if (res.ok) {
           const rows = await res.json();
-          if (rows.length && rows[0].data) setData({ ...EMPTY_DATA, ...rows[0].data });
+          if (rows.length && rows[0].data) {
+            setData({ ...EMPTY_DATA, ...rows[0].data });
+          } else {
+            // No row returned — could be RLS blocking or first launch
+            console.warn("Supabase returned no data rows. Check RLS policies on app_state table.");
+            // Still show the app with empty data rather than blank screen
+            setData(EMPTY_DATA);
+          }
+        } else {
+          const errText = await res.text().catch(()=>"");
+          console.error("Supabase load error:", res.status, errText);
+          // Show app anyway so users aren't stuck on blank screen
+          setData(EMPTY_DATA);
         }
       } catch (err) {
         console.error("Supabase load failed:", err);
+        // Network error or timeout — show app with empty data
+        setData(EMPTY_DATA);
       } finally {
         setLoadingData(false);
       }
@@ -2525,17 +2539,24 @@ export default function App() {
   if (loadingData) {
     return (
       <div style={{
-        height: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: T.bg,
-        color: T.text,
-        fontFamily: "'Barlow Condensed',sans-serif",
-        fontSize: 24,
-        fontWeight: 700
+        height: "100vh", display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        background: T.bg, color: T.text,
+        fontFamily: "'Barlow Condensed',sans-serif", gap: 16,
       }}>
-        Loading shared data...
+        <div style={{fontSize: 40}}>🦂</div>
+        <div style={{fontSize: 24, fontWeight: 700}}>Loading Scorpion Portal…</div>
+        <div style={{fontSize: 14, color: T.textMuted}}>Connecting to database</div>
+        <div style={{width: 200, height: 4, background: T.border, borderRadius: 999, overflow: "hidden", marginTop: 8}}>
+          <div style={{height: "100%", width: "60%", background: T.gold, borderRadius: 999,
+            animation: "pulse 1.4s ease-in-out infinite"}}/>
+        </div>
+        <button type="button" onClick={() => window.location.reload()}
+          style={{marginTop: 16, background: "transparent", border: `1px solid ${T.border}`,
+            color: T.textMuted, borderRadius: 8, padding: "8px 20px", fontSize: 13,
+            cursor: "pointer", fontFamily: "inherit"}}>
+          Taking too long? Refresh
+        </button>
       </div>
     );
   }
