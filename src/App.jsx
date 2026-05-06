@@ -567,7 +567,7 @@ async function fetchAppData() {
 }
 async function uploadToSupabase(file, folder) {
   const ext   = file.name.split(".").pop();
-  const path  = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+  const safeFolder = folder.replace(/[^a-zA-Z0-9._\-\/]/g,"_"); const safeFile = file.name.replace(/[^a-zA-Z0-9._-]/g,"_"); const path = `${safeFolder}/${Date.now()}_${safeFile}`;
   const res   = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
     method:"POST",
     headers:{"Authorization":`Bearer ${SUPABASE_ANON}`,"Content-Type":file.type,"x-upsert":"true"},
