@@ -2430,7 +2430,7 @@ export default function App() {
       const lastPing = localStorage.getItem("sb_ping");
       const now = Date.now();
       if (!lastPing || now - parseInt(lastPing) > 1000 * 60 * 60 * 72) {
-        supabase.from("app_data").select("id").limit(1);
+        supabase.from("app_state").select("id").limit(1);
         localStorage.setItem("sb_ping", String(now));
       }
     } catch {}
