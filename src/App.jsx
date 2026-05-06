@@ -791,7 +791,7 @@ function WelcomeScreen({onEnter}) {
         fontFamily:"'Barlow Condensed',sans-serif",
         animation:"subReveal 1s ease 2s both",
       }}>
-        In House ERP Solution
+        Document & Asset Management System
       </div>
     </div>
   );
