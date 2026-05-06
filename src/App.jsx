@@ -4048,7 +4048,7 @@ function FinanceLoginPage({ onLogin, title="FINANCE ACCESS", subtitle="This sect
           onMouseEnter={e => { e.currentTarget.style.transform="translateY(-1px)"; e.currentTarget.style.boxShadow=`0 6px 28px ${T.gold}66`; }}
           onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow=`0 4px 20px ${T.gold}44`; }}
         >
-          UNLOCK FINANCE
+          ENTER PORTAL
         </button>
 
         <div style={{textAlign:"center",fontSize:11,color:T.textMuted,marginTop:16,letterSpacing:"1px"}}>
