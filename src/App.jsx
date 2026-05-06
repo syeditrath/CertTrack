@@ -547,8 +547,8 @@ const ANALYSIS_PASSWORD = "analysis2025";
 const COST_PASSWORD     = "cost2025"; // Change this to your desired cost control password
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
-const SUPABASE_URL    = "https://mmvuqyupaxhlcqabvvad.supabase.co";
-const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdnVxeXVwYXhobGNxYWJ2dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMzUxNzYsImV4cCI6MjA5MzYxMTE3Nn0.PFhW-KtWx_BqF0SzVNu7mpHUrKX7sYcx2nmhkUVka6c";
+const SUPABASE_URL    = "https://rgjyvbcqstkteprfrgnu.supabase.co";
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnanl2YmNxc3RrdGVwcmZyZ251Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NzI5MDEsImV4cCI6MjA5MTA0ODkwMX0.kzVvgeuCx001S-POe-pQANmz84ddUGuNzKEt8gpv1R8";
 const STORAGE_BUCKET  = "portal-files";
 async function fetchAppData() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
@@ -2687,7 +2687,7 @@ export default function App() {
         <main style={{flex:1,overflowY:"auto",padding:"clamp(14px,2vw,28px) clamp(14px,2.5vw,32px)"}}>
           {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go}/></div>}
           {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)}/></div>}
           {page==="analysis"  && (
             analysisAuthed
               ? <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go}/></div>
@@ -4048,7 +4048,7 @@ function FinanceLoginPage({ onLogin, title="FINANCE ACCESS", subtitle="This sect
           onMouseEnter={e => { e.currentTarget.style.transform="translateY(-1px)"; e.currentTarget.style.boxShadow=`0 6px 28px ${T.gold}66`; }}
           onMouseLeave={e => { e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow=`0 4px 20px ${T.gold}44`; }}
         >
-          ENTER PORTAL
+          UNLOCK FINANCE
         </button>
 
         <div style={{textAlign:"center",fontSize:11,color:T.textMuted,marginTop:16,letterSpacing:"1px"}}>
@@ -4311,7 +4311,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
               <Btn color={T.green} solid onClick={() => setModal({mode:"add"})}>+ Add Invoice</Btn>
             </div>
             {projects.length === 0
-              ? <Empty icon="🧾" label="No projects yet" sub="Add projects via Manage Projects in the sidebar" color={T.green} onAdd={() => {}}/>
+              ? <Empty icon="🧾" label="No projects yet" sub="Add projects via Manage Projects in the sidebar" color={T.green} onAdd={() => onManageProjects && onManageProjects()}/>
               : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:14}}>
                   {projects.map((p,i) => { p=pName(p);
                     const pinvs = invoiceDocs.filter(d => d.project === p);
@@ -4549,7 +4549,7 @@ const PD_TABS = [
 /* ════════════════════════════════════════════════════════════════════════════
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
-function ProjectDocs({data,setData,showToast}) {
+function ProjectDocs({data,setData,showToast,onManageProjects}) {
   // ALL hooks must be at the top — never after a conditional return
   const [selectedProject, setSelectedProject] = useState(null);
   const [subTab,  setSubTab]  = useState("certificates");
@@ -4695,7 +4695,7 @@ function ProjectDocs({data,setData,showToast}) {
         </div>
 
         {projects.length===0
-          ? <Empty icon="◆" label="No projects yet" sub="Add projects from Manage Projects in the sidebar" color={T.blue} onAdd={()=>{}}/>
+          ? <Empty icon="◆" label="No projects yet" sub="Add projects from Manage Projects in the sidebar" color={T.blue} onAdd={() => onManageProjects && onManageProjects()}/>
           : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
               {projects.map((project,i)=>{ project=pName(project);
                 const projectDocs = docs.filter(d=>d.project===project);
