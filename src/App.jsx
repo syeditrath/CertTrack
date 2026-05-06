@@ -4832,12 +4832,10 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
           </div>
         </div>
 
-        <Btn color={T.blue} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>
-          <div style={{display:"flex", gap:8}}>
-  <Btn color={T.blue} onClick={()=>setMultiPdfModal({project:selProj})}>⬆ Upload PDFs</Btn>
-  <Btn color={T.blue} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>+ Add Manually</Btn>
-</div>
-        </Btn>
+        <div style={{display:"flex", gap:8}}>
+          <Btn color={T.blue} onClick={()=>setMultiPdfModal({project:selProj})}>⬆ Upload PDFs</Btn>
+          <Btn color={T.blue} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>+ Add Manually</Btn>
+        </div>
       </div>
 
       {projCerts.length===0
