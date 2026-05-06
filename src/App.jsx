@@ -547,8 +547,8 @@ const ANALYSIS_PASSWORD = "analysis2025";
 const COST_PASSWORD     = "cost2025"; // Change this to your desired cost control password
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
-const SUPABASE_URL    = "https://mmvuqyupaxhlcqabvvad.supabase.co";
-const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdnVxeXVwYXhobGNxYWJ2dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMzUxNzYsImV4cCI6MjA5MzYxMTE3Nn0.PFhW-KtWx_BqF0SzVNu7mpHUrKX7sYcx2nmhkUVka6c";
+const SUPABASE_URL    = "https://kojtmdvzkrkdkorsulss.supabase.co";
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvanRtZHZ6a3JrZGtvcnN1bHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTk4OTUsImV4cCI6MjA5MDg5NTg5NX0.vsonVDcb27wz1kLc3rlms4zLR41qGaH8tCnvKxOOqfk";
 const STORAGE_BUCKET  = "portal-files";
 async function fetchAppData() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
@@ -2403,36 +2403,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
 }
 
 
-class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { error: null }; }
-  static getDerivedStateFromError(e) { return { error: e }; }
-  componentDidCatch(e, info) { console.error("React crash:", e, info); }
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{padding:40, fontFamily:"sans-serif", color:"#fff", background:"#1a1a1a", minHeight:"100vh"}}>
-          <h2 style={{color:"#f59e0b"}}>⚠ App crashed — please report this error:</h2>
-          <pre style={{background:"#000", padding:20, borderRadius:8, fontSize:12, overflow:"auto", color:"#ff6b6b"}}>
-            {this.state.error.toString()}
-          </pre>
-          <button onClick={()=>window.location.reload()}
-            style={{marginTop:20, padding:"10px 24px", background:"#f59e0b", border:"none", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:14}}>
-            Reload App
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function AppWithBoundary() {
-  return <ErrorBoundary><App /></ErrorBoundary>;
-}
-
-export default AppWithBoundary;
-
-function App() {
+export default function App() {
   const [data, setData] = useState(EMPTY_DATA);
   const [loadingData, setLoadingData] = useState(true);
   const [page, setPage] = useState("dashboard");
