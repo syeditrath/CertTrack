@@ -632,6 +632,8 @@ const EMPTY_DATA = {
   projectDocs: [],
   projectAnalysis: [],
   rigs: [],          // { id, project, name }
+  unbilledIncome: [], // { id, project, description, amount, date, status, reversedDate, notes }
+  unbilledIncome: [], // { id, project, date, description, amount, status, reversedDate }
   costControl: [],  // { id, project, category, description, amount, date, refNo, notes, budgeted }
                     // category: "Labour"|"Equipment"|"Materials"|"Subcontractor"|"Overhead"|"Other"
 };
@@ -3546,6 +3548,7 @@ function CostControlPage({data, setData, showToast, go}) {
   const [selProj, setSelProj] = useState(null);
   const [modal,   setModal]   = useState(null);
   const [filterCat, setFilterCat] = useState("All");
+  const [unbilledModal, setUnbilledModal] = useState(null); // null | {mode,entry}
 
   const projects  = data.projects       || [];
   const analysis  = data.projectAnalysis|| [];
@@ -3570,25 +3573,65 @@ function CostControlPage({data, setData, showToast, go}) {
     showToast("Deleted","del");
   };
 
+  // ── Unbilled income CRUD ──
+  const saveUnbilled = (entry, mode) => {
+    setModal(null);
+    setTimeout(() => {
+      setData(prev => {
+        const list = [...(prev.unbilledIncome||[])];
+        if (mode==="add") list.push({...entry, id:uid(), status:"pending"});
+        else { const i=list.findIndex(d=>d.id===entry.id); if(i>=0) list[i]=entry; }
+        return {...prev, unbilledIncome:list};
+      });
+      showToast(mode==="add"?"Unbilled income added":"Entry updated");
+    },0);
+  };
+
+  const delUnbilled = id => {
+    setData(prev=>({...prev, unbilledIncome:(prev.unbilledIncome||[]).filter(e=>e.id!==id)}));
+    showToast("Deleted","del");
+  };
+
+  const reverseUnbilled = id => {
+    if (!window.confirm("Reverse this unbilled income to Revenue? This marks the work as billed and moves it to recognised revenue.")) return;
+    setData(prev=>({
+      ...prev,
+      unbilledIncome:(prev.unbilledIncome||[]).map(u=>
+        u.id===id ? {...u, status:"reversed", reversedDate:new Date().toISOString().slice(0,10)} : u
+      )
+    }));
+    showToast("Reversed to Revenue ✓");
+  };
+
   // ── Per-project P&L helper ──
   const getProjFinancials = (proj) => {
-    const pa        = analysis.find(a=>a.project===proj);
-    const poValue   = parseFloat(pa?.poValue)||0;
-    const invs      = invoiceDocs.filter(d=>d.project===proj);
-    const revenue   = invs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-    const collected = invs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0);
-    const costs     = allCosts.filter(c=>c.project===proj);
-    const totalCost = costs.reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
-    const margin    = revenue - totalCost;
-    const marginPct = revenue>0 ? Math.round((margin/revenue)*100) : null;
-    return {poValue, revenue, collected, costs, totalCost, margin, marginPct, pa};
+    const pa          = analysis.find(a=>a.project===proj);
+    const poValue     = parseFloat(pa?.poValue)||0;
+    const invs        = invoiceDocs.filter(d=>d.project===proj);
+    const revenue     = invs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+    const collected   = invs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0);
+    const costs       = allCosts.filter(c=>c.project===proj);
+    const totalCost   = costs.reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+    // Unbilled income
+    const allUnbilled     = (data.unbilledIncome||[]).filter(u=>u.project===proj);
+    const unbilledPending = allUnbilled.filter(u=>u.status!=="reversed");
+    const unbilledReversed= allUnbilled.filter(u=>u.status==="reversed");
+    const unbilledTotal   = unbilledPending.reduce((s,u)=>s+(parseFloat(u.amount)||0),0);
+    const reversedTotal   = unbilledReversed.reduce((s,u)=>s+(parseFloat(u.amount)||0),0);
+    // Total revenue including reversed unbilled (which became real revenue)
+    const totalRevenue    = revenue + reversedTotal;
+    const margin          = totalRevenue - totalCost;
+    const marginPct       = totalRevenue>0 ? Math.round((margin/totalRevenue)*100) : null;
+    return {poValue, revenue, collected, costs, totalCost, margin, marginPct, pa,
+            allUnbilled, unbilledPending, unbilledReversed, unbilledTotal, reversedTotal, totalRevenue};
   };
 
   // ── Project overview cards ──
   if (!selProj) {
-    const allMargin    = projects.reduce((s,p)=>{ const f=getProjFinancials(p); return s+f.margin; },0);
-    const allRevenue   = projects.reduce((s,p)=>{ const f=getProjFinancials(pName(p)); return s+f.revenue; },0);
+    const allMargin    = projects.reduce((s,p)=>{ const f=getProjFinancials(pName(p)); return s+f.margin; },0);
+    const allRevenue   = projects.reduce((s,p)=>{ const f=getProjFinancials(pName(p)); return s+f.totalRevenue; },0);
     const allCostTotal = projects.reduce((s,p)=>{ const f=getProjFinancials(pName(p)); return s+f.totalCost; },0);
+    const allUnbilled  = projects.reduce((s,p)=>{ const f=getProjFinancials(pName(p)); return s+f.unbilledTotal; },0);
     const overallPct   = allRevenue>0 ? Math.round((allMargin/allRevenue)*100) : null;
 
     return (
@@ -3604,12 +3647,12 @@ function CostControlPage({data, setData, showToast, go}) {
         {/* Portfolio summary strip */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:20}}>
           {[
-            {label:"Total Revenue",  v:formatSarCompact(allRevenue),   color:T.green},
-            {label:"Total Costs",    v:formatSarCompact(allCostTotal), color:T.red},
-            {label:"Gross Margin",   v:formatSarCompact(allMargin),    color:allMargin>=0?T.green:T.red},
-            {label:"Margin %",       v:overallPct!==null?`${overallPct}%`:"—", color:overallPct===null?T.textMuted:overallPct>=20?T.green:overallPct>=10?T.gold:T.red},
-            {label:"Projects",       v:projects.length,                color:T.blue},
-            {label:"Cost Entries",   v:allCosts.length,                color:T.purple},
+            {label:"Total Revenue",      v:formatSarCompact(allRevenue),   color:T.green},
+            {label:"Unbilled Income",    v:formatSarCompact(allUnbilled),  color:T.gold},
+            {label:"Total Costs",        v:formatSarCompact(allCostTotal), color:T.red},
+            {label:"Gross Margin",       v:formatSarCompact(allMargin),    color:allMargin>=0?T.green:T.red},
+            {label:"Margin %",           v:overallPct!==null?`${overallPct}%`:"—", color:overallPct===null?T.textMuted:overallPct>=20?T.green:overallPct>=10?T.gold:T.red},
+            {label:"Projects",           v:projects.length,                color:T.blue},
           ].map((k,i)=>(
             <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",boxShadow:T.shadow,animationDelay:`${i*.04}s`}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(20px,2.5vw,34px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
@@ -3621,7 +3664,7 @@ function CostControlPage({data, setData, showToast, go}) {
         {/* Project cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:14}}>
           {projects.map((proj,i)=>{ proj=pName(proj);
-            const {poValue,revenue,collected,totalCost,margin,marginPct,costs} = getProjFinancials(proj);
+            const {poValue,revenue,collected,totalCost,margin,marginPct,costs,unbilledTotal} = getProjFinancials(proj);
             const costByCat = COST_CATS.map(c=>({
               ...c,
               total: costs.filter(e=>e.category===c.id).reduce((s,e)=>s+(parseFloat(e.amount)||0),0)
@@ -3649,6 +3692,10 @@ function CostControlPage({data, setData, showToast, go}) {
                     <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(revenue)}</div>
                     <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700}}>REVENUE</div>
                   </div>
+                  {unbilledTotal>0&&<div style={{background:T.goldDim,border:`1px solid ${T.gold}22`,borderRadius:10,padding:"10px 12px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.gold,lineHeight:1}}>{formatSarCompact(unbilledTotal)}</div>
+                    <div style={{fontSize:10,color:T.gold,marginTop:4,fontWeight:700}}>UNBILLED</div>
+                  </div>}
                   <div style={{background:T.redDim,border:`1px solid ${T.red}22`,borderRadius:10,padding:"10px 12px"}}>
                     <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.red,lineHeight:1}}>{formatSarCompact(totalCost)}</div>
                     <div style={{fontSize:10,color:T.red,marginTop:4,fontWeight:700}}>TOTAL COST</div>
@@ -3692,7 +3739,8 @@ function CostControlPage({data, setData, showToast, go}) {
   }
 
   // ── Project detail view ──
-  const {poValue, revenue, collected, totalCost, margin, marginPct, costs, pa} = getProjFinancials(selProj);
+  const {poValue, revenue, collected, totalCost, margin, marginPct, costs, pa,
+          allUnbilled, unbilledPending, unbilledReversed, unbilledTotal, reversedTotal, totalRevenue} = getProjFinancials(selProj);
   const filteredCosts = filterCat==="All" ? costs : costs.filter(c=>c.category===filterCat);
 
   // Cost by category
@@ -3705,15 +3753,23 @@ function CostControlPage({data, setData, showToast, go}) {
   // Budget vs actual: compare poValue budget allocation (user can set budget per category on project analysis)
   const budgetedTotal = costs.reduce((s,c)=>s+(parseFloat(c.budgeted)||0),0);
 
-  // Monthly cost trend
+  // Monthly trend (costs + unbilled income)
   const monthlyMap = {};
   costs.forEach(c=>{
     if(!c.date) return;
     const ym = c.date.slice(0,7);
-    monthlyMap[ym]=(monthlyMap[ym]||0)+(parseFloat(c.amount)||0);
+    if(!monthlyMap[ym]) monthlyMap[ym]={cost:0,unbilled:0,reversed:0};
+    monthlyMap[ym].cost += parseFloat(c.amount)||0;
+  });
+  allUnbilled.forEach(u=>{
+    if(!u.date) return;
+    const ym = u.date.slice(0,7);
+    if(!monthlyMap[ym]) monthlyMap[ym]={cost:0,unbilled:0,reversed:0};
+    if(u.status==="reversed") monthlyMap[ym].reversed += parseFloat(u.amount)||0;
+    else monthlyMap[ym].unbilled += parseFloat(u.amount)||0;
   });
   const monthlyTrend = Object.entries(monthlyMap).sort(([a],[b])=>a.localeCompare(b));
-  const maxMonthly = Math.max(...monthlyTrend.map(([,v])=>v),1);
+  const maxMonthly = Math.max(...monthlyTrend.map(([,v])=>Math.max(v.cost,v.unbilled+v.reversed)),1);
 
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
@@ -3741,6 +3797,8 @@ function CostControlPage({data, setData, showToast, go}) {
           {[
             {label:"CONTRACT VALUE (PO)", v:poValue?formatSarCompact(poValue):"Not set",   color:T.gold},
             {label:"REVENUE INVOICED",    v:formatSarCompact(revenue),                      color:T.green},
+            {label:"UNBILLED INCOME",     v:formatSarCompact(unbilledTotal),                color:T.gold, note:unbilledTotal>0?"Pending recognition":""},
+            {label:"TOTAL REVENUE",       v:formatSarCompact(totalRevenue),                 color:T.teal},
             {label:"AMOUNT COLLECTED",    v:formatSarCompact(collected),                    color:T.blue},
             {label:"TOTAL COSTS",         v:formatSarCompact(totalCost),                    color:T.red},
             {label:"GROSS MARGIN",        v:formatSarCompact(Math.abs(margin)),              color:margin>=0?T.green:T.red},
@@ -3749,6 +3807,7 @@ function CostControlPage({data, setData, showToast, go}) {
             <div key={k.label} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",animationDelay:`${i*.04}s`}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2.2vw,28px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
               <div style={{fontSize:10,color:T.textMuted,marginTop:5,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
+              {k.note&&<div style={{fontSize:9,color:T.gold,marginTop:2,fontWeight:600}}>{k.note}</div>}
             </div>
           ))}
         </div>
@@ -3811,19 +3870,33 @@ function CostControlPage({data, setData, showToast, go}) {
         {monthlyTrend.length>0 && (
           <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,marginBottom:16}}>MONTHLY SPEND</div>
-            <div style={{display:"grid",gap:6}}>
+            <div style={{display:"flex",gap:16,marginBottom:10,fontSize:10,color:T.textMuted}}>
+                <span><span style={{color:T.red,fontWeight:700}}>■</span> Cost</span>
+                <span><span style={{color:T.gold,fontWeight:700}}>■</span> Unbilled</span>
+                <span><span style={{color:T.green,fontWeight:700}}>■</span> Reversed→Rev</span>
+              </div>
+              <div style={{display:"grid",gap:8}}>
               {monthlyTrend.map(([ym,v])=>{
                 const [yr,mo]=ym.split("-");
                 const label=new Date(parseInt(yr),parseInt(mo)-1).toLocaleDateString("en-GB",{month:"short",year:"2-digit"});
+                const costPct   = Math.round((v.cost/maxMonthly)*100);
+                const unbillPct = Math.round((v.unbilled/maxMonthly)*100);
+                const revPct    = Math.round((v.reversed/maxMonthly)*100);
                 return (
-                  <div key={ym} style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{fontSize:11,color:T.textMuted,width:48,flexShrink:0}}>{label}</div>
-                    <div style={{flex:1,height:18,background:T.border,borderRadius:4,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${Math.round((v/maxMonthly)*100)}%`,background:`linear-gradient(90deg,${T.teal},${T.teal}bb)`,borderRadius:4,display:"flex",alignItems:"center"}}>
-                        {v/maxMonthly>0.35&&<span style={{fontSize:10,color:"#fff",fontWeight:700,paddingLeft:6}}>{formatSarCompact(v)}</span>}
+                  <div key={ym}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                      <div style={{fontSize:11,color:T.textMuted,width:48,flexShrink:0,fontWeight:600}}>{label}</div>
+                      <div style={{fontSize:10,color:T.textMuted}}>
+                        {v.cost>0&&<span style={{color:T.red,marginRight:8}}>Cost: {formatSarCompact(v.cost)}</span>}
+                        {v.unbilled>0&&<span style={{color:T.gold,marginRight:8}}>Unbilled: {formatSarCompact(v.unbilled)}</span>}
+                        {v.reversed>0&&<span style={{color:T.green}}>→Rev: {formatSarCompact(v.reversed)}</span>}
                       </div>
                     </div>
-                    {v/maxMonthly<=0.35&&<span style={{fontSize:11,color:T.textMuted,minWidth:54,textAlign:"right"}}>{formatSarCompact(v)}</span>}
+                    <div style={{display:"flex",gap:2,marginLeft:56}}>
+                      {v.cost>0&&<div style={{height:8,width:`${costPct}%`,background:T.red,borderRadius:4,maxWidth:"100%"}}/>}
+                      {v.unbilled>0&&<div style={{height:8,width:`${unbillPct}%`,background:T.gold,borderRadius:4,maxWidth:"100%"}}/>}
+                      {v.reversed>0&&<div style={{height:8,width:`${revPct}%`,background:T.green,borderRadius:4,maxWidth:"100%"}}/>}
+                    </div>
                   </div>
                 );
               })}
@@ -3888,7 +3961,86 @@ function CostControlPage({data, setData, showToast, go}) {
         }
       </div>
 
+      {/* ══ UNBILLED INCOME ══════════════════════════════════════════════════ */}
+      <div className="fade-up" style={{background:T.card,border:`1px solid ${T.gold}44`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow,marginTop:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:16}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.gold}}>💰 UNBILLED INCOME</div>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Work completed but not yet invoiced · Reverse to Revenue when project is billed</div>
+          </div>
+          <button type="button" onClick={()=>setUnbilledModal({mode:"add",entry:{project:selProj,date:new Date().toISOString().slice(0,10)}})}
+            style={{background:T.goldDim,border:`1px solid ${T.gold}55`,color:T.gold,borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+            + Add Unbilled Income
+          </button>
+        </div>
+
+        {unbilledPending.length===0 && unbilledReversed.length===0
+          ? <div style={{textAlign:"center",padding:"24px",background:T.bg,borderRadius:12,border:`1px dashed ${T.gold}44`}}>
+              <div style={{fontSize:28,marginBottom:8}}>💰</div>
+              <div style={{fontSize:14,color:T.textMuted,fontWeight:600}}>No unbilled income recorded</div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>Add income for work completed but not yet invoiced to the client</div>
+            </div>
+          : <div style={{display:"grid",gap:8}}>
+              {/* Pending entries */}
+              {unbilledPending.length>0 && <>
+                <div style={{fontSize:11,fontWeight:700,color:T.gold,letterSpacing:"1px",marginBottom:2}}>PENDING RECOGNITION</div>
+                {unbilledPending.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map((u,i)=>(
+                  <div key={u.id} className="fade-up"
+                    style={{background:T.bg,border:`1px solid ${T.gold}33`,borderLeft:`4px solid ${T.gold}`,borderRadius:12,padding:"14px 16px",animationDelay:`${i*.02}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{u.description||"—"}</span>
+                        <span style={{background:`${T.gold}22`,color:T.gold,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>UNBILLED</span>
+                        {u.date&&<span style={{fontSize:11,color:T.textMuted}}>{fmtDate(u.date)}</span>}
+                      </div>
+                      {u.notes&&<div style={{fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{u.notes}</div>}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.gold}}>
+                        {formatSarCompact(parseFloat(u.amount)||0)}
+                      </div>
+                      <div style={{display:"flex",gap:4}}>
+                        <button type="button" onClick={()=>reverseUnbilled(u.id)}
+                          style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                          ↳ Reverse to Revenue
+                        </button>
+                        <ABtn color={T.blue} onClick={()=>setUnbilledModal({mode:"edit",entry:u})}>✎</ABtn>
+                        <ABtn color={T.red}  onClick={()=>delUnbilled(u.id)}>✕</ABtn>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>}
+
+              {/* Reversed entries */}
+              {unbilledReversed.length>0 && <>
+                <div style={{fontSize:11,fontWeight:700,color:T.green,letterSpacing:"1px",marginTop:unbilledPending.length>0?12:0,marginBottom:2}}>REVERSED → REVENUE</div>
+                {unbilledReversed.slice().sort((a,b)=>(b.reversedDate||b.date||"").localeCompare(a.reversedDate||a.date||"")).map((u,i)=>(
+                  <div key={u.id} className="fade-up"
+                    style={{background:T.bg,border:`1px solid ${T.green}22`,borderLeft:`4px solid ${T.green}`,borderRadius:12,padding:"14px 16px",animationDelay:`${i*.02}s`,display:"flex",alignItems:"flex-start",gap:14,opacity:0.8}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{u.description||"—"}</span>
+                        <span style={{background:`${T.green}22`,color:T.green,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>✓ REVENUE</span>
+                        {u.reversedDate&&<span style={{fontSize:11,color:T.textMuted}}>Reversed: {fmtDate(u.reversedDate)}</span>}
+                      </div>
+                      {u.notes&&<div style={{fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{u.notes}</div>}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.green}}>
+                        {formatSarCompact(parseFloat(u.amount)||0)}
+                      </div>
+                      <ABtn color={T.red} onClick={()=>delUnbilled(u.id)}>✕</ABtn>
+                    </div>
+                  </div>
+                ))}
+              </>}
+            </div>
+        }
+      </div>
+
       {modal && <CostEntryModal mode={modal.mode} entry={modal.entry} projects={projects} onClose={()=>setModal(null)} onSave={saveEntry}/>}
+      {unbilledModal && <UnbilledIncomeModal mode={unbilledModal.mode} entry={unbilledModal.entry} projects={projects} onClose={()=>setUnbilledModal(null)} onSave={saveUnbilled}/>}
     </div>
   );
 }
@@ -3927,6 +4079,26 @@ function CostEntryModal({mode, entry, projects, onClose, onSave}) {
       <FieldRow label="Date"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.teal}/></FieldRow>
       <FieldRow label="Reference No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.teal}/></FieldRow>
       <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.teal}/></FieldRow>
+    </FormModal>
+  );
+}
+
+function UnbilledIncomeModal({mode, entry, projects, onClose, onSave}) {
+  const [f, setF] = useState(entry||{});
+  const set = k => v => setF(p=>({...p,[k]:v}));
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} UNBILLED INCOME`} color={T.gold} onClose={onClose}
+      onSave={()=>{ if(!f.description){alert("Description required");return;} if(!f.amount){alert("Amount required");return;} onSave(f,mode); }}>
+      <FieldRow label="Description *"><FInput value={f.description||""} onChange={set("description")} color={T.gold} placeholder="e.g. HDD Works – Phase 2 completion"/></FieldRow>
+      <FieldRow label="Project *">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.gold}>
+          <option value="">Select project…</option>
+          {renderProjectOptions(projects)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Amount (SAR) *"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.gold}/></FieldRow>
+      <FieldRow label="Date of Work"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.gold}/></FieldRow>
+      <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.gold} placeholder="e.g. Awaiting client sign-off on completion certificate"/></FieldRow>
     </FormModal>
   );
 }
