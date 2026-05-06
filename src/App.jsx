@@ -3935,6 +3935,18 @@ function CostEntryModal({mode, entry, projects, onClose, onSave}) {
    FINANCE LOGIN PAGE
    Shown when user navigates to Finance but hasn't authenticated yet.
 ════════════════════════════════════════════════════════════════════════════ */
+function LoginPage({ onLogin }) {
+  return (
+    <FinanceLoginPage
+      onLogin={onLogin}
+      title="SCORPION ARABIA"
+      subtitle="Welcome back. Enter your password to access the portal."
+      passwordLabel="PASSWORD"
+      placeholder="Enter password…"
+    />
+  );
+}
+
 function FinanceLoginPage({ onLogin, title="FINANCE ACCESS", subtitle="This section is restricted.\nEnter the finance password to continue.", passwordLabel="FINANCE PASSWORD", placeholder="Enter finance password…" }) {
   const [pw,    setPw]    = useState("");
   const [error, setError] = useState("");
