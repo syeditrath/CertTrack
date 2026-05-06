@@ -2424,6 +2424,18 @@ export default function App() {
   const [selectedInvoiceYear, setSelectedInvoiceYear] = useState("All");
   const { width: viewportWidth } = useViewport();
 
+  // Keep Supabase project alive — pings once every 3 days so the project never pauses
+  useEffect(() => {
+    try {
+      const lastPing = localStorage.getItem("sb_ping");
+      const now = Date.now();
+      if (!lastPing || now - parseInt(lastPing) > 1000 * 60 * 60 * 72) {
+        supabase.from("app_data").select("id").limit(1);
+        localStorage.setItem("sb_ping", String(now));
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
       const s = document.createElement("style");
