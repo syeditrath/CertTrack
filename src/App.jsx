@@ -3939,7 +3939,7 @@ function LoginPage({ onLogin }) {
   return (
     <FinanceLoginPage
       onLogin={onLogin}
-      title="SCORPION ARABIA"
+      title="AUTHENTICATION"
       subtitle="Welcome back. Enter your password to access the portal."
       passwordLabel="PASSWORD"
       placeholder="Enter password…"
