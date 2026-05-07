@@ -619,7 +619,7 @@ function getPreviewUrl(url) {
 }
 
 function isAuthenticated() {
-  try { return localStorage.getItem(AUTH_KEY) === "true"; } catch { return false; }
+  try { return sessionStorage.getItem(AUTH_KEY) === "true"; } catch { return false; }
 }
 
 const EMPTY_DATA = {
@@ -2543,7 +2543,7 @@ export default function App() {
   }
 
   const logout = () => {
-    try { localStorage.removeItem(AUTH_KEY); } catch {}
+    try { sessionStorage.removeItem(AUTH_KEY); } catch {}
     setAuthed(false);
     setFinanceAuthed(false);
     setAnalysisAuthed(false);
@@ -2590,7 +2590,7 @@ export default function App() {
 
   if (!authed) {
     return <LoginPage onLogin={(pw) => {
-      if (pw === COMPANY_PASSWORD) { try{localStorage.setItem(AUTH_KEY,"true");}catch{} setAuthed(true); return true; }
+      if (pw === COMPANY_PASSWORD) { try{sessionStorage.setItem(AUTH_KEY,"true");}catch{} setAuthed(true); return true; }
       return false;
     }} />;
   }
