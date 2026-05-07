@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx";
 
 /* ─── Global CSS ─────────────────────────────────────────────────────────── */
@@ -2214,8 +2214,24 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
   const [showDprConsolidate, setShowDprConsolidate] = useState(false);
 
   const projects  = data.projects || [];
-  const analysis  = data.projectAnalysis || [];
   const projectDocs = data.projectDocs || [];
+
+  // Auto-sync: any project in data.projects not yet in projectAnalysis gets added automatically
+  const rawAnalysis = data.projectAnalysis || [];
+  const analysis = useMemo(() => {
+    const existingIds = new Set(rawAnalysis.map(x => x.project));
+    const autoAdded = projects
+      .filter(p => !existingIds.has(typeof p === "string" ? p : p.name))
+      .map(p => ({ id: uid(), project: typeof p === "string" ? p : p.name, status: "Active", poValue: "", clientName: "", poNumber: "", quotationRef: "", notes: "" }));
+    return autoAdded.length > 0 ? [...rawAnalysis, ...autoAdded] : rawAnalysis;
+  }, [projects, rawAnalysis]);
+
+  // Persist auto-synced entries to data
+  useEffect(() => {
+    if (analysis.length > rawAnalysis.length) {
+      setData(prev => ({ ...prev, projectAnalysis: analysis }));
+    }
+  }, [analysis.length]);
 
   const save = p => {
     const exists = analysis.find(x=>x.id===p.id);
