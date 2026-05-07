@@ -4266,21 +4266,24 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
               <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>Invoice collection status by project {selectedInvoiceYear !== "All" ? `for ${selectedInvoiceYear}` : ""}</div>
               <div style={{display:"grid",gap:12}}>
                 {projectBreakdown.map((p,i) => (
-                  <div key={p.proj} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 18px",animationDelay:`${i*.04}s`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:10}}>
-                      <div>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{p.proj}</div>
-                        <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>{p.count} invoice{p.count!==1?"s":""}</div>
-                      </div>
-                      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                        <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.green}}>{formatSarCompact(p.invoiced)}</div><div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>INVOICED</div></div>
-                        <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.blue}}>{formatSarCompact(p.collected)}</div><div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>COLLECTED</div></div>
-                        <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:p.due>0?T.red:T.green}}>{formatSarCompact(p.due)}</div><div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>DUE</div></div>
-                      </div>
+                  <div key={p.proj} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 16px",animationDelay:`${i*.04}s`,display:"flex",alignItems:"center",gap:14}}>
+                    {/* Project name + count */}
+                    <div style={{minWidth:180,maxWidth:220}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.proj}</div>
+                      <div style={{fontSize:11,color:T.textMuted}}>{p.count} invoice{p.count!==1?"s":""}</div>
                     </div>
-                    <div>
-                      <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted,marginBottom:4}}><span>Collection progress</span><span style={{fontWeight:700,color:pctColor(p.pct)}}>{p.pct}%</span></div>
-                      <div style={{height:6,background:T.border,borderRadius:999,overflow:"hidden"}}><div style={{height:"100%",width:`${p.pct}%`,borderRadius:999,background:`linear-gradient(90deg,${pctColor(p.pct)},${pctColor(p.pct)}bb)`,transition:"width 1s"}}/></div>
+                    {/* Progress bar */}
+                    <div style={{flex:1,display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{flex:1,height:6,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                        <div style={{height:"100%",width:`${p.pct}%`,borderRadius:999,background:`linear-gradient(90deg,${pctColor(p.pct)},${pctColor(p.pct)}bb)`,transition:"width 1s"}}/>
+                      </div>
+                      <div style={{fontSize:11,fontWeight:700,color:pctColor(p.pct),minWidth:32,textAlign:"right"}}>{p.pct}%</div>
+                    </div>
+                    {/* Amounts */}
+                    <div style={{display:"flex",gap:16,flexShrink:0}}>
+                      <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.green}}>{formatSarCompact(p.invoiced)}</div><div style={{fontSize:9,color:T.textMuted,fontWeight:600}}>INVOICED</div></div>
+                      <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.blue}}>{formatSarCompact(p.collected)}</div><div style={{fontSize:9,color:T.textMuted,fontWeight:600}}>COLLECTED</div></div>
+                      <div style={{textAlign:"right"}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:p.due>0?T.red:T.green}}>{formatSarCompact(p.due)}</div><div style={{fontSize:9,color:T.textMuted,fontWeight:600}}>DUE</div></div>
                     </div>
                   </div>
                 ))}
