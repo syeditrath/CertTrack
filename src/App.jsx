@@ -1539,7 +1539,7 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
 }
 
 /* ── Project Analysis Form Modal (PO details, dates, etc.) ── */
-function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
+function ProjectAnalysisModal({ proj, projectNames, workOrders, onSave, onClose }) {
   const blank = { id: uid(), project:"", poValue:"", poNumber:"", quotationRef:"", clientName:"", startDate:"", estEndDate:"", status:"In Progress", description:"", dailyReports:[] };
   const [f, setF] = useState(proj ? { dailyReports:[], ...proj } : blank);
   const upd = (k,v) => setF(p=>({...p,[k]:v}));
@@ -1554,7 +1554,7 @@ function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
         </div>
         <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:14}}>
           <div style={{background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:10,padding:"10px 14px",fontSize:12,color:T.blue}}>
-            ℹ Progress is calculated automatically from invoices in Project Docs. Just enter the contract PO value here.
+            ℹ Progress is calculated automatically from invoices in Project Docs. The contract / PO value is set on the project itself (Manage Projects).
           </div>
           <div>
             <label style={LS}>PROJECT *</label>
@@ -1563,9 +1563,21 @@ function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
               {projectNames.map(p=>{ const name = typeof p==="string"?p:(p?.name??""); return <option key={name} value={name}>{name}</option>; })}
             </select>
           </div>
+          {(() => {
+            const wos = (workOrders||[]).filter(d=>d.project===f.project);
+            const cv = wos.length ? Math.max(...wos.map(d=>parseFloat(d.amount)||0)) : 0;
+            return cv ? (
+              <div style={{background:`${T.teal}12`,border:`1px solid ${T.teal}44`,borderRadius:10,padding:"10px 14px",fontSize:13,color:T.teal,fontWeight:700}}>
+                💰 Contract Value: {formatSarCompact(cv)} — from Work Orders / Agreements
+              </div>
+            ) : (
+              <div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}33`,borderRadius:10,padding:"10px 14px",fontSize:12,color:T.gold}}>
+                ⚠ No contract value found. Add a Work Order / Agreement for this project under Finance.
+              </div>
+            );
+          })()}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div><label style={LS}>PO NUMBER</label><input value={f.poNumber} onChange={e=>upd("poNumber",e.target.value)} placeholder="e.g. PO-2025-001" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
-            <div><label style={LS}>PO VALUE (SAR) — Total Contract</label><input type="number" value={f.poValue} onChange={e=>upd("poValue",e.target.value)} placeholder="e.g. 2700000" style={IS} onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div><label style={LS}>QUOTATION REF</label><input value={f.quotationRef} onChange={e=>upd("quotationRef",e.target.value)} placeholder="e.g. QT-2024-089" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
@@ -2353,7 +2365,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         ) : null)}
       </div>
 
-      {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
+      {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} workOrders={(data.projectDocs||[]).filter(d=>d.subTab==="workorders")} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
       {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} projectName={proj.project} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
       </> /* end detailTab===overview */}
     </div>
@@ -2373,11 +2385,23 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
 
   // Auto-sync: any project in data.projects not yet in projectAnalysis gets added automatically
   const rawAnalysis = data.projectAnalysis || [];
+  const workOrders = projectDocs.filter(d => d.subTab === "workorders");
+
+  // Get contract value for a project from its work order (highest amount if multiple)
+  const getWorkOrderValue = (projectName) => {
+    const wo = workOrders.filter(d => d.project === projectName);
+    if (!wo.length) return "";
+    return String(Math.max(...wo.map(d => parseFloat(d.amount) || 0)) || "");
+  };
+
   const analysis = useMemo(() => {
     const existingIds = new Set(rawAnalysis.map(x => x.project));
     const autoAdded = projects
       .filter(p => !existingIds.has(typeof p === "string" ? p : p.name))
-      .map(p => ({ id: uid(), project: typeof p === "string" ? p : p.name, status: "Active", poValue: "", clientName: "", poNumber: "", quotationRef: "", notes: "" }));
+      .map(p => {
+        const name = typeof p === "string" ? p : p.name;
+        return { id: uid(), project: name, status: "Active", poValue: "", clientName: typeof p === "object" ? (p.client || "") : "", poNumber: "", quotationRef: "", notes: "" };
+      });
     return autoAdded.length > 0 ? [...rawAnalysis, ...autoAdded] : rawAnalysis;
   }, [projects, rawAnalysis]);
 
@@ -2407,16 +2431,18 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
 
   const detailRec = detail ? analysis.find(x=>x.id===detail) : null;
   if (detailRec) {
+    const woValue = getWorkOrderValue(detailRec.project);
     return <ProjectAnalysisDetail
-      proj={detailRec} projectDocs={projectDocs} projectNames={projects}
+      proj={{...detailRec, poValue: woValue || detailRec.poValue}} projectDocs={projectDocs} projectNames={projects}
       data={data} setData={setData} showToast={showToast}
       onUpdate={p=>{update(p);setDetail(p.id);}} onDelete={()=>del(detailRec.id)}
       onBack={()=>setDetail(null)} go={go}/>;
   }
 
-  // Enrich each record with live invoice stats
+  // Enrich each record with live invoice stats + work order contract value
   const enriched = analysis.map(p => ({
     ...p,
+    poValue: getWorkOrderValue(p.project) || p.poValue,
     ...deriveProjectStats(p.project, projectDocs),
   }));
 
@@ -2567,7 +2593,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
       )}
 
       {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} onClose={()=>setShowDprConsolidate(false)}/>}
-      {modal&&<ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} onSave={save} onClose={()=>setModal(null)}/>}
+      {modal&&<ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} workOrders={workOrders} onSave={save} onClose={()=>setModal(null)}/>}
     </div>
   );
 }
@@ -2988,9 +3014,10 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
 
 /* ── Projects Manager Modal ──────────────────────────────────────────────── */
 function ProjectsModal({projects,onSave,onClose}) {
-  const [list,    setList]    = useState(projects.map(p=>typeof p==="string"?{name:p,client:""}:{...p}));
+  const [list,    setList]    = useState(projects.map(p=>typeof p==="string"?{name:p,client:"",contractValue:""}:{contractValue:"",...p}));
   const [newName, setNewName] = useState("");
   const [newClient,setNewClient]=useState("");
+  const [newContractValue,setNewContractValue]=useState("");
   const [editing, setEditing] = useState(null); // {idx, field, val}
 
   const clients = [...new Set(list.map(p=>p.client).filter(Boolean))].sort();
@@ -2998,8 +3025,8 @@ function ProjectsModal({projects,onSave,onClose}) {
   const add = () => {
     const n=newName.trim();
     if(!n||list.some(x=>x.name===n)) return;
-    setList(l=>[...l,{name:n,client:newClient.trim()}]);
-    setNewName("");
+    setList(l=>[...l,{name:n,client:newClient.trim(),contractValue:newContractValue.trim()}]);
+    setNewName(""); setNewContractValue("");
   };
 
   const del = idx => setList(l=>l.filter((_,i)=>i!==idx));
@@ -3037,6 +3064,13 @@ function ProjectsModal({projects,onSave,onClose}) {
               style={{width:"100%",background:T.inputBg,border:`1px solid ${T.gold}`,borderRadius:6,padding:"3px 7px",fontSize:11,color:T.text,outline:"none",marginTop:3}}/>
           :<div style={{fontSize:11,color:p.client?T.gold:T.textMuted,marginTop:2,cursor:"text"}} onDoubleClick={()=>startEdit(p._idx,"client",p.client||"")}>{p.client||"No client — double-click to assign"}</div>
         }
+        {editing&&editing.idx===p._idx&&editing.field==="contractValue"
+          ?<input autoFocus type="number" value={editing.val} onChange={e=>setEditing({...editing,val:e.target.value})} onKeyDown={e=>{if(e.key==="Enter")commitEdit();if(e.key==="Escape")setEditing(null);}} onBlur={commitEdit}
+              style={{width:"100%",background:T.inputBg,border:`1px solid ${T.teal}`,borderRadius:6,padding:"3px 7px",fontSize:11,color:T.text,outline:"none",marginTop:3}}/>
+          :<div style={{fontSize:11,color:p.contractValue?T.teal:T.textMuted,marginTop:2,cursor:"text"}} onDoubleClick={()=>startEdit(p._idx,"contractValue",p.contractValue||"")}>
+            {p.contractValue?(`Contract: ${formatSarCompact(parseFloat(p.contractValue))}`):"No contract value — double-click to set"}
+          </div>
+        }
       </div>
       <button onClick={()=>startEdit(p._idx,"name",p.name)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}} title="Rename">✎</button>
       <button onClick={()=>del(p._idx)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}} title="Delete">✕</button>
@@ -3064,12 +3098,18 @@ function ProjectsModal({projects,onSave,onClose}) {
               style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
               onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
           </div>
-          <div style={{display:"flex",gap:8}}>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
             <input value={newClient} onChange={e=>setNewClient(e.target.value)} list="existing-clients" onKeyDown={e=>e.key==="Enter"&&add()}
               placeholder="Client name (optional)…"
               style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
               onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=T.border}/>
             <datalist id="existing-clients">{clients.map(c=><option key={c} value={c}/>)}</datalist>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <input type="number" value={newContractValue} onChange={e=>setNewContractValue(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}
+              placeholder="Contract / PO value (SAR, optional)…"
+              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+              onFocus={e=>e.target.style.borderColor=T.teal} onBlur={e=>e.target.style.borderColor=T.border}/>
             <button onClick={add} style={{background:T.green,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0,cursor:"pointer"}}>+ Add</button>
           </div>
         </div>
@@ -3745,8 +3785,10 @@ function CostControlPage({data, setData, showToast, go}) {
   // ── Per-project P&L helper ──
   const getProjFinancials = (proj) => {
     const pa        = analysis.find(a=>a.project===proj);
-    const projObj   = (data.projects||[]).find(p=>pName(p)===proj);
-    const poValue   = parseFloat(pa?.poValue) || parseFloat(projObj?.poValue) || 0;
+    // Contract value: pull from work orders first (Finance > Work Orders / Agreements)
+    const woDocs    = (data.projectDocs||[]).filter(d=>d.subTab==="workorders" && d.project===proj);
+    const woValue   = woDocs.length ? Math.max(...woDocs.map(d=>parseFloat(d.amount)||0)) : 0;
+    const poValue   = woValue || parseFloat(pa?.poValue) || 0;
     const invs      = invoiceDocs.filter(d=>d.project===proj);
     const revenue   = invs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
     const collected = invs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0);
