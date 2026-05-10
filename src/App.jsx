@@ -1560,7 +1560,7 @@ function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
             <label style={LS}>PROJECT *</label>
             <select value={f.project} onChange={e=>upd("project",e.target.value)} style={{...IS,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}>
               <option value="">— Select project —</option>
-              {projectNames.map(p=><option key={p} value={p}>{p}</option>)}
+              {projectNames.map(p=>{ const name = typeof p==="string"?p:(p?.name??""); return <option key={name} value={name}>{name}</option>; })}
             </select>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -2511,7 +2511,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
                     </div>
                   </div>
                   <div style={{display:"flex",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                    <button onClick={()=>setModal(p)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✎</button>
+                    <button onClick={()=>{ const {invs,jobs,ungroupedInvs,ungroupedCerts,totalInvoiced,totalCollected,totalDue,...clean}=p; setModal(clean); }} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✎</button>
                     <button onClick={()=>del(p.id)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✕</button>
                   </div>
                 </div>
