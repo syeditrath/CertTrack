@@ -1831,7 +1831,7 @@ function ProjectDurationChart({ proj, reports }) {
 }
 
 /* ── Project Detail view ── */
-function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDelete, onBack, go }) {
+function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData, showToast, onUpdate, onDelete, onBack, go }) {
   const [editProj, setEditProj]     = useState(false);
   const [drModal,  setDrModal]      = useState(null);
   const [expandDr, setExpandDr]     = useState(null);
@@ -1839,6 +1839,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
   const [expandAllInvs,      setExpandAllInvs]      = useState(false);
   const [expandJobsSection,  setExpandJobsSection]  = useState(false);
   const [expandDailySection, setExpandDailySection] = useState(false);
+  const [detailTab, setDetailTab] = useState("overview");
 
   const { invs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts } = deriveProjectStats(proj.project, projectDocs);
   const poValue = parseFloat(proj.poValue) || 0;
@@ -1875,6 +1876,157 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
         <button onClick={()=>{if(window.confirm("Delete this project analysis?")) onDelete();}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✕ Delete</button>
       </div>
 
+      {/* Detail tab bar */}
+      <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
+        {[
+          {id:"overview",   label:"Overview",   icon:"◐"},
+          {id:"costsheet",  label:"Cost Sheet",  icon:"💰"},
+          {id:"quotation",  label:"Quotation",   icon:"📄"},
+        ].map(t=>{
+          const active = detailTab===t.id;
+          const accentColor = t.id==="costsheet"?T.teal:t.id==="quotation"?T.purple:T.blue;
+          return (
+            <button key={t.id} onClick={()=>setDetailTab(t.id)}
+              style={{background:active?`${accentColor}18`:T.card, border:`1px solid ${active?accentColor+"66":T.border}`, color:active?accentColor:T.textMuted, borderRadius:10, padding:"9px 18px", fontSize:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:6, transition:"all .15s"}}>
+              <span>{t.icon}</span>{t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ══ COST SHEET tab ═══════════════════════════════════════════════ */}
+      {detailTab==="costsheet" && (() => {
+        const sheets = (data.costSheets||[]).filter(s=>s.project===proj.project);
+        const addSheet = () => {
+          const desc = window.prompt("Cost item description:");
+          if (!desc) return;
+          const est = window.prompt("Estimated cost (SAR):");
+          const act = window.prompt("Actual cost (SAR, leave blank if not yet spent):");
+          setData(prev=>({...prev, costSheets:[...(prev.costSheets||[]), {id:uid(), project:proj.project, description:desc, estimatedCost:est||"0", actualCost:act||"", date:new Date().toISOString().slice(0,10), notes:""}]}));
+          showToast("Cost sheet entry added");
+        };
+        const delSheet = id => setData(prev=>({...prev, costSheets:(prev.costSheets||[]).filter(s=>s.id!==id)}));
+        const totalEst = sheets.reduce((s,x)=>s+(parseFloat(x.estimatedCost)||0),0);
+        const totalAct = sheets.reduce((s,x)=>s+(parseFloat(x.actualCost)||0),0);
+        return (
+          <div className="fade-in">
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>💰 COST SHEET — {proj.project}</div>
+              <button onClick={addSheet} style={{background:T.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",letterSpacing:"1px"}}>+ ADD ENTRY</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:16}}>
+              {[
+                {label:"TOTAL ESTIMATED", v:formatSarCompact(totalEst), color:T.gold},
+                {label:"TOTAL ACTUAL",    v:totalAct>0?formatSarCompact(totalAct):"—", color:T.red},
+                {label:"VARIANCE",        v:totalAct>0?formatSarCompact(Math.abs(totalEst-totalAct)):"—", color:totalAct>totalEst?T.red:T.green},
+                {label:"ENTRIES",         v:sheets.length, color:T.blue},
+              ].map(k=>(
+                <div key={k.label} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:k.color}}>{k.v}</div>
+                  <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
+                </div>
+              ))}
+            </div>
+            {sheets.length===0
+              ? <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"48px 20px",textAlign:"center"}}>
+                  <div style={{fontSize:40,marginBottom:10}}>💰</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.textSub,marginBottom:8}}>NO COST ENTRIES</div>
+                  <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>Add estimated and actual costs for this project</div>
+                  <button onClick={addSheet} style={{background:T.teal,border:"none",color:"#fff",borderRadius:10,padding:"10px 22px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer"}}>+ ADD ENTRY</button>
+                </div>
+              : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 140px 140px 120px 40px",gap:12,padding:"8px 16px",background:T.card,borderRadius:10,fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:".5px"}}>
+                    <span>DESCRIPTION</span><span style={{textAlign:"right"}}>ESTIMATED</span><span style={{textAlign:"right"}}>ACTUAL</span><span style={{textAlign:"right"}}>DATE</span><span/>
+                  </div>
+                  {sheets.map(s=>{
+                    const est=parseFloat(s.estimatedCost)||0;
+                    const act=parseFloat(s.actualCost)||0;
+                    const over=act>0&&act>est;
+                    return (
+                      <div key={s.id} style={{display:"grid",gridTemplateColumns:"1fr 140px 140px 120px 40px",gap:12,padding:"12px 16px",background:T.card,border:`1px solid ${over?T.red+"44":T.border}`,borderRadius:10,alignItems:"center"}}>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:14,color:T.text}}>{s.description}</div>
+                          {s.notes&&<div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{s.notes}</div>}
+                        </div>
+                        <div style={{textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.gold}}>{formatSarCompact(est)}</div>
+                        <div style={{textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:act>0?(over?T.red:T.green):T.textMuted}}>{act>0?formatSarCompact(act):"—"}</div>
+                        <div style={{textAlign:"right",fontSize:12,color:T.textMuted}}>{s.date||"—"}</div>
+                        <button onClick={()=>delSheet(s.id)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:0}}>✕</button>
+                      </div>
+                    );
+                  })}
+                </div>
+            }
+          </div>
+        );
+      })()}
+
+      {/* ══ QUOTATION tab ════════════════════════════════════════════════ */}
+      {detailTab==="quotation" && (() => {
+        const quotes = (data.quotations||[]).filter(q=>q.project===proj.project);
+        const addQuote = () => {
+          const qNo = window.prompt("Quotation number (e.g. QT-2025-001):");
+          if (!qNo) return;
+          const client = window.prompt("Client name:");
+          const amount = window.prompt("Total quoted amount (SAR):");
+          const status = window.prompt("Status (Pending / Approved / Rejected):", "Pending");
+          setData(prev=>({...prev, quotations:[...(prev.quotations||[]), {id:uid(), project:proj.project, quotationNo:qNo, clientName:client||"", totalAmount:amount||"0", status:status||"Pending", date:new Date().toISOString().slice(0,10), notes:""}]}));
+          showToast("Quotation added");
+        };
+        const delQuote = id => setData(prev=>({...prev, quotations:(prev.quotations||[]).filter(q=>q.id!==id)}));
+        const statusColor = s => s==="Approved"?T.green:s==="Rejected"?T.red:T.gold;
+        return (
+          <div className="fade-in">
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>📄 QUOTATIONS — {proj.project}</div>
+              <button onClick={addQuote} style={{background:T.purple,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",letterSpacing:"1px"}}>+ ADD QUOTATION</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16}}>
+              {[
+                {label:"TOTAL QUOTATIONS", v:quotes.length, color:T.purple},
+                {label:"APPROVED",  v:quotes.filter(q=>q.status==="Approved").length,  color:T.green},
+                {label:"PENDING",   v:quotes.filter(q=>q.status==="Pending").length,   color:T.gold},
+                {label:"REJECTED",  v:quotes.filter(q=>q.status==="Rejected").length,  color:T.red},
+              ].map(k=>(
+                <div key={k.label} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:k.color}}>{k.v}</div>
+                  <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
+                </div>
+              ))}
+            </div>
+            {quotes.length===0
+              ? <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"48px 20px",textAlign:"center"}}>
+                  <div style={{fontSize:40,marginBottom:10}}>📄</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.textSub,marginBottom:8}}>NO QUOTATIONS</div>
+                  <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>Add quotations submitted for this project</div>
+                  <button onClick={addQuote} style={{background:T.purple,border:"none",color:"#fff",borderRadius:10,padding:"10px 22px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer"}}>+ ADD QUOTATION</button>
+                </div>
+              : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {quotes.map(q=>(
+                    <div key={q.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+                      <div style={{flex:1,minWidth:200}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text}}>{q.quotationNo}</div>
+                        {q.clientName&&<div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Client: {q.clientName}</div>}
+                        {q.notes&&<div style={{fontSize:11,color:T.textMuted,marginTop:3,fontStyle:"italic"}}>{q.notes}</div>}
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.gold}}>{formatSarCompact(parseFloat(q.totalAmount)||0)}</div>
+                        <div style={{fontSize:10,color:T.textMuted,fontWeight:700}}>QUOTED AMOUNT</div>
+                      </div>
+                      <div style={{textAlign:"center"}}>
+                        <div style={{background:statusColor(q.status)+"22",color:statusColor(q.status),border:`1px solid ${statusColor(q.status)}44`,borderRadius:8,padding:"4px 14px",fontSize:12,fontWeight:700}}>{q.status}</div>
+                        <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>{q.date}</div>
+                      </div>
+                      <button onClick={()=>delQuote(q.id)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:0}}>✕</button>
+                    </div>
+                  ))}
+                </div>
+            }
+          </div>
+        );
+      })()}
+
+      {detailTab==="overview" && <>
       {/* Progress hero */}
       <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"24px 28px",marginBottom:16,boxShadow:T.shadow}}>
         <div style={{display:"flex",flexWrap:"wrap",gap:20,alignItems:"flex-start",justifyContent:"space-between",marginBottom:20}}>
@@ -2203,6 +2355,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, onUpdate, onDe
 
       {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
       {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} projectName={proj.project} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
+      </> /* end detailTab===overview */}
     </div>
   );
 }
@@ -2256,6 +2409,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
   if (detailRec) {
     return <ProjectAnalysisDetail
       proj={detailRec} projectDocs={projectDocs} projectNames={projects}
+      data={data} setData={setData} showToast={showToast}
       onUpdate={p=>{update(p);setDetail(p.id);}} onDelete={()=>del(detailRec.id)}
       onBack={()=>setDetail(null)} go={go}/>;
   }
@@ -4612,8 +4766,6 @@ function AlertRow({a}) {
 const PD_TABS = [
   {id:"certificates",  label:"Job Completion Certificates", icon:"📜", color:T.blue,   dim:T.blueDim},
   {id:"dailyreports",  label:"Daily Reports",               icon:"📅", color:T.gold,   dim:T.goldDim},
-  {id:"costsheet",     label:"Cost Sheet",                  icon:"💰", color:T.teal,   dim:T.tealDim||"#0d948822"},
-  {id:"quotation",     label:"Quotation",                   icon:"📄", color:T.purple, dim:T.purpleDim||"#a855f722"},
 ];
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -5144,141 +5296,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
       )}
 
       )}
-
-      {/* ══ COST SHEET ═══════════════════════════════════════════════════ */}
-      {subTab==="costsheet" && (() => {
-        const sheets = (data.costSheets||[]).filter(s=>s.project===selectedProject);
-        const addSheet = () => {
-          const desc = window.prompt("Cost item description:");
-          if (!desc) return;
-          const est = window.prompt("Estimated cost (SAR):");
-          const act = window.prompt("Actual cost (SAR, leave blank if not yet spent):");
-          setData(prev=>({...prev, costSheets:[...(prev.costSheets||[]), {id:uid(), project:selectedProject, description:desc, estimatedCost:est||"0", actualCost:act||"", date:new Date().toISOString().slice(0,10), notes:""}]}));
-          showToast("Cost sheet entry added");
-        };
-        const delSheet = id => setData(prev=>({...prev, costSheets:(prev.costSheets||[]).filter(s=>s.id!==id)}));
-        const totalEst = sheets.reduce((s,x)=>s+(parseFloat(x.estimatedCost)||0),0);
-        const totalAct = sheets.reduce((s,x)=>s+(parseFloat(x.actualCost)||0),0);
-        return (
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>💰 COST SHEET — {selectedProject}</div>
-              <button onClick={addSheet} style={{background:T.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",letterSpacing:"1px"}}>+ ADD ENTRY</button>
-            </div>
-            {/* Summary */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:16}}>
-              {[
-                {label:"TOTAL ESTIMATED", v:formatSarCompact(totalEst), color:T.gold},
-                {label:"TOTAL ACTUAL",    v:totalAct>0?formatSarCompact(totalAct):"—", color:T.red},
-                {label:"VARIANCE",        v:totalAct>0?formatSarCompact(Math.abs(totalEst-totalAct)):"—", color:totalAct>totalEst?T.red:T.green},
-                {label:"ENTRIES",         v:sheets.length, color:T.blue},
-              ].map(k=>(
-                <div key={k.label} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:k.color}}>{k.v}</div>
-                  <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
-                </div>
-              ))}
-            </div>
-            {sheets.length===0
-              ? <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"48px 20px",textAlign:"center"}}>
-                  <div style={{fontSize:40,marginBottom:10}}>💰</div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.textSub,marginBottom:8}}>NO COST ENTRIES</div>
-                  <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>Add estimated and actual costs for this project</div>
-                  <button onClick={addSheet} style={{background:T.teal,border:"none",color:"#fff",borderRadius:10,padding:"10px 22px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer"}}>+ ADD ENTRY</button>
-                </div>
-              : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {/* Table header */}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 140px 140px 120px 40px",gap:12,padding:"8px 16px",background:T.card,borderRadius:10,fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:".5px"}}>
-                    <span>DESCRIPTION</span><span style={{textAlign:"right"}}>ESTIMATED</span><span style={{textAlign:"right"}}>ACTUAL</span><span style={{textAlign:"right"}}>DATE</span><span/>
-                  </div>
-                  {sheets.map(s=>{
-                    const est=parseFloat(s.estimatedCost)||0;
-                    const act=parseFloat(s.actualCost)||0;
-                    const over=act>0&&act>est;
-                    return (
-                      <div key={s.id} style={{display:"grid",gridTemplateColumns:"1fr 140px 140px 120px 40px",gap:12,padding:"12px 16px",background:T.card,border:`1px solid ${over?T.red+"44":T.border}`,borderRadius:10,alignItems:"center"}}>
-                        <div>
-                          <div style={{fontWeight:600,fontSize:14,color:T.text}}>{s.description}</div>
-                          {s.notes&&<div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{s.notes}</div>}
-                        </div>
-                        <div style={{textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.gold}}>{formatSarCompact(est)}</div>
-                        <div style={{textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:act>0?(over?T.red:T.green):T.textMuted}}>{act>0?formatSarCompact(act):"—"}</div>
-                        <div style={{textAlign:"right",fontSize:12,color:T.textMuted}}>{s.date||"—"}</div>
-                        <button onClick={()=>delSheet(s.id)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:0}}>✕</button>
-                      </div>
-                    );
-                  })}
-                </div>
-            }
-          </div>
-        );
-      })()}
-
-      {/* ══ QUOTATION ════════════════════════════════════════════════════ */}
-      {subTab==="quotation" && (() => {
-        const quotes = (data.quotations||[]).filter(q=>q.project===selectedProject);
-        const addQuote = () => {
-          const qNo = window.prompt("Quotation number (e.g. QT-2025-001):");
-          if (!qNo) return;
-          const client = window.prompt("Client name:");
-          const amount = window.prompt("Total quoted amount (SAR):");
-          const status = window.prompt("Status (Pending / Approved / Rejected):", "Pending");
-          setData(prev=>({...prev, quotations:[...(prev.quotations||[]), {id:uid(), project:selectedProject, quotationNo:qNo, clientName:client||"", totalAmount:amount||"0", status:status||"Pending", date:new Date().toISOString().slice(0,10), notes:""}]}));
-          showToast("Quotation added");
-        };
-        const delQuote = id => setData(prev=>({...prev, quotations:(prev.quotations||[]).filter(q=>q.id!==id)}));
-        const statusColor = s => s==="Approved"?T.green:s==="Rejected"?T.red:T.gold;
-        return (
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>📄 QUOTATIONS — {selectedProject}</div>
-              <button onClick={addQuote} style={{background:T.purple,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",letterSpacing:"1px"}}>+ ADD QUOTATION</button>
-            </div>
-            {/* Summary */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16}}>
-              {[
-                {label:"TOTAL QUOTATIONS", v:quotes.length, color:T.purple},
-                {label:"APPROVED",  v:quotes.filter(q=>q.status==="Approved").length,  color:T.green},
-                {label:"PENDING",   v:quotes.filter(q=>q.status==="Pending").length,   color:T.gold},
-                {label:"REJECTED",  v:quotes.filter(q=>q.status==="Rejected").length,  color:T.red},
-              ].map(k=>(
-                <div key={k.label} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:k.color}}>{k.v}</div>
-                  <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
-                </div>
-              ))}
-            </div>
-            {quotes.length===0
-              ? <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"48px 20px",textAlign:"center"}}>
-                  <div style={{fontSize:40,marginBottom:10}}>📄</div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.textSub,marginBottom:8}}>NO QUOTATIONS</div>
-                  <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>Add quotations submitted for this project</div>
-                  <button onClick={addQuote} style={{background:T.purple,border:"none",color:"#fff",borderRadius:10,padding:"10px 22px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer"}}>+ ADD QUOTATION</button>
-                </div>
-              : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {quotes.map(q=>(
-                    <div key={q.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-                      <div style={{flex:1,minWidth:200}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text}}>{q.quotationNo}</div>
-                        {q.clientName&&<div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Client: {q.clientName}</div>}
-                        {q.notes&&<div style={{fontSize:11,color:T.textMuted,marginTop:3,fontStyle:"italic"}}>{q.notes}</div>}
-                      </div>
-                      <div style={{textAlign:"right"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.gold}}>{formatSarCompact(parseFloat(q.totalAmount)||0)}</div>
-                        <div style={{fontSize:10,color:T.textMuted,fontWeight:700}}>QUOTED AMOUNT</div>
-                      </div>
-                      <div style={{textAlign:"center"}}>
-                        <div style={{background:statusColor(q.status)+"22",color:statusColor(q.status),border:`1px solid ${statusColor(q.status)}44`,borderRadius:8,padding:"4px 14px",fontSize:12,fontWeight:700}}>{q.status}</div>
-                        <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>{q.date}</div>
-                      </div>
-                      <button onClick={()=>delQuote(q.id)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:0}}>✕</button>
-                    </div>
-                  ))}
-                </div>
-            }
-          </div>
-        );
-      })()}
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
       {modal && subTab==="certificates"  && <CertificateModal  mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
