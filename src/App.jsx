@@ -1554,7 +1554,7 @@ function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
         </div>
         <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:14}}>
           <div style={{background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:10,padding:"10px 14px",fontSize:12,color:T.blue}}>
-            ℹ Progress is calculated automatically from invoices in Project Docs. Just enter the contract PO value here.
+            ℹ Progress is calculated automatically from invoices in Project Docs. The contract / PO value is set on the project itself (Manage Projects).
           </div>
           <div>
             <label style={LS}>PROJECT *</label>
@@ -1563,9 +1563,21 @@ function ProjectAnalysisModal({ proj, projectNames, onSave, onClose }) {
               {projectNames.map(p=>{ const name = typeof p==="string"?p:(p?.name??""); return <option key={name} value={name}>{name}</option>; })}
             </select>
           </div>
+          {(() => {
+            const projObj = projectNames.find(p=>(typeof p==="string"?p:p?.name)===f.project);
+            const cv = projObj && typeof projObj==="object" ? projObj.contractValue : "";
+            return cv ? (
+              <div style={{background:`${T.teal}12`,border:`1px solid ${T.teal}44`,borderRadius:10,padding:"10px 14px",fontSize:13,color:T.teal,fontWeight:700}}>
+                💰 Contract Value: {formatSarCompact(parseFloat(cv))} — pulled from project
+              </div>
+            ) : (
+              <div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}33`,borderRadius:10,padding:"10px 14px",fontSize:12,color:T.gold}}>
+                ⚠ No contract value set. Go to <strong>Manage Projects</strong> and double-click the project to set its contract value.
+              </div>
+            );
+          })()}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div><label style={LS}>PO NUMBER</label><input value={f.poNumber} onChange={e=>upd("poNumber",e.target.value)} placeholder="e.g. PO-2025-001" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
-            <div><label style={LS}>PO VALUE (SAR) — Total Contract</label><input type="number" value={f.poValue} onChange={e=>upd("poValue",e.target.value)} placeholder="e.g. 2700000" style={IS} onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=T.border}/></div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div><label style={LS}>QUOTATION REF</label><input value={f.quotationRef} onChange={e=>upd("quotationRef",e.target.value)} placeholder="e.g. QT-2024-089" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
@@ -2377,8 +2389,20 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
     const existingIds = new Set(rawAnalysis.map(x => x.project));
     const autoAdded = projects
       .filter(p => !existingIds.has(typeof p === "string" ? p : p.name))
-      .map(p => ({ id: uid(), project: typeof p === "string" ? p : p.name, status: "Active", poValue: "", clientName: "", poNumber: "", quotationRef: "", notes: "" }));
-    return autoAdded.length > 0 ? [...rawAnalysis, ...autoAdded] : rawAnalysis;
+      .map(p => {
+        const name = typeof p === "string" ? p : p.name;
+        const cv = typeof p === "object" ? (p.contractValue || "") : "";
+        return { id: uid(), project: name, status: "Active", poValue: cv, clientName: typeof p === "object" ? (p.client || "") : "", poNumber: "", quotationRef: "", notes: "" };
+      });
+    // Sync contractValue from data.projects into existing analysis records
+    const synced = rawAnalysis.map(rec => {
+      const projObj = projects.find(p => (typeof p === "string" ? p : p.name) === rec.project);
+      const cv = projObj && typeof projObj === "object" ? (projObj.contractValue || "") : "";
+      // Only use contractValue if it exists and analysis record has no manually set poValue
+      const poValue = cv || rec.poValue;
+      return poValue !== rec.poValue ? { ...rec, poValue } : rec;
+    });
+    return autoAdded.length > 0 ? [...synced, ...autoAdded] : synced;
   }, [projects, rawAnalysis]);
 
   // Persist auto-synced entries to data
@@ -2988,9 +3012,10 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
 
 /* ── Projects Manager Modal ──────────────────────────────────────────────── */
 function ProjectsModal({projects,onSave,onClose}) {
-  const [list,    setList]    = useState(projects.map(p=>typeof p==="string"?{name:p,client:""}:{...p}));
+  const [list,    setList]    = useState(projects.map(p=>typeof p==="string"?{name:p,client:"",contractValue:""}:{contractValue:"",...p}));
   const [newName, setNewName] = useState("");
   const [newClient,setNewClient]=useState("");
+  const [newContractValue,setNewContractValue]=useState("");
   const [editing, setEditing] = useState(null); // {idx, field, val}
 
   const clients = [...new Set(list.map(p=>p.client).filter(Boolean))].sort();
@@ -2998,8 +3023,8 @@ function ProjectsModal({projects,onSave,onClose}) {
   const add = () => {
     const n=newName.trim();
     if(!n||list.some(x=>x.name===n)) return;
-    setList(l=>[...l,{name:n,client:newClient.trim()}]);
-    setNewName("");
+    setList(l=>[...l,{name:n,client:newClient.trim(),contractValue:newContractValue.trim()}]);
+    setNewName(""); setNewContractValue("");
   };
 
   const del = idx => setList(l=>l.filter((_,i)=>i!==idx));
@@ -3037,6 +3062,13 @@ function ProjectsModal({projects,onSave,onClose}) {
               style={{width:"100%",background:T.inputBg,border:`1px solid ${T.gold}`,borderRadius:6,padding:"3px 7px",fontSize:11,color:T.text,outline:"none",marginTop:3}}/>
           :<div style={{fontSize:11,color:p.client?T.gold:T.textMuted,marginTop:2,cursor:"text"}} onDoubleClick={()=>startEdit(p._idx,"client",p.client||"")}>{p.client||"No client — double-click to assign"}</div>
         }
+        {editing&&editing.idx===p._idx&&editing.field==="contractValue"
+          ?<input autoFocus type="number" value={editing.val} onChange={e=>setEditing({...editing,val:e.target.value})} onKeyDown={e=>{if(e.key==="Enter")commitEdit();if(e.key==="Escape")setEditing(null);}} onBlur={commitEdit}
+              style={{width:"100%",background:T.inputBg,border:`1px solid ${T.teal}`,borderRadius:6,padding:"3px 7px",fontSize:11,color:T.text,outline:"none",marginTop:3}}/>
+          :<div style={{fontSize:11,color:p.contractValue?T.teal:T.textMuted,marginTop:2,cursor:"text"}} onDoubleClick={()=>startEdit(p._idx,"contractValue",p.contractValue||"")}>
+            {p.contractValue?(`Contract: ${formatSarCompact(parseFloat(p.contractValue))}`):"No contract value — double-click to set"}
+          </div>
+        }
       </div>
       <button onClick={()=>startEdit(p._idx,"name",p.name)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}} title="Rename">✎</button>
       <button onClick={()=>del(p._idx)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}} title="Delete">✕</button>
@@ -3064,12 +3096,18 @@ function ProjectsModal({projects,onSave,onClose}) {
               style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
               onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
           </div>
-          <div style={{display:"flex",gap:8}}>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
             <input value={newClient} onChange={e=>setNewClient(e.target.value)} list="existing-clients" onKeyDown={e=>e.key==="Enter"&&add()}
               placeholder="Client name (optional)…"
               style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
               onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=T.border}/>
             <datalist id="existing-clients">{clients.map(c=><option key={c} value={c}/>)}</datalist>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <input type="number" value={newContractValue} onChange={e=>setNewContractValue(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}
+              placeholder="Contract / PO value (SAR, optional)…"
+              style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 11px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+              onFocus={e=>e.target.style.borderColor=T.teal} onBlur={e=>e.target.style.borderColor=T.border}/>
             <button onClick={add} style={{background:T.green,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0,cursor:"pointer"}}>+ Add</button>
           </div>
         </div>
