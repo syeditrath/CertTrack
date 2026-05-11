@@ -1923,6 +1923,12 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
   const [expandJobsSection,  setExpandJobsSection]  = useState(false);
   const [expandDailySection, setExpandDailySection] = useState(false);
   const [detailTab, setDetailTab] = useState("overview");
+  // Cost sheet file upload state (hoisted from IIFE to satisfy Rules of Hooks)
+  const [csUploading, setCsUploading]       = useState(false);
+  const csFileRef                            = useRef();
+  // Quotation file upload state
+  const [quoteUploading, setQuoteUploading] = useState({});
+  const quoteFileRefs                        = useRef({});
 
   const { invs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts } = deriveProjectStats(proj.project, projectDocs);
   const poValue = parseFloat(proj.poValue) || 0;
@@ -1993,8 +1999,6 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         const totalAct = sheets.reduce((s,x)=>s+(parseFloat(x.actualCost)||0),0);
 
         // Cost sheet file upload & estimated total cost (stored on the projectAnalysis entry)
-        const csFileRef = React.useRef();
-        const [csUploading, setCsUploading] = React.useState(false);
         const paEntry = (data.projectAnalysis||[]).find(x=>x.project===proj.project) || {};
         const handleCsFileUpload = async (file) => {
           if (!file) return;
@@ -2121,8 +2125,6 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         };
         const delQuote = id => setData(prev=>({...prev, quotations:(prev.quotations||[]).filter(q=>q.id!==id)}));
         const statusColor = s => s==="Approved"?T.green:s==="Rejected"?T.red:T.gold;
-        const [quoteUploading, setQuoteUploading] = React.useState({});
-        const quoteFileRefs = React.useRef({});
         const handleQuoteFileUpload = async (qId, file) => {
           if (!file) return;
           setQuoteUploading(p=>({...p,[qId]:true}));
