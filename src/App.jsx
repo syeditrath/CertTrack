@@ -633,7 +633,7 @@ const EMPTY_DATA = {
   projectAnalysis: [],
   rigs: [],          // { id, project, name }
   costControl: [],  // { id, project, category, description, amount, date, refNo, notes, budgeted }
-                    // category: "Labour"|"Equipment"|"Materials"|"Subcontractor"|"Tools"|"Transport"|"Overhead"|"Other"
+                    // category: "Labour"|"Equipment"|"Materials"|"Subcontractor"|"Overhead"|"Other"
   costSheets:  [],  // { id, project, description, estimatedCost, actualCost, date, notes }
   quotations:  [],  // { id, project, quotationNo, clientName, date, validUntil, items:[], status, notes }
 };
@@ -3749,6 +3749,8 @@ const COST_CATS = [
   {id:"Equipment",     color:"#fbbf24", icon:"◎"},
   {id:"Materials",     color:"#34d399", icon:"▦"},
   {id:"Subcontractor", color:"#a78bfa", icon:"◆"},
+  {id:"Transport",     color:"#f472b6", icon:"◉"},
+  {id:"Tools",         color:"#4ade80", icon:"⚙"},
   {id:"Overhead",      color:"#fb923c", icon:"⊕"},
   {id:"Other",         color:"#94a3b8", icon:"·"},
 ];
@@ -3789,21 +3791,30 @@ function CostControlPage({data, setData, showToast, go}) {
     const woDocs    = (data.projectDocs||[]).filter(d=>d.subTab==="workorders" && d.project===proj);
     const woValue   = woDocs.length ? Math.max(...woDocs.map(d=>parseFloat(d.amount)||0)) : 0;
     const poValue   = woValue || parseFloat(pa?.poValue) || 0;
-    const invs      = invoiceDocs.filter(d=>d.project===proj);
-    const revenue   = invs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
-    const collected = invs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0);
-    const costs     = allCosts.filter(c=>c.project===proj);
-    const totalCost = costs.reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
-    const margin    = revenue - totalCost;
-    const marginPct = revenue>0 ? Math.round((margin/revenue)*100) : null;
-    return {poValue, revenue, collected, costs, totalCost, margin, marginPct, pa};
+    const invs        = invoiceDocs.filter(d=>d.project===proj);
+    const advanceInvs = invs.filter(d=>getInvoiceStream(d)==="advance");
+    const incomeInvs  = invs.filter(d=>getInvoiceStream(d)==="income");
+    const advance     = advanceInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+    const income      = incomeInvs.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
+    const revenue     = advance + income;
+    const advanceCollected = advanceInvs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0);
+    const incomeCollected  = incomeInvs.reduce((s,d)=>s+getInvoiceCollectedAmount(d),0);
+    const collected   = advanceCollected + incomeCollected;
+    const costs       = allCosts.filter(c=>c.project===proj);
+    const totalCost   = costs.reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
+    const margin      = revenue - totalCost;
+    const marginPct   = revenue>0 ? Math.round((margin/revenue)*100) : null;
+    return {poValue, revenue, advance, income, advanceCollected, incomeCollected, collected, costs, totalCost, margin, marginPct, pa};
   };
 
   // ── Project overview cards ──
   if (!selProj) {
-    const allMargin    = projects.reduce((s,p)=>{ const f=getProjFinancials(p); return s+f.margin; },0);
-    const allRevenue   = projects.reduce((s,p)=>{ const f=getProjFinancials(pName(p)); return s+f.revenue; },0);
-    const allCostTotal = projects.reduce((s,p)=>{ const f=getProjFinancials(pName(p)); return s+f.totalCost; },0);
+    const allFinancials = projects.map(p=>getProjFinancials(pName(p)));
+    const allMargin    = allFinancials.reduce((s,f)=>s+f.margin,0);
+    const allRevenue   = allFinancials.reduce((s,f)=>s+f.revenue,0);
+    const allAdvance   = allFinancials.reduce((s,f)=>s+f.advance,0);
+    const allIncome    = allFinancials.reduce((s,f)=>s+f.income,0);
+    const allCostTotal = allFinancials.reduce((s,f)=>s+f.totalCost,0);
     const overallPct   = allRevenue>0 ? Math.round((allMargin/allRevenue)*100) : null;
 
     return (
@@ -3817,13 +3828,13 @@ function CostControlPage({data, setData, showToast, go}) {
         </div>
 
         {/* Portfolio summary strip */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:20}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:20}}>
           {[
-            {label:"Total Revenue",  v:formatSarCompact(allRevenue),   color:T.green},
+            {label:"Total Advance",  v:formatSarCompact(allAdvance),   color:T.gold},
+            {label:"Total Income",   v:formatSarCompact(allIncome),    color:T.green},
             {label:"Total Costs",    v:formatSarCompact(allCostTotal), color:T.red},
             {label:"Gross Margin",   v:formatSarCompact(allMargin),    color:allMargin>=0?T.green:T.red},
             {label:"Margin %",       v:overallPct!==null?`${overallPct}%`:"—", color:overallPct===null?T.textMuted:overallPct>=20?T.green:overallPct>=10?T.gold:T.red},
-            {label:"Projects",       v:projects.length,                color:T.blue},
             {label:"Cost Entries",   v:allCosts.length,                color:T.purple},
           ].map((k,i)=>(
             <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",boxShadow:T.shadow,animationDelay:`${i*.04}s`}}>
@@ -3836,7 +3847,7 @@ function CostControlPage({data, setData, showToast, go}) {
         {/* Project cards */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:14}}>
           {projects.map((proj,i)=>{ proj=pName(proj);
-            const {poValue,revenue,collected,totalCost,margin,marginPct,costs} = getProjFinancials(proj);
+            const {poValue,revenue,advance,income,collected,totalCost,margin,marginPct,costs} = getProjFinancials(proj);
             const costByCat = COST_CATS.map(c=>({
               ...c,
               total: costs.filter(e=>e.category===c.id).reduce((s,e)=>s+(parseFloat(e.amount)||0),0)
@@ -3859,18 +3870,24 @@ function CostControlPage({data, setData, showToast, go}) {
                 </div>
 
                 {/* P&L mini table */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
-                  <div style={{background:T.bg,borderRadius:10,padding:"10px 12px"}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(revenue)}</div>
-                    <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700}}>REVENUE</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
+                  <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:9,padding:"8px 10px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:T.gold,lineHeight:1}}>{formatSarCompact(advance)}</div>
+                    <div style={{fontSize:9,color:T.gold,marginTop:3,fontWeight:700}}>ADVANCE</div>
                   </div>
-                  <div style={{background:T.redDim,border:`1px solid ${T.red}22`,borderRadius:10,padding:"10px 12px"}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:T.red,lineHeight:1}}>{formatSarCompact(totalCost)}</div>
-                    <div style={{fontSize:10,color:T.red,marginTop:4,fontWeight:700}}>TOTAL COST</div>
+                  <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:9,padding:"8px 10px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(income)}</div>
+                    <div style={{fontSize:9,color:T.green,marginTop:3,fontWeight:700}}>INCOME</div>
                   </div>
-                  <div style={{background:margin>=0?T.greenDim:T.redDim,border:`1px solid ${margin>=0?T.green:T.red}22`,borderRadius:10,padding:"10px 12px"}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:margin>=0?T.green:T.red,lineHeight:1}}>{formatSarCompact(Math.abs(margin))}</div>
-                    <div style={{fontSize:10,color:margin>=0?T.green:T.red,marginTop:4,fontWeight:700}}>{margin>=0?"MARGIN":"LOSS"}</div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
+                  <div style={{background:T.redDim,border:`1px solid ${T.red}22`,borderRadius:9,padding:"8px 10px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:T.red,lineHeight:1}}>{formatSarCompact(totalCost)}</div>
+                    <div style={{fontSize:9,color:T.red,marginTop:3,fontWeight:700}}>TOTAL COST</div>
+                  </div>
+                  <div style={{background:margin>=0?T.greenDim:T.redDim,border:`1px solid ${margin>=0?T.green:T.red}22`,borderRadius:9,padding:"8px 10px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:15,fontWeight:800,color:margin>=0?T.green:T.red,lineHeight:1}}>{formatSarCompact(Math.abs(margin))}</div>
+                    <div style={{fontSize:9,color:margin>=0?T.green:T.red,marginTop:3,fontWeight:700}}>{margin>=0?"MARGIN":"LOSS"}</div>
                   </div>
                 </div>
 
@@ -3907,7 +3924,7 @@ function CostControlPage({data, setData, showToast, go}) {
   }
 
   // ── Project detail view ──
-  const {poValue, revenue, collected, totalCost, margin, marginPct, costs, pa} = getProjFinancials(selProj);
+  const {poValue, revenue, advance, income, advanceCollected, incomeCollected, collected, totalCost, margin, marginPct, costs, pa} = getProjFinancials(selProj);
   const filteredCosts = filterCat==="All" ? costs : costs.filter(c=>c.category===filterCat);
 
   // Cost by category
@@ -3997,17 +4014,34 @@ function CostControlPage({data, setData, showToast, go}) {
           </div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:20}}>
+        {/* Revenue split: Advance + Income */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+          <div className="fade-up" style={{background:T.bg,border:`1px solid ${T.gold}44`,borderRadius:12,padding:"14px 16px"}}>
+            <div style={{fontSize:10,color:T.textMuted,fontWeight:700,letterSpacing:".5px",marginBottom:6}}>ADVANCE INVOICED</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2.2vw,28px)",fontWeight:800,color:T.gold,lineHeight:1}}>{formatSarCompact(advance)}</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:5}}>Collected: <span style={{color:T.gold,fontWeight:700}}>{formatSarCompact(advanceCollected)}</span>
+              {advance-advanceCollected>0&&<span style={{color:T.red}}> · Due: {formatSarCompact(advance-advanceCollected)}</span>}
+            </div>
+          </div>
+          <div className="fade-up" style={{background:T.bg,border:`1px solid ${T.green}44`,borderRadius:12,padding:"14px 16px"}}>
+            <div style={{fontSize:10,color:T.textMuted,fontWeight:700,letterSpacing:".5px",marginBottom:6}}>INCOME INVOICED</div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2.2vw,28px)",fontWeight:800,color:T.green,lineHeight:1}}>{formatSarCompact(income)}</div>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:5}}>Collected: <span style={{color:T.green,fontWeight:700}}>{formatSarCompact(incomeCollected)}</span>
+              {income-incomeCollected>0&&<span style={{color:T.red}}> · Due: {formatSarCompact(income-incomeCollected)}</span>}
+            </div>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:20}}>
           {[
-            {label:"CONTRACT VALUE (PO)", v:poValue?formatSarCompact(poValue):"Set in Project Analysis",   color:poValue?T.gold:T.textMuted},
-            {label:"REVENUE INVOICED",    v:formatSarCompact(revenue),                      color:T.green},
-            {label:"AMOUNT COLLECTED",    v:formatSarCompact(collected),                    color:T.blue},
-            {label:"TOTAL COSTS",         v:formatSarCompact(totalCost),                    color:T.red},
-            {label:"GROSS MARGIN",        v:formatSarCompact(Math.abs(margin)),              color:margin>=0?T.green:T.red},
-            {label:"MARGIN %",            v:marginPct!==null?`${marginPct}%`:"—",           color:marginPct===null?T.textMuted:marginPct>=20?T.green:marginPct>=10?T.gold:T.red},
+            {label:"CONTRACT VALUE (PO)", v:poValue?formatSarCompact(poValue):"Set in Project Analysis", color:poValue?T.gold:T.textMuted},
+            {label:"TOTAL REVENUE",       v:formatSarCompact(revenue),                                   color:T.green},
+            {label:"TOTAL COLLECTED",     v:formatSarCompact(collected),                                 color:T.blue},
+            {label:"TOTAL COSTS",         v:formatSarCompact(totalCost),                                 color:T.red},
+            {label:"GROSS MARGIN",        v:formatSarCompact(Math.abs(margin)),                          color:margin>=0?T.green:T.red},
+            {label:"MARGIN %",            v:marginPct!==null?`${marginPct}%`:"—",                       color:marginPct===null?T.textMuted:marginPct>=20?T.green:marginPct>=10?T.gold:T.red},
           ].map((k,i)=>(
             <div key={k.label} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",animationDelay:`${i*.04}s`}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(18px,2.2vw,28px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(16px,2vw,24px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
               <div style={{fontSize:10,color:T.textMuted,marginTop:5,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
             </div>
           ))}
