@@ -1319,25 +1319,35 @@ function DailyReportModal({ report, projectName, rigs, onSave, onClose }) {
 
 /* ════════════════════════════════════════════════════════════════════════════
    DPR CONSOLIDATION MODAL
-   Collates daily reports from ALL projects into one master Excel export.
-   Also lets the user drop multiple DPR Excel files directly to parse them
-   without first manually adding a report.
+   Collates daily reports from ALL projects/rigs into one master Excel export.
+   Reports are organised by Project → Rig. Each rig gets its own sheet.
+   Also lets the user drop multiple DPR Excel files directly to parse them.
 ════════════════════════════════════════════════════════════════════════════ */
-function DprConsolidateModal({ projectAnalysis, onClose }) {
+function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
   const [dropping, setDropping]         = useState(false);
   const [ingestStatus, setIngestStatus] = useState([]); // [{name, ok, rec}]
   const [ingesting, setIngesting]       = useState(false);
+  const [filterProj, setFilterProj]     = useState("");
+  const [filterRig,  setFilterRig]      = useState("");
   const fileRef = useRef();
 
-  // All existing saved daily reports across projects, enriched with project name
-  const savedRows = (projectAnalysis || []).flatMap(pa =>
-    (pa.dailyReports || []).map(r => ({ ...r, _project: pa.project }))
+  // Saved daily reports come from projectDocs (subTab=dailyreports) — enriched with rig
+  const savedRows = (projectDocs || [])
+    .filter(d => d.subTab === "dailyreports")
+    .map(r => ({ ...r, _project: r.project || "Unassigned", _rig: r.rig || "Unassigned", _source: "saved" }));
+
+  // Legacy: also pull from projectAnalysis.dailyReports if any exist
+  const legacyRows = (projectAnalysis || []).flatMap(pa =>
+    (pa.dailyReports || []).map(r => ({ ...r, _project: pa.project, _rig: r.rig || "Unassigned", _source: "saved" }))
   );
 
-  // Ingested-from-drop rows (not yet saved to app state)
-  const droppedRows = ingestStatus.filter(s => s.ok && s.rec).map(s => ({ ...s.rec, _project: s.rec.project || "Unassigned", _fromFile: s.name }));
+  // Ingested-from-drop rows
+  const droppedRows = ingestStatus.filter(s => s.ok && s.rec).map(s => ({
+    ...s.rec, _project: s.rec.project || "Unassigned", _rig: s.rec.rig || "Unassigned", _fromFile: s.name, _source: "file"
+  }));
 
-  const allRows = [...savedRows, ...droppedRows];
+  const allRows = [...savedRows, ...legacyRows, ...droppedRows]
+    .sort((a,b) => (a._project).localeCompare(b._project) || (a._rig).localeCompare(b._rig) || (b.date||"").localeCompare(a.date||""));
 
   const handleFiles = async (files) => {
     const xlsxFiles = [...files].filter(f => /\.xlsx?$/i.test(f.name));
@@ -1368,56 +1378,55 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
   const exportMaster = () => {
     if (!allRows.length) return;
     const headers = [
-      "Project Name",
-      "Date",
-      "Profile",
-      "Activity",
-      "Permit Received",
-      "Permit Hours",
-      "Standby Reason",
-      "Progress Today (m)",
-      "Accumulated Progress (m)",
-      "Activity Summary",
+      "Project", "Rig / Spread", "Date", "Work Profile", "Activity",
+      "Permit Received", "Permit Hours", "Standby Reason",
+      "Progress Today (m)", "Accumulated (m)", "Activity Summary", "Issues / Delays", "Notes",
     ];
+    const safe = str => String(str||"").replace(/[\\/?*[\]:]/g,"").slice(0,28);
     const toRow = r => [
-      r._project || r.project || "",
-      r.date || "",
-      r.profile || "",
-      r.activity || "",
-      r.permitReceived || "",
-      (r.permitHours  !== undefined && r.permitHours  !== null) ? String(r.permitHours)  : "",
-      r.standbyReason || "",
-      (r.progressToday !== undefined && r.progressToday !== null) ? String(r.progressToday) : "",
-      (r.accumulated   !== undefined && r.accumulated   !== null) ? String(r.accumulated)   : "",
-      r.activities || "",
+      r._project||r.project||"", r._rig||r.rig||"", r.date||"",
+      r.profile||"", r.activity||"",
+      r.permitReceived||"",
+      r.permitHours!=null?String(r.permitHours):"",
+      r.standbyReason||"",
+      r.progressToday!=null?String(r.progressToday):"",
+      r.accumulated!=null?String(r.accumulated):"",
+      r.activities||"", r.issues||"", r.notes||"",
     ];
-    const rows = allRows.map(toRow);
-
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const colWidths = [28, 14, 20, 24, 16, 14, 32, 18, 22, 50];
-    ws["!cols"] = colWidths.map(w => ({ wch: w }));
-    ws["!freeze"] = { xSplit: 0, ySplit: 1 };
-
+    const colWidths = [26,18,12,20,24,14,13,30,16,14,48,30,30];
+    const makeSheet = rows => {
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows.map(toRow)]);
+      ws["!cols"] = colWidths.map(w=>({wch:w}));
+      ws["!freeze"] = {xSplit:0,ySplit:1};
+      return ws;
+    };
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "DPR Master");
-
-    // Per-project sheets
+    // Master sheet — all projects, all rigs
+    XLSX.utils.book_append_sheet(wb, makeSheet(allRows), "DPR Master");
+    // Group by project → rig
     const byProject = {};
     allRows.forEach(r => {
-      const p = r._project || r.project || "Unassigned";
-      if (!byProject[p]) byProject[p] = [];
-      byProject[p].push(r);
+      const proj = r._project||r.project||"Unassigned";
+      const rig  = r._rig||r.rig||"No Rig";
+      if (!byProject[proj]) byProject[proj] = {};
+      if (!byProject[proj][rig]) byProject[proj][rig] = [];
+      byProject[proj][rig].push(r);
     });
-    Object.entries(byProject).forEach(([proj, pRows]) => {
-      const safeName = proj.replace(/[\\/\?\*\[\]:]/g,"").slice(0,28);
-      const pWs = XLSX.utils.aoa_to_sheet([headers, ...pRows.map(toRow)]);
-      pWs["!cols"] = colWidths.map(w => ({ wch: w }));
-      pWs["!freeze"] = { xSplit: 0, ySplit: 1 };
-      XLSX.utils.book_append_sheet(wb, pWs, safeName);
+    Object.entries(byProject).forEach(([proj, rigMap]) => {
+      const projSafe = safe(proj).slice(0,20);
+      const allProjRows = Object.values(rigMap).flat();
+      // Per-project summary sheet
+      XLSX.utils.book_append_sheet(wb, makeSheet(allProjRows), projSafe);
+      // Per-rig sheet (only if multiple rigs)
+      if (Object.keys(rigMap).length > 1) {
+        Object.entries(rigMap).forEach(([rig, rigRows]) => {
+          const sheetName = (projSafe + "-" + safe(rig)).slice(0,31);
+          XLSX.utils.book_append_sheet(wb, makeSheet(rigRows), sheetName);
+        });
+      }
     });
-
     const today = new Date().toISOString().slice(0,10);
-    XLSX.writeFile(wb, `DPR_Master_Consolidation_${today}.xlsx`);
+    XLSX.writeFile(wb, `DPR_Consolidation_${today}.xlsx`);
   };
 
   const IS = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
@@ -1431,7 +1440,7 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>📊 DPR CONSOLIDATION</div>
             <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>
-              {savedRows.length} saved report{savedRows.length!==1?"s":""} across {(projectAnalysis||[]).length} project{(projectAnalysis||[]).length!==1?"s":""}
+              {savedRows.length + legacyRows.length} saved report{(savedRows.length+legacyRows.length)!==1?"s":""} across {Object.keys(Object.fromEntries(allRows.map(r=>[r._project,1]))).length} project{Object.keys(Object.fromEntries(allRows.map(r=>[r._project,1]))).length!==1?"s":""} · {Object.keys(Object.fromEntries(allRows.map(r=>[r._rig,1]))).length} rig{Object.keys(Object.fromEntries(allRows.map(r=>[r._rig,1]))).length!==1?"s":""}
               {droppedRows.length>0&&<span style={{color:T.blue,marginLeft:8}}>+ {droppedRows.length} from dropped files</span>}
             </div>
           </div>
@@ -1457,6 +1466,23 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
             <input ref={fileRef} type="file" multiple accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{handleFiles(e.target.files);e.target.value="";}}/>
           </div>
 
+          {/* Filters */}
+          {allRows.length > 0 && (
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+              <select value={filterProj} onChange={e=>setFilterProj(e.target.value)}
+                style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light",flex:1,minWidth:160}}>
+                <option value="">All Projects</option>
+                {[...new Set(allRows.map(r=>r._project))].sort().map(p=><option key={p} value={p}>{p}</option>)}
+              </select>
+              <select value={filterRig} onChange={e=>setFilterRig(e.target.value)}
+                style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light",flex:1,minWidth:140}}>
+                <option value="">All Rigs</option>
+                {[...new Set(allRows.filter(r=>!filterProj||r._project===filterProj).map(r=>r._rig))].sort().map(rg=><option key={rg} value={rg}>{rg}</option>)}
+              </select>
+              {(filterProj||filterRig)&&<button onClick={()=>{setFilterProj("");setFilterRig("");}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>✕ Clear</button>}
+            </div>
+          )}
+
           {/* Ingested file status */}
           {ingestStatus.length>0&&(
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -1475,67 +1501,102 @@ function DprConsolidateModal({ projectAnalysis, onClose }) {
             </div>
           )}
 
-          {/* Preview table of all reports */}
-          {allRows.length>0 ? (
-            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:T.text}}>{allRows.length} TOTAL REPORT{allRows.length!==1?"S":""} READY</div>
-                <div style={{fontSize:12,color:T.textMuted}}>Scroll to see all</div>
+          {/* Preview table - filtered, grouped by project+rig */}
+          {(() => {
+            const visRows = allRows.filter(r =>
+              (!filterProj || r._project === filterProj) &&
+              (!filterRig  || r._rig    === filterRig)
+            );
+            if (!visRows.length) return (
+              <div style={{textAlign:"center",padding:"40px 20px",color:T.textMuted}}>
+                <div style={{fontSize:48,marginBottom:12}}>📋</div>
+                <div style={{fontSize:14}}>{allRows.length ? "No reports match the current filter." : "No daily reports yet. Add reports from each project's rig sections, or drop DPR Excel files above."}</div>
               </div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead>
-                    <tr style={{background:T.card2}}>
-                      {["Project","Date","Work Profile","Activity","Permit Received","Permit Hours","Standby Reason","Total Qty (m)","Progress Today (m)","Accumulated (m)","Issues / Delays","Source"].map(h=>(
-                        <th key={h} style={{padding:"8px 12px",textAlign:"left",fontWeight:700,fontSize:11,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allRows.map((r,i)=>(
-                      <tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
-                        <td style={{padding:"8px 12px",fontWeight:600,color:T.text,whiteSpace:"nowrap"}}>{r._project||r.project||"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textSub,whiteSpace:"nowrap"}}>{r.date?fmtDate(r.date):"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textSub,whiteSpace:"nowrap"}}>{r.profile||"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.activity||"—"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"center"}}>
-                          {r.permitReceived
-                            ? <span style={{background:r.permitReceived.toLowerCase()==="yes"?T.greenDim:T.redDim,color:r.permitReceived.toLowerCase()==="yes"?T.green:T.red,fontWeight:700,borderRadius:6,padding:"2px 8px"}}>{r.permitReceived}</span>
-                            : <span style={{color:T.textMuted}}>—</span>}
-                        </td>
-                        <td style={{padding:"8px 12px",color:T.textSub,textAlign:"center"}}>{r.permitHours||"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.standbyReason||"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textSub,textAlign:"center"}}>{r.totalQty||"—"}</td>
-                        <td style={{padding:"8px 12px",textAlign:"center"}}>
-                          {r.progressToday
-                            ? <span style={{background:T.blueDim,color:T.blue,fontWeight:700,borderRadius:6,padding:"2px 8px"}}>{r.progressToday}m</span>
-                            : <span style={{color:T.textMuted}}>—</span>}
-                        </td>
-                        <td style={{padding:"8px 12px",color:T.textSub,textAlign:"center"}}>{r.accumulated||"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textSub,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.issues||"—"}</td>
-                        <td style={{padding:"8px 12px",color:T.textMuted,fontSize:11}}>
-                          {r._fromFile
-                            ? <span style={{background:T.goldDim,color:T.gold,borderRadius:5,padding:"2px 8px",fontWeight:600}}>📂 File</span>
-                            : <span style={{background:T.greenDim,color:T.green,borderRadius:5,padding:"2px 8px",fontWeight:600}}>✓ Saved</span>}
-                        </td>
-                      </tr>
+            );
+
+            // Group by project → rig for display
+            const groups = {};
+            visRows.forEach(r => {
+              const k = r._project;
+              if (!groups[k]) groups[k] = {};
+              const rk = r._rig;
+              if (!groups[k][rk]) groups[k][rk] = [];
+              groups[k][rk].push(r);
+            });
+
+            return (
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                <div style={{fontSize:12,color:T.textMuted,fontWeight:700}}>{visRows.length} REPORT{visRows.length!==1?"S":""} {filterProj||filterRig?"(FILTERED)":"TOTAL"}</div>
+                {Object.entries(groups).map(([proj, rigMap]) => (
+                  <div key={proj} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
+                    {/* Project header */}
+                    <div style={{background:T.card2,padding:"10px 16px",borderBottom:`1px solid ${T.border}`,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text,display:"flex",alignItems:"center",gap:10}}>
+                      <span>◆</span> {proj}
+                      <span style={{fontSize:12,color:T.textMuted,fontWeight:500,fontFamily:"inherit"}}>{Object.values(rigMap).flat().length} report{Object.values(rigMap).flat().length!==1?"s":""}</span>
+                    </div>
+                    {/* Per-rig sections */}
+                    {Object.entries(rigMap).map(([rig, rigRows], ri) => (
+                      <div key={rig}>
+                        {/* Rig sub-header */}
+                        <div style={{background:`${T.gold}0e`,padding:"8px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,borderTop: ri>0?`1px solid ${T.border}`:"none"}}>
+                          <span style={{fontSize:13}}>🔩</span>
+                          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.gold}}>{rig}</span>
+                          <span style={{fontSize:11,color:T.textMuted}}>{rigRows.length} report{rigRows.length!==1?"s":""}</span>
+                        </div>
+                        {/* Reports table */}
+                        <div style={{overflowX:"auto"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead>
+                              <tr style={{background:T.card2}}>
+                                {["Date","Work Profile","Activity","Permit","Permit Hrs","Progress Today","Accumulated","Issues","Source"].map(h=>(
+                                  <th key={h} style={{padding:"6px 10px",textAlign:"left",fontWeight:700,fontSize:10,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rigRows.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map((r,i)=>(
+                                <tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
+                                  <td style={{padding:"7px 10px",color:T.textSub,whiteSpace:"nowrap"}}>{r.date?fmtDate(r.date):"—"}</td>
+                                  <td style={{padding:"7px 10px",color:T.textSub,whiteSpace:"nowrap"}}>{r.profile||"—"}</td>
+                                  <td style={{padding:"7px 10px",color:T.textSub,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.activity||"—"}</td>
+                                  <td style={{padding:"7px 10px",textAlign:"center"}}>
+                                    {r.permitReceived
+                                      ? <span style={{background:r.permitReceived.toLowerCase()==="yes"?T.greenDim:T.redDim,color:r.permitReceived.toLowerCase()==="yes"?T.green:T.red,fontWeight:700,borderRadius:5,padding:"1px 7px",fontSize:11}}>{r.permitReceived}</span>
+                                      : <span style={{color:T.textMuted}}>—</span>}
+                                  </td>
+                                  <td style={{padding:"7px 10px",color:T.textSub,textAlign:"center"}}>{r.permitHours||"—"}</td>
+                                  <td style={{padding:"7px 10px",textAlign:"center"}}>
+                                    {r.progressToday
+                                      ? <span style={{background:T.blueDim,color:T.blue,fontWeight:700,borderRadius:5,padding:"1px 7px",fontSize:11}}>{r.progressToday}m</span>
+                                      : <span style={{color:T.textMuted}}>—</span>}
+                                  </td>
+                                  <td style={{padding:"7px 10px",color:T.textSub,textAlign:"center"}}>{r.accumulated||"—"}</td>
+                                  <td style={{padding:"7px 10px",color:T.textSub,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.issues||"—"}</td>
+                                  <td style={{padding:"7px 10px",color:T.textMuted,fontSize:11}}>
+                                    {r._fromFile
+                                      ? <span style={{background:T.goldDim,color:T.gold,borderRadius:5,padding:"1px 7px",fontWeight:600}}>📂 File</span>
+                                      : <span style={{background:T.greenDim,color:T.green,borderRadius:5,padding:"1px 7px",fontWeight:600}}>✓ Saved</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                ))}
               </div>
-            </div>
-          ) : (
-            <div style={{textAlign:"center",padding:"40px 20px",color:T.textMuted}}>
-              <div style={{fontSize:48,marginBottom:12}}>📋</div>
-              <div style={{fontSize:14}}>No daily reports yet. Add reports from each project's detail page, or drop DPR Excel files above.</div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Footer */}
         <div style={{padding:"14px 24px 20px",borderTop:`1px solid ${T.border}`,display:"flex",gap:10,alignItems:"center",flexShrink:0,borderRadius:"0 0 18px 18px",background:T.card}}>
           <div style={{flex:1,fontSize:12,color:T.textMuted}}>
-            {allRows.length} report{allRows.length!==1?"s":""} → 1 master Excel (all projects) + {Object.keys(Object.fromEntries(allRows.map(r=>[r._project||r.project||"Unassigned",1]))).length} per-project sheet{Object.keys(Object.fromEntries(allRows.map(r=>[r._project||r.project||"Unassigned",1]))).length!==1?"s":""}
+            {allRows.length} report{allRows.length!==1?"s":""} →
+            1 master sheet + {[...new Set(allRows.map(r=>r._project))].length} project sheet{[...new Set(allRows.map(r=>r._project))].length!==1?"s":""}
+            + per-rig sheets where multiple rigs exist
           </div>
           <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
           <button onClick={exportMaster} disabled={allRows.length===0}
@@ -2602,7 +2663,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
         </div>
       )}
 
-      {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} onClose={()=>setShowDprConsolidate(false)}/>}
+      {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} projectDocs={data.projectDocs||[]} rigs={data.rigs||[]} onClose={()=>setShowDprConsolidate(false)}/>}
       {modal&&<ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} workOrders={workOrders} onSave={save} onClose={()=>setModal(null)}/>}
     </div>
   );
