@@ -1991,11 +1991,74 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         const delSheet = id => setData(prev=>({...prev, costSheets:(prev.costSheets||[]).filter(s=>s.id!==id)}));
         const totalEst = sheets.reduce((s,x)=>s+(parseFloat(x.estimatedCost)||0),0);
         const totalAct = sheets.reduce((s,x)=>s+(parseFloat(x.actualCost)||0),0);
+
+        // Cost sheet file upload & estimated total cost (stored on the projectAnalysis entry)
+        const csFileRef = React.useRef();
+        const [csUploading, setCsUploading] = React.useState(false);
+        const paEntry = (data.projectAnalysis||[]).find(x=>x.project===proj.project) || {};
+        const handleCsFileUpload = async (file) => {
+          if (!file) return;
+          setCsUploading(true);
+          try {
+            let fileUrl = "";
+            if (isSupabaseConfigured()) {
+              fileUrl = await uploadToSupabase(file, "costsheets");
+            } else {
+              fileUrl = URL.createObjectURL(file);
+            }
+            setData(prev=>({...prev, projectAnalysis:(prev.projectAnalysis||[]).map(x=>x.project===proj.project?{...x,costSheetFileUrl:fileUrl,costSheetFileName:file.name}:x)}));
+            showToast("Cost sheet file uploaded");
+          } catch(e) { showToast("Upload failed","error"); }
+          setCsUploading(false);
+        };
+        const handleEstTotalChange = (v) => {
+          setData(prev=>({...prev, projectAnalysis:(prev.projectAnalysis||[]).map(x=>x.project===proj.project?{...x,estimatedTotalCost:v}:x)}));
+        };
+
         return (
           <div className="fade-in">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>💰 COST SHEET — {proj.project}</div>
               <button onClick={addSheet} style={{background:T.teal,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",letterSpacing:"1px"}}>+ ADD ENTRY</button>
+            </div>
+            {/* ── Cost sheet file upload + estimated total cost ── */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+              {/* File upload */}
+              <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",marginBottom:8}}>COST SHEET FILE</div>
+                <input ref={csFileRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp,.doc,.docx" style={{display:"none"}} onChange={e=>{handleCsFileUpload(e.target.files[0]);e.target.value="";}}/>
+                {paEntry.costSheetFileUrl ? (
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <span style={{fontSize:16}}>{/\.pdf$/i.test(paEntry.costSheetFileName||"")?"📄":/\.(png|jpg|jpeg|webp)$/i.test(paEntry.costSheetFileName||"")?"🖼️":"📎"}</span>
+                    <a href={paEntry.costSheetFileUrl} target="_blank" rel="noreferrer" style={{flex:1,fontSize:12,color:T.blue,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:"none"}}>
+                      {paEntry.costSheetFileName||"View File"}
+                    </a>
+                    <button onClick={()=>csFileRef.current&&csFileRef.current.click()} style={{background:T.tealDim,border:`1px solid ${T.teal}44`,color:T.teal,borderRadius:7,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Replace</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={()=>csFileRef.current&&csFileRef.current.click()}
+                    disabled={csUploading}
+                    style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:T.tealDim,border:`1px dashed ${T.teal}66`,color:T.teal,borderRadius:9,padding:"9px 14px",fontSize:13,fontWeight:700,cursor:"pointer",width:"100%",opacity:csUploading?0.6:1}}
+                  >
+                    {csUploading?"⏳ Uploading…":"📎 Attach Cost Sheet File"}
+                  </button>
+                )}
+              </div>
+              {/* Estimated total cost */}
+              <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+                <div style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",marginBottom:8}}>ESTIMATED TOTAL COST (SAR)</div>
+                <input
+                  type="number"
+                  value={paEntry.estimatedTotalCost||""}
+                  onChange={e=>handleEstTotalChange(e.target.value)}
+                  placeholder="0"
+                  style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:15,fontWeight:700,color:T.gold,outline:"none",colorScheme:"light"}}
+                  onFocus={e=>e.target.style.borderColor=T.teal}
+                  onBlur={e=>e.target.style.borderColor=T.border}
+                />
+                {paEntry.estimatedTotalCost&&<div style={{fontSize:11,color:T.textMuted,marginTop:5}}>= {formatSarCompact(parseFloat(paEntry.estimatedTotalCost)||0)}</div>}
+              </div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:16}}>
               {[
@@ -2058,6 +2121,23 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         };
         const delQuote = id => setData(prev=>({...prev, quotations:(prev.quotations||[]).filter(q=>q.id!==id)}));
         const statusColor = s => s==="Approved"?T.green:s==="Rejected"?T.red:T.gold;
+        const [quoteUploading, setQuoteUploading] = React.useState({});
+        const quoteFileRefs = React.useRef({});
+        const handleQuoteFileUpload = async (qId, file) => {
+          if (!file) return;
+          setQuoteUploading(p=>({...p,[qId]:true}));
+          try {
+            let fileUrl = "";
+            if (isSupabaseConfigured()) {
+              fileUrl = await uploadToSupabase(file, "quotations");
+            } else {
+              fileUrl = URL.createObjectURL(file);
+            }
+            setData(prev=>({...prev, quotations:(prev.quotations||[]).map(q=>q.id===qId?{...q,fileUrl,fileName:file.name}:q)}));
+            showToast("File uploaded");
+          } catch(e) { showToast("Upload failed","error"); }
+          setQuoteUploading(p=>({...p,[qId]:false}));
+        };
         return (
           <div className="fade-in">
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
@@ -2086,21 +2166,53 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
                 </div>
               : <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   {quotes.map(q=>(
-                    <div key={q.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-                      <div style={{flex:1,minWidth:200}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text}}>{q.quotationNo}</div>
-                        {q.clientName&&<div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Client: {q.clientName}</div>}
-                        {q.notes&&<div style={{fontSize:11,color:T.textMuted,marginTop:3,fontStyle:"italic"}}>{q.notes}</div>}
+                    <div key={q.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+                      <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+                        <div style={{flex:1,minWidth:200}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text}}>{q.quotationNo}</div>
+                          {q.clientName&&<div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Client: {q.clientName}</div>}
+                          {q.notes&&<div style={{fontSize:11,color:T.textMuted,marginTop:3,fontStyle:"italic"}}>{q.notes}</div>}
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.gold}}>{formatSarCompact(parseFloat(q.totalAmount)||0)}</div>
+                          <div style={{fontSize:10,color:T.textMuted,fontWeight:700}}>QUOTED AMOUNT</div>
+                        </div>
+                        <div style={{textAlign:"center"}}>
+                          <div style={{background:statusColor(q.status)+"22",color:statusColor(q.status),border:`1px solid ${statusColor(q.status)}44`,borderRadius:8,padding:"4px 14px",fontSize:12,fontWeight:700}}>{q.status}</div>
+                          <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>{q.date}</div>
+                        </div>
+                        <button onClick={()=>delQuote(q.id)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:0}}>✕</button>
                       </div>
-                      <div style={{textAlign:"right"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.gold}}>{formatSarCompact(parseFloat(q.totalAmount)||0)}</div>
-                        <div style={{fontSize:10,color:T.textMuted,fontWeight:700}}>QUOTED AMOUNT</div>
+                      {/* ── File upload area ── */}
+                      <div style={{borderTop:`1px solid ${T.border}`,paddingTop:10}}>
+                        <input
+                          ref={el => { if (el) quoteFileRefs.current[q.id] = el; }}
+                          type="file"
+                          accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                          style={{display:"none"}}
+                          onChange={e => { handleQuoteFileUpload(q.id, e.target.files[0]); e.target.value=""; }}
+                        />
+                        {q.fileUrl ? (
+                          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                            <span style={{fontSize:16}}>{/\.pdf$/i.test(q.fileName||"")?"📄":/\.(png|jpg|jpeg|webp)$/i.test(q.fileName||"")?"🖼️":"📎"}</span>
+                            <a href={q.fileUrl} target="_blank" rel="noreferrer" style={{flex:1,fontSize:13,color:T.blue,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:"none"}}>
+                              {q.fileName||"View Attachment"}
+                            </a>
+                            <button
+                              onClick={() => { if (quoteFileRefs.current[q.id]) quoteFileRefs.current[q.id].click(); }}
+                              style={{background:T.purpleDim,border:`1px solid ${T.purple}44`,color:T.purple,borderRadius:7,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}
+                            >Replace</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { if (quoteFileRefs.current[q.id]) quoteFileRefs.current[q.id].click(); }}
+                            disabled={quoteUploading[q.id]}
+                            style={{display:"flex",alignItems:"center",gap:8,background:T.purpleDim,border:`1px dashed ${T.purple}66`,color:T.purple,borderRadius:9,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer",width:"100%",justifyContent:"center",opacity:quoteUploading[q.id]?0.6:1}}
+                          >
+                            {quoteUploading[q.id] ? "⏳ Uploading…" : "📎 Attach Quotation File"}
+                          </button>
+                        )}
                       </div>
-                      <div style={{textAlign:"center"}}>
-                        <div style={{background:statusColor(q.status)+"22",color:statusColor(q.status),border:`1px solid ${statusColor(q.status)}44`,borderRadius:8,padding:"4px 14px",fontSize:12,fontWeight:700}}>{q.status}</div>
-                        <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>{q.date}</div>
-                      </div>
-                      <button onClick={()=>delQuote(q.id)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:0}}>✕</button>
                     </div>
                   ))}
                 </div>
