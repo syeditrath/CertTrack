@@ -633,7 +633,7 @@ const EMPTY_DATA = {
   projectAnalysis: [],
   rigs: [],          // { id, project, name }
   costControl: [],  // { id, project, category, description, amount, date, refNo, notes, budgeted }
-                    // category: "Labour"|"Equipment"|"Materials"|"Subcontractor"|"Overhead"|"Other"
+                    // category: "Labour"|"Equipment"|"Materials"|"Subcontractor"|"Tools"|"Transport"|"Overhead"|"Other"
   costSheets:  [],  // { id, project, description, estimatedCost, actualCost, date, notes }
   quotations:  [],  // { id, project, quotationNo, clientName, date, validUntil, items:[], status, notes }
 };
