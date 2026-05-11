@@ -2113,21 +2113,10 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
 
       {/* ══ QUOTATION tab ════════════════════════════════════════════════ */}
       {detailTab==="quotation" && (() => {
-        const quotes = (data.quotations||[]).filter(q=>q.project===proj.project);
-        const addQuote = () => {
-          const qNo = window.prompt("Quotation number (e.g. QT-2025-001):");
-          if (!qNo) return;
-          const client = window.prompt("Client name:");
-          const amount = window.prompt("Total quoted amount (SAR):");
-          const status = window.prompt("Status (Pending / Approved / Rejected):", "Pending");
-          setData(prev=>({...prev, quotations:[...(prev.quotations||[]), {id:uid(), project:proj.project, quotationNo:qNo, clientName:client||"", totalAmount:amount||"0", status:status||"Pending", date:new Date().toISOString().slice(0,10), notes:""}]}));
-          showToast("Quotation added");
-        };
-        const delQuote = id => setData(prev=>({...prev, quotations:(prev.quotations||[]).filter(q=>q.id!==id)}));
-        const statusColor = s => s==="Approved"?T.green:s==="Rejected"?T.red:T.gold;
-        const handleQuoteFileUpload = async (qId, file) => {
+        const paEntry = (data.projectAnalysis||[]).find(x=>x.project===proj.project) || {};
+        const handleQuoteFileUpload = async (file) => {
           if (!file) return;
-          setQuoteUploading(p=>({...p,[qId]:true}));
+          setQuoteUploading(p=>({...p, _main:true}));
           try {
             let fileUrl = "";
             if (isSupabaseConfigured()) {
@@ -2135,90 +2124,41 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
             } else {
               fileUrl = URL.createObjectURL(file);
             }
-            setData(prev=>({...prev, quotations:(prev.quotations||[]).map(q=>q.id===qId?{...q,fileUrl,fileName:file.name}:q)}));
+            setData(prev=>({...prev, projectAnalysis:(prev.projectAnalysis||[]).map(x=>x.project===proj.project?{...x,quotationFileUrl:fileUrl,quotationFileName:file.name}:x)}));
             showToast("File uploaded");
           } catch(e) { showToast("Upload failed","error"); }
-          setQuoteUploading(p=>({...p,[qId]:false}));
+          setQuoteUploading(p=>({...p, _main:false}));
         };
         return (
           <div className="fade-in">
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>📄 QUOTATIONS — {proj.project}</div>
-              <button onClick={addQuote} style={{background:T.purple,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",letterSpacing:"1px"}}>+ ADD QUOTATION</button>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text,marginBottom:16}}>📄 QUOTATION — {proj.project}</div>
+            <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"24px 20px"}}>
+              <div style={{fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:".5px",marginBottom:12}}>QUOTATION FILE</div>
+              <input
+                ref={el => { quoteFileRefs.current["_main"] = el; }}
+                type="file"
+                accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp,.doc,.docx"
+                style={{display:"none"}}
+                onChange={e => { handleQuoteFileUpload(e.target.files[0]); e.target.value=""; }}
+              />
+              {paEntry.quotationFileUrl ? (
+                <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                  <span style={{fontSize:20}}>{/\.pdf$/i.test(paEntry.quotationFileName||"")?"📄":/\.(png|jpg|jpeg|webp)$/i.test(paEntry.quotationFileName||"")?"🖼️":"📎"}</span>
+                  <a href={paEntry.quotationFileUrl} target="_blank" rel="noreferrer" style={{flex:1,fontSize:14,color:T.blue,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:"none"}}>
+                    {paEntry.quotationFileName||"View Quotation File"}
+                  </a>
+                  <button onClick={()=>quoteFileRefs.current["_main"]&&quoteFileRefs.current["_main"].click()} style={{background:T.purpleDim,border:`1px solid ${T.purple}44`,color:T.purple,borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Replace</button>
+                </div>
+              ) : (
+                <button
+                  onClick={()=>quoteFileRefs.current["_main"]&&quoteFileRefs.current["_main"].click()}
+                  disabled={quoteUploading["_main"]}
+                  style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,background:T.purpleDim,border:`2px dashed ${T.purple}66`,color:T.purple,borderRadius:12,padding:"28px 20px",fontSize:15,fontWeight:700,cursor:"pointer",width:"100%",opacity:quoteUploading["_main"]?0.6:1}}
+                >
+                  {quoteUploading["_main"] ? "⏳ Uploading…" : "📎 Attach Quotation File"}
+                </button>
+              )}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16}}>
-              {[
-                {label:"TOTAL QUOTATIONS", v:quotes.length, color:T.purple},
-                {label:"APPROVED",  v:quotes.filter(q=>q.status==="Approved").length,  color:T.green},
-                {label:"PENDING",   v:quotes.filter(q=>q.status==="Pending").length,   color:T.gold},
-                {label:"REJECTED",  v:quotes.filter(q=>q.status==="Rejected").length,  color:T.red},
-              ].map(k=>(
-                <div key={k.label} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:k.color}}>{k.v}</div>
-                  <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
-                </div>
-              ))}
-            </div>
-            {quotes.length===0
-              ? <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"48px 20px",textAlign:"center"}}>
-                  <div style={{fontSize:40,marginBottom:10}}>📄</div>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.textSub,marginBottom:8}}>NO QUOTATIONS</div>
-                  <div style={{fontSize:13,color:T.textMuted,marginBottom:16}}>Add quotations submitted for this project</div>
-                  <button onClick={addQuote} style={{background:T.purple,border:"none",color:"#fff",borderRadius:10,padding:"10px 22px",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer"}}>+ ADD QUOTATION</button>
-                </div>
-              : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {quotes.map(q=>(
-                    <div key={q.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
-                      <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-                        <div style={{flex:1,minWidth:200}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color:T.text}}>{q.quotationNo}</div>
-                          {q.clientName&&<div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Client: {q.clientName}</div>}
-                          {q.notes&&<div style={{fontSize:11,color:T.textMuted,marginTop:3,fontStyle:"italic"}}>{q.notes}</div>}
-                        </div>
-                        <div style={{textAlign:"right"}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.gold}}>{formatSarCompact(parseFloat(q.totalAmount)||0)}</div>
-                          <div style={{fontSize:10,color:T.textMuted,fontWeight:700}}>QUOTED AMOUNT</div>
-                        </div>
-                        <div style={{textAlign:"center"}}>
-                          <div style={{background:statusColor(q.status)+"22",color:statusColor(q.status),border:`1px solid ${statusColor(q.status)}44`,borderRadius:8,padding:"4px 14px",fontSize:12,fontWeight:700}}>{q.status}</div>
-                          <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>{q.date}</div>
-                        </div>
-                        <button onClick={()=>delQuote(q.id)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:0}}>✕</button>
-                      </div>
-                      {/* ── File upload area ── */}
-                      <div style={{borderTop:`1px solid ${T.border}`,paddingTop:10}}>
-                        <input
-                          ref={el => { if (el) quoteFileRefs.current[q.id] = el; }}
-                          type="file"
-                          accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp,.doc,.docx"
-                          style={{display:"none"}}
-                          onChange={e => { handleQuoteFileUpload(q.id, e.target.files[0]); e.target.value=""; }}
-                        />
-                        {q.fileUrl ? (
-                          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                            <span style={{fontSize:16}}>{/\.pdf$/i.test(q.fileName||"")?"📄":/\.(png|jpg|jpeg|webp)$/i.test(q.fileName||"")?"🖼️":"📎"}</span>
-                            <a href={q.fileUrl} target="_blank" rel="noreferrer" style={{flex:1,fontSize:13,color:T.blue,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:"none"}}>
-                              {q.fileName||"View Attachment"}
-                            </a>
-                            <button
-                              onClick={() => { if (quoteFileRefs.current[q.id]) quoteFileRefs.current[q.id].click(); }}
-                              style={{background:T.purpleDim,border:`1px solid ${T.purple}44`,color:T.purple,borderRadius:7,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}
-                            >Replace</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => { if (quoteFileRefs.current[q.id]) quoteFileRefs.current[q.id].click(); }}
-                            disabled={quoteUploading[q.id]}
-                            style={{display:"flex",alignItems:"center",gap:8,background:T.purpleDim,border:`1px dashed ${T.purple}66`,color:T.purple,borderRadius:9,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer",width:"100%",justifyContent:"center",opacity:quoteUploading[q.id]?0.6:1}}
-                          >
-                            {quoteUploading[q.id] ? "⏳ Uploading…" : "📎 Attach Quotation File"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-            }
           </div>
         );
       })()}
