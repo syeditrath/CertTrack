@@ -1079,8 +1079,8 @@ function parseDailyReportExcel(arrayBuffer) {
     .filter(rec => Object.keys(rec).filter(k => k !== "id").length > 0);
 }
 
-function DailyReportModal({ report, projectName, onSave, onClose }) {
-  const blank = { id: uid(), date: new Date().toISOString().slice(0,10), weather:"", activities:"", manpower:"", equipment:"", issues:"", notes:"", fileLink:"", fileName:"" };
+function DailyReportModal({ report, projectName, rigs, onSave, onClose }) {
+  const blank = { id: uid(), date: new Date().toISOString().slice(0,10), rig:"", weather:"", activities:"", manpower:"", equipment:"", issues:"", notes:"", fileLink:"", fileName:"" };
   const [f, setF]         = useState(report ? { ...blank, ...report } : blank);
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState("");
@@ -1170,6 +1170,16 @@ function DailyReportModal({ report, projectName, onSave, onClose }) {
           </div>
 
           {/* ── Manual fields ── */}
+          {rigs && rigs.length > 0 && (
+            <div>
+              <label style={LS}>RIG / SPREAD *</label>
+              <select value={f.rig||""} onChange={e=>upd("rig",e.target.value)}
+                style={{...IS,colorScheme:"light"}} onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=T.border}>
+                <option value="">Select rig…</option>
+                {rigs.map(r=><option key={r.id} value={r.name}>{r.name}</option>)}
+              </select>
+            </div>
+          )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div><label style={LS}>DATE</label><input type="date" value={f.date} onChange={e=>upd("date",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
             <div><label style={LS}>WEATHER</label><input value={f.weather} onChange={e=>upd("weather",e.target.value)} placeholder="e.g. Sunny, 38°C" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
@@ -2366,7 +2376,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
       </div>
 
       {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} workOrders={(data.projectDocs||[]).filter(d=>d.subTab==="workorders")} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
-      {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} projectName={proj.project} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
+      {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} projectName={proj.project} rigs={(data.rigs||[]).filter(r=>r.project===proj.project)} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
       </> /* end detailTab===overview */}
     </div>
   );
@@ -5159,7 +5169,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
                       </div>
                     </div>
 
-                    {(()=>{const rc=(data.rigs||[]).filter(r=>r.project===project).length; return rc>0&&<div style={{marginTop:10,fontSize:11,color:T.textMuted}}>🔩 {rc} rig{rc!==1?"s":""}</div>;})()}
+                    {(()=>{ const rc=(data.rigs||[]).filter(r=>r.project===project).length; if(!rc) return null; const rigNames=(data.rigs||[]).filter(r=>r.project===project).map(r=>r.name); return <div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:6}}>{rigNames.map(n=><span key={n} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 8px",fontSize:11,color:T.textMuted,fontWeight:600}}>🔩 {n}</span>)}</div>; })()}
                     <div style={{marginTop:14,fontSize:12,color:T.blue,fontWeight:700,textAlign:"right"}}>Open Project →</div>
                   </button>
                 );
@@ -5409,34 +5419,149 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
 )}
 
       {/* ══ DAILY REPORTS ═══════════════════════════════════════════════ */}
-      {subTab==="dailyreports" && (
-        selProj ? (
-          <div>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-              <button onClick={backToProjects} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600}}>← Back</button>
-              <div style={{flex:1}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selectedProject}</div>
-                <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>{projDRs.length} daily report{projDRs.length!==1?"s":""}</div>
+      {subTab==="dailyreports" && (() => {
+        // Helper: render a single DR card
+        const DrCard = ({doc, i}) => (
+          <div key={doc.id} className="fade-up"
+            style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.gold}`,borderRadius:12,padding:"14px 16px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:12}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
+                <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(13px,1.1vw,16px)",color:T.text}}>{doc.name}</span>
+                {doc.date&&<Tag color={T.gold}>{fmtDate(doc.date)}</Tag>}
+                {doc.rig&&<Tag color={T.purple}>🔩 {doc.rig}</Tag>}
               </div>
-              <Btn color={T.gold} solid onClick={()=>setModal({mode:"add",doc:{project:selProj}})}>+ Add Report</Btn>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
+                {doc.fileLink&&<FileLink href={doc.fileLink}/>}
+              </div>
+              {doc.notes&&<div style={{marginTop:5,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
             </div>
-            {projDRs.length===0
-              ?<Empty icon="📅" label="No daily reports yet" sub="Add the first daily report for this project" color={T.gold} onAdd={()=>setModal({mode:"add",doc:{project:selProj}})}/>
-              :<div style={{display:"grid",gap:10}}>
-                {projDRs.map((doc,i)=>(
+            <div style={{display:"flex",gap:6,flexShrink:0}}>
+              <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
+              <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
+            </div>
+          </div>
+        );
+
+        if (selProj) {
+          // ── Per-project view: grouped by rig ──
+          const rigColors = ["#a78bfa","#38bdf8","#34d399","#f472b6","#fb923c","#fbbf24"];
+          const rigSections = projRigs.map((rig, ri) => ({
+            rig,
+            color: rigColors[ri % rigColors.length],
+            reports: projDRs.filter(d=>d.rig===rig.name).sort((a,b)=>(b.date||"").localeCompare(a.date||"")),
+          }));
+          const unassigned = projDRs.filter(d=>!d.rig||!projRigs.some(r=>r.name===d.rig))
+            .sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+
+          return (
+            <div>
+              {/* Header */}
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+                <button onClick={backToProjects} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>← Back</button>
+                <div style={{flex:1}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selectedProject}</div>
+                  <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>{projDRs.length} report{projDRs.length!==1?"s":""} · {projRigs.length} rig{projRigs.length!==1?"s":""}</div>
+                </div>
+              </div>
+
+              {projRigs.length === 0 ? (
+                /* No rigs — show flat list with prompt */
+                <div>
+                  <div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"14px 16px",marginBottom:16,fontSize:13,color:T.gold}}>
+                    🔩 No rigs defined for this project yet. Add rigs using the panel above — reports will then be organised per rig.
+                  </div>
+                  {projDRs.length===0
+                    ?<Empty icon="📅" label="No daily reports yet" sub="Add rigs first, then add daily reports per rig" color={T.gold} onAdd={()=>setModal({mode:"add",doc:{project:selProj}})}/>
+                    :<div style={{display:"grid",gap:8}}>
+                      {projDRs.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)}
+                    </div>
+                  }
+                </div>
+              ) : (
+                /* Rigs defined — show one section per rig */
+                <div style={{display:"grid",gap:16}}>
+                  {rigSections.map(({rig, color, reports})=>(
+                    <div key={rig.id} style={{background:T.card,border:`2px solid ${color}44`,borderRadius:16,overflow:"hidden"}}>
+                      {/* Rig header */}
+                      <div style={{background:`${color}18`,borderBottom:`1px solid ${color}33`,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <span style={{fontSize:20}}>🔩</span>
+                          <div>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color}}>{rig.name}</div>
+                            <div style={{fontSize:12,color:T.textMuted,marginTop:1}}>{reports.length} report{reports.length!==1?"s":""}</div>
+                          </div>
+                        </div>
+                        <Btn color={color} solid onClick={()=>setModal({mode:"add",doc:{project:selProj, rig:rig.name}})}>+ Add Report</Btn>
+                      </div>
+                      {/* Reports */}
+                      <div style={{padding:"14px 16px"}}>
+                        {reports.length===0
+                          ?<div style={{textAlign:"center",padding:"20px 16px",fontSize:13,color:T.textMuted}}>
+                            No reports yet for {rig.name} — <button onClick={()=>setModal({mode:"add",doc:{project:selProj, rig:rig.name}})} style={{background:"none",border:"none",color,fontWeight:700,cursor:"pointer",padding:0,fontSize:13}}>add the first one</button>
+                          </div>
+                          :<div style={{display:"grid",gap:8}}>
+                            {reports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)}
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Unassigned reports */}
+                  {unassigned.length>0&&(
+                    <div style={{background:T.card,border:`1px dashed ${T.border}`,borderRadius:16,overflow:"hidden"}}>
+                      <div style={{background:T.bg,borderBottom:`1px solid ${T.border}`,padding:"12px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                        <div>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.textSub}}>Unassigned Reports</div>
+                          <div style={{fontSize:12,color:T.textMuted}}>{unassigned.length} report{unassigned.length!==1?"s":""} not linked to a rig</div>
+                        </div>
+                      </div>
+                      <div style={{padding:"14px 16px",display:"grid",gap:8}}>
+                        {unassigned.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // ── All-projects view ──
+        const drDocs = fProj ? drAll.filter(d=>d.project===fProj) : drAll;
+        return (
+          <div>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>DAILY REPORTS</div>
+                <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Site activity and progress reports — per rig, per project</div>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
+                  <option value="">All Projects</option>
+                  {renderProjectOptions(projects)}
+                </select>
+              </div>
+            </div>
+            {drDocs.length===0
+              ?<Empty icon="📅" label="No daily reports yet" sub="Open a project and add reports per rig" color={T.gold}/>
+              :<div style={{display:"grid",gap:8}}>
+                {drDocs.map((doc,i)=>(
                   <div key={doc.id} className="fade-up"
-                    style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.gold}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
+                    style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.gold}`,borderRadius:12,padding:"14px 16px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:12}}>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(13px,1.1vw,16px)",color:T.text}}>{doc.name}</span>
                         {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
+                        {doc.rig&&<Tag color={T.purple}>🔩 {doc.rig}</Tag>}
                         {doc.date&&<Tag color={T.gold}>{fmtDate(doc.date)}</Tag>}
                       </div>
                       <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                         {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
                         {doc.fileLink&&<FileLink href={doc.fileLink}/>}
                       </div>
-                      {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
+                      {doc.notes&&<div style={{marginTop:5,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
                       <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
@@ -5447,58 +5572,14 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
               </div>
             }
           </div>
-        ) : (
-          <div>
-            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
-              <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>DAILY REPORTS</div>
-                <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Site activity and progress reports by project</div>
-              </div>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <select value={fProj} onChange={e=>setFProj(e.target.value)} style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
-                  <option value="">All Projects</option>
-                  {renderProjectOptions(projects)}
-                </select>
-                <Btn color={T.gold} solid onClick={()=>setModal({mode:"add"})}>+ Add Report</Btn>
-              </div>
-            </div>
-            {(() => {
-              const drDocs = fProj ? drAll.filter(d=>d.project===fProj) : drAll;
-              return drDocs.length===0
-                ?<Empty icon="📅" label="No daily reports yet" sub="Add your first daily report" color={T.gold} onAdd={()=>setModal({mode:"add"})}/>
-                :<div style={{display:"grid",gap:10}}>
-                  {drDocs.map((doc,i)=>(
-                    <div key={doc.id} className="fade-up"
-                      style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.gold}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.03}s`,display:"flex",alignItems:"flex-start",gap:14}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-                          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.1vw,17px)",color:T.text}}>{doc.name}</span>
-                          {doc.project&&<Tag color={T.teal}>{doc.project}</Tag>}
-                          {doc.date&&<Tag color={T.gold}>{fmtDate(doc.date)}</Tag>}
-                        </div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                          {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
-                          {doc.fileLink&&<FileLink href={doc.fileLink}/>}
-                        </div>
-                        {doc.notes&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
-                      </div>
-                      <div style={{display:"flex",gap:6,flexShrink:0}}>
-                        <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
-                        <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
-                      </div>
-                    </div>
-                  ))}
-                </div>;
-            })()}
-          </div>
-        )
-      )}
+        );
+      })()}
 
       )}
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
       {modal && subTab==="certificates"  && <CertificateModal  mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
-      {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} rigs={data.rigs||[]} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ rows.forEach(r=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...r,id:uid(),subTab}]})); }); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
       {multiPdfModal && (
   <MultiPdfCertUpload
@@ -5796,8 +5877,8 @@ function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
   );
 }
 
-function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,onSave}) {
-  const [f,setF] = useState({ project: defaultProject || "", ...(doc || {}) });
+function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClose,onSave}) {
+  const [f,setF] = useState({ project: defaultProject || "", rig: "", ...(doc || {}) });
   const [parsing,setParsing] = useState(false);
   const [msg,setMsg] = useState("");
   const excelRef = useRef();
@@ -5872,6 +5953,11 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
           alert("Project is required");
           return;
         }
+        const projRigsForValidation = (rigs||[]).filter(r=>r.project===f.project);
+        if (projRigsForValidation.length > 0 && !f.rig) {
+          alert("Please select a rig for this project");
+          return;
+        }
         if (!f.extractedFields) {
           alert("Please upload the Excel daily report first");
           return;
@@ -5880,11 +5966,24 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,onClose,on
       }}
     >
       <FieldRow label="Project *">
-        <FSelect value={f.project || ""} onChange={v => setF(p => ({...p, project:v}))} color={T.gold}>
+        <FSelect value={f.project || ""} onChange={v => setF(p => ({...p, project:v, rig:""}))} color={T.gold}>
           <option value="">Select project…</option>
           {renderProjectOptions(projects)}
         </FSelect>
       </FieldRow>
+
+      {f.project && (() => {
+        const projRigs = (rigs||[]).filter(r=>r.project===f.project);
+        if (!projRigs.length) return null;
+        return (
+          <FieldRow label="Rig / Spread *">
+            <FSelect value={f.rig||""} onChange={v=>setF(p=>({...p,rig:v}))} color={T.gold}>
+              <option value="">Select rig…</option>
+              {projRigs.map(r=><option key={r.id} value={r.name}>{r.name}</option>)}
+            </FSelect>
+          </FieldRow>
+        );
+      })()}
 
       <FieldRow label="Upload Daily Report Excel *">
         <div>
