@@ -4068,6 +4068,129 @@ function CostControlPage({data, setData, showToast, go}) {
         )}
       </div>
 
+
+      {/* ── Estimated vs Actual Cost Chart ─────────────────────────── */}
+      {(() => {
+        const estimationCost = parseFloat(pa?.estimationCost) || 0;
+        const chartCats = catBreakdown.map(c => ({
+          ...c,
+          budgeted: costs.filter(e=>e.category===c.id).reduce((s,e)=>s+(parseFloat(e.budgeted)||0),0),
+        }));
+        const hasAny = estimationCost > 0 || totalCost > 0;
+        if (!hasAny) return null;
+
+        // Bar chart: estimated vs actual per category + totals
+        const maxVal = Math.max(estimationCost, totalCost, ...chartCats.map(c=>Math.max(c.budgeted,c.total)), 1);
+        const barH = 28;
+        const labelW = 110;
+        const chartW = 420;
+        const allRows = [
+          { id:"TOTAL", label:"Total Project", estimated: estimationCost, actual: totalCost, color: T.teal, isTotal: true },
+          ...chartCats.filter(c=>c.budgeted>0||c.total>0).map(c=>({ id:c.id, label:c.id, estimated:c.budgeted, actual:c.total, color:c.color, isTotal:false })),
+        ];
+        const rowH = barH * 2 + 14;
+        const svgH = allRows.length * rowH + 48;
+
+        return (
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 24px",marginBottom:14,boxShadow:T.shadow}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,marginBottom:4}}>ESTIMATED vs ACTUAL COST</div>
+            <div style={{fontSize:12,color:T.textMuted,marginBottom:18}}>
+              Estimated from the project estimation cost &amp; per-entry budgeted amounts · Actual from recorded cost entries
+            </div>
+
+            {/* Legend */}
+            <div style={{display:"flex",gap:20,marginBottom:16,fontSize:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:14,height:14,borderRadius:3,background:T.teal,opacity:.5}}/><span style={{color:T.textSub,fontWeight:600}}>Estimated</span></div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:14,height:14,borderRadius:3,background:T.red}}/><span style={{color:T.textSub,fontWeight:600}}>Actual</span></div>
+              {estimationCost > 0 && totalCost > estimationCost && (
+                <div style={{display:"flex",alignItems:"center",gap:6,color:T.red,fontWeight:700}}>⚠ Over budget by {formatSarCompact(totalCost - estimationCost)}</div>
+              )}
+              {estimationCost > 0 && totalCost <= estimationCost && totalCost > 0 && (
+                <div style={{display:"flex",alignItems:"center",gap:6,color:T.green,fontWeight:700}}>✓ Under budget by {formatSarCompact(estimationCost - totalCost)}</div>
+              )}
+            </div>
+
+            {/* SVG Chart */}
+            <div style={{overflowX:"auto"}}>
+              <svg width="100%" viewBox={`0 0 ${labelW + chartW + 130} ${svgH}`} style={{fontFamily:"'Barlow Condensed',sans-serif",minWidth:520}}>
+                {/* Grid lines */}
+                {[0,.25,.5,.75,1].map(pct=>(
+                  <g key={pct}>
+                    <line x1={labelW + chartW*pct} y1={0} x2={labelW + chartW*pct} y2={svgH-30}
+                      stroke={T.border} strokeWidth="1" strokeDasharray={pct===0?"none":"4 3"}/>
+                    <text x={labelW + chartW*pct} y={svgH-14} textAnchor="middle" fontSize="9" fill={T.textMuted}>
+                      {formatSarCompact(maxVal*pct)}
+                    </text>
+                  </g>
+                ))}
+
+                {allRows.map((row, ri) => {
+                  const y = ri * rowH + 10;
+                  const estPct  = Math.min(row.estimated / maxVal, 1);
+                  const actPct  = Math.min(row.actual    / maxVal, 1);
+                  const over    = row.actual > row.estimated && row.estimated > 0;
+                  const actColor = over ? T.red : (row.actual > 0 && row.estimated > 0 && row.actual <= row.estimated) ? T.green : T.red;
+                  return (
+                    <g key={row.id}>
+                      {/* Row label */}
+                      <text x={labelW-8} y={y + barH - 4} textAnchor="end" fontSize={row.isTotal?"12":"11"}
+                        fill={row.isTotal ? T.text : T.textSub} fontWeight={row.isTotal?"800":"600"}>
+                        {row.label}
+                      </text>
+
+                      {/* Separator for total row */}
+                      {row.isTotal && ri > 0 && (
+                        <line x1={0} y1={y-6} x2={labelW+chartW+120} y2={y-6} stroke={T.border} strokeWidth="1"/>
+                      )}
+
+                      {/* Estimated bar */}
+                      <rect x={labelW} y={y} width={Math.max(estPct * chartW, row.estimated>0?2:0)} height={barH-2}
+                        rx="4" fill={row.color} opacity="0.35"/>
+                      {row.estimated > 0 && (
+                        <text x={labelW + Math.max(estPct*chartW,2) + 6} y={y + barH/2 + 4}
+                          fontSize="10" fill={T.textMuted}>
+                          {formatSarCompact(row.estimated)}
+                        </text>
+                      )}
+
+                      {/* Actual bar */}
+                      <rect x={labelW} y={y + barH} width={Math.max(actPct * chartW, row.actual>0?2:0)} height={barH-2}
+                        rx="4" fill={actColor} opacity="0.85"/>
+                      {row.actual > 0 && (
+                        <text x={labelW + Math.max(actPct*chartW,2) + 6} y={y + barH*2 - 2}
+                          fontSize="10" fontWeight="700" fill={actColor}>
+                          {formatSarCompact(row.actual)}
+                        </text>
+                      )}
+                      {row.actual === 0 && (
+                        <text x={labelW + 6} y={y + barH*2 - 2} fontSize="10" fill={T.textMuted}>No actual cost yet</text>
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+
+            {/* Summary callout */}
+            {estimationCost > 0 && (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginTop:16}}>
+                {[
+                  {label:"ESTIMATED",  v:formatSarCompact(estimationCost), color:T.teal},
+                  {label:"ACTUAL",     v:formatSarCompact(totalCost),      color:totalCost>estimationCost?T.red:T.green},
+                  {label:"VARIANCE",   v:(totalCost>estimationCost?"+":"-")+formatSarCompact(Math.abs(totalCost-estimationCost)), color:totalCost>estimationCost?T.red:T.green},
+                  {label:"USED %",     v:estimationCost>0?`${Math.round((totalCost/estimationCost)*100)}%`:"—", color:totalCost>estimationCost?T.red:T.gold},
+                ].map(k=>(
+                  <div key={k.label} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 14px"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:800,color:k.color}}>{k.v}</div>
+                    <div style={{fontSize:10,color:T.textMuted,marginTop:3,fontWeight:700,letterSpacing:".5px"}}>{k.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Cost breakdown by category */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14,marginBottom:14}}>
         <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 22px",boxShadow:T.shadow}}>
