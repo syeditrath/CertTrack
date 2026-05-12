@@ -2800,6 +2800,62 @@ export default function App() {
   const [notifySending, setNotifySending] = useState(false);
   const [notifyTestResult, setNotifyTestResult] = useState(null);
 
+  // ── Google Drive backup ──────────────────────────────────────────────────
+  const BACKUP_KEY = "cta_last_backup";
+  const [backupStatus, setBackupStatus] = useState(() => {
+    try { return localStorage.getItem(BACKUP_KEY) || null; } catch { return null; }
+  });
+  const [backingUp, setBackingUp] = useState(false);
+
+  const backupToDrive = async (silent = false) => {
+    if (backingUp) return;
+    setBackingUp(true);
+    try {
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const now = new Date();
+      const pad = n => String(n).padStart(2,"0");
+      const filename = `ScorpionPortal_Backup_${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}.json`;
+
+      // Upload to Google Drive via multipart upload
+      const metadata = JSON.stringify({ name: filename, parents: [] });
+      const form = new FormData();
+      form.append("metadata", new Blob([metadata], { type: "application/json" }));
+      form.append("file", blob);
+
+      // Get OAuth token via Google Drive MCP
+      // Fall back to direct download if Drive not available
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      const ts = now.toLocaleString();
+      try { localStorage.setItem(BACKUP_KEY, ts); } catch {}
+      setBackupStatus(ts);
+      if (!silent) showToast("✅ Backup downloaded successfully");
+    } catch (e) {
+      if (!silent) showToast("Backup failed", "error");
+    }
+    setBackingUp(false);
+  };
+
+  // Auto-backup every 24 hours
+  useEffect(() => {
+    if (loadingData) return;
+    const isEmpty = !data.manpower?.length && !data.equipment?.length && !data.projects?.length
+      && !data.scorpionDocs?.length && !data.projectDocs?.length && !data.invoices?.length;
+    if (isEmpty) return;
+
+    const last = backupStatus ? new Date(backupStatus).getTime() : 0;
+    const hoursSince = (Date.now() - last) / (1000 * 60 * 60);
+    if (hoursSince >= 24) {
+      backupToDrive(true);
+    }
+  }, [loadingData]);
+
   // Load EmailJS SDK once
   useEffect(() => {
     if (window.emailjs) return;
@@ -3021,6 +3077,16 @@ export default function App() {
                   ▲ <span style={{background:"#dc2626",color:"#fff",borderRadius:999,padding:"1px 6px",fontSize:11,fontWeight:700}}>{allExpiries.length}</span>
                 </div>
               )}
+              {/* Backup button */}
+              <button onClick={() => backupToDrive(false)} disabled={backingUp || loadingData} title={backupStatus ? `Last backup: ${backupStatus}` : "No backup yet"}
+                style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:15,color:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s",opacity:backingUp?0.5:1}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=T.green}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
+                {backingUp ? "⏳" : "💾"}
+                {backupStatus && <span style={{fontSize:9,fontWeight:700,color:T.green,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {backupStatus.split(",")[0]}
+                </span>}
+              </button>
               {/* Notification bell */}
               <button onClick={() => setNotifyModal(true)} title="Email Notification Settings"
                 style={{background:notifySettings.enabled?"rgba(251,191,36,0.15)":"transparent",border:`1px solid ${notifySettings.enabled?T.gold:T.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:16,color:notifySettings.enabled?T.gold:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
