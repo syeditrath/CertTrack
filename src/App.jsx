@@ -1057,6 +1057,8 @@ function parseScorpionDprSheet(wb) {
     date:           date,
     profile:        get("profile",       "C13"),
     activity:       get("activity",      "H13"),
+    permitStartTime: rd("C11"),
+    permitEndTime:   rd("H11"),
     permitReceived: rd("C14"),
     permitHours:    rd("H14"),
     standbyReason:  rd("C15"),
@@ -1398,6 +1400,7 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
     if (!allRows.length) return;
     const headers = [
       "Project", "Rig / Spread", "Date", "Work Profile", "Activity",
+      "Permit Start Time", "Permit End Time",
       "Permit Received", "Permit Hours", "Standby Reason",
       "Progress Today (m)", "Accumulated (m)", "Activity Summary", "Issues / Delays", "Notes",
     ];
@@ -1405,6 +1408,8 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
     const toRow = r => [
       r._project||r.project||"", r._rig||r.rig||"", r.date||"",
       r.profile||"", r.activity||"",
+      r.permitStartTime||"",
+      r.permitEndTime||"",
       r.permitReceived||"",
       r.permitHours!=null?String(r.permitHours):"",
       r.standbyReason||"",
@@ -1412,7 +1417,7 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
       r.accumulated!=null?String(r.accumulated):"",
       r.activities||"", r.issues||"", r.notes||"",
     ];
-    const colWidths = [26,18,12,20,24,14,13,30,16,14,48,30,30];
+    const colWidths = [26,18,12,20,24,16,16,14,13,30,16,14,48,30,30];
     const makeSheet = rows => {
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows.map(toRow)]);
       ws["!cols"] = colWidths.map(w=>({wch:w}));
