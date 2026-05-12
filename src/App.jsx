@@ -410,12 +410,17 @@ const NOTIFY_LAST_SENT_KEY = "cta_notify_last_sent";
 function loadNotifySettings() {
   try {
     const s = localStorage.getItem(NOTIFY_STORAGE_KEY);
-    if (!s) return { enabled: false, emails: [], thresholdDays: 90, maintEmails: [] };
+    const defaults = { enabled: false, responsiblePersons: [], managers: [], managingDirector: [], ceo: [], maintEmails: [] };
+    if (!s) return defaults;
     const p = JSON.parse(s);
-    // migrate old single-email field
-    if (!p.emails) p.emails = p.email ? [p.email] : [];
-    return p;
-  } catch { return { enabled: false, emails: [], thresholdDays: 90 }; }
+    // migrate legacy flat emails list → responsiblePersons
+    if (!p.responsiblePersons) p.responsiblePersons = p.emails || (p.email ? [p.email] : []);
+    if (!p.managers)           p.managers = [];
+    if (!p.managingDirector)   p.managingDirector = [];
+    if (!p.ceo)                p.ceo = [];
+    if (!p.maintEmails)        p.maintEmails = [];
+    return { ...defaults, ...p };
+  } catch { return { enabled: false, responsiblePersons: [], managers: [], managingDirector: [], ceo: [], maintEmails: [] }; }
 }
 
 function saveNotifySettings(s) {
@@ -2798,6 +2803,10 @@ export default function App() {
 
   useEffect(() => {
     if (loadingData) return;
+    // Safety guard: never save if all core arrays are empty (prevents wiping real data on load failure)
+    const isEmpty = !data.manpower?.length && !data.equipment?.length && !data.projects?.length
+      && !data.scorpionDocs?.length && !data.projectDocs?.length && !data.invoices?.length;
+    if (isEmpty) return;
 
     const t = setTimeout(() => {
       saveAppData(data).catch(err => { console.error("Save failed:", err); });
