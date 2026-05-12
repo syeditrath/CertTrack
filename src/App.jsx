@@ -5495,7 +5495,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
                       </div>
                     </div>
 
-                    {(()=>{ const rc=(data.rigs||[]).filter(r=>r.project===project).length; if(!rc) return null; const rigNames=(data.rigs||[]).filter(r=>r.project===project).map(r=>r.name); return <div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:6}}>{rigNames.map(n=><span key={n} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 8px",fontSize:11,color:T.textMuted,fontWeight:600}}>🔩 {n}</span>)}</div>; })()}
+                    {(()=>{ const rc=(data.rigs||[]).filter(r=>r.project===project).length; if(!rc) return null; const rigNames=(data.rigs||[]).filter(r=>r.project===project).map(r=>r.name); return (<div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:6}}>{rigNames.map(n=><span key={n} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 8px",fontSize:11,color:T.textMuted,fontWeight:600}}>🔩 {n}</span>)}</div>); })()}
                     <div style={{marginTop:14,fontSize:12,color:T.blue,fontWeight:700,textAlign:"right"}}>Open Project →</div>
                   </button>
                 );
