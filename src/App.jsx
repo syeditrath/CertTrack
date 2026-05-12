@@ -269,6 +269,42 @@ function useViewport() {
   return viewport;
 }
 
+/* ─── Print utility ─────────────────────────────────────────────────────── */
+function printPage(title, htmlContent) {
+  const win = window.open("", "_blank", "width=1100,height=800");
+  win.document.write(`<!DOCTYPE html><html><head>
+    <title>${title}</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #111; background: #fff; padding: 24px; }
+      h1 { font-size: 22px; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px; }
+      h2 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; border-bottom: 2px solid #111; padding-bottom: 4px; }
+      .meta { font-size: 11px; color: #555; margin-bottom: 18px; }
+      .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 10px; margin-bottom: 20px; }
+      .kpi { border: 1.5px solid #ddd; border-radius: 8px; padding: 10px 14px; }
+      .kpi-val { font-size: 20px; font-weight: 800; }
+      .kpi-lbl { font-size: 10px; color: #666; margin-top: 2px; font-weight: 600; text-transform: uppercase; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 11px; }
+      th { background: #111; color: #fff; padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+      td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
+      tr:nth-child(even) td { background: #f9f9f9; }
+      .bar-wrap { background: #eee; border-radius: 999px; height: 7px; width: 100%; margin-top: 3px; }
+      .bar-fill { height: 7px; border-radius: 999px; background: #16a34a; }
+      .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; border: 1px solid #ddd; }
+      .logo { font-size: 11px; color: #999; text-align: right; margin-bottom: 16px; }
+      @media print { body { padding: 10px; } }
+    </style>
+  </head><body>
+    <div class="logo">SCORPION ARABIA — Confidential</div>
+    ${htmlContent}
+    <div style="margin-top:32px;font-size:10px;color:#aaa;text-align:center">
+      Printed on ${new Date().toLocaleString()} · Scorpion Portal
+    </div>
+    <script>window.onload=()=>{window.print();}<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
 /* ─── Export utilities ───────────────────────────────────────────────────── */
 function exportToExcel(rows, filename) {
   if(!rows||!rows.length) return;
@@ -2617,6 +2653,44 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
           </div>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <button onClick={()=>{
+            const rows = visible.map(p=>{
+              const poValue = parseFloat(p.poValue)||0;
+              const pct = poValue>0?Math.min(100,Math.round((p.totalInvoiced/poValue)*100)):0;
+              return `<tr>
+                <td><strong>${p.project||"—"}</strong>${p.clientName?`<br/><span style="color:#666;font-size:10px">${p.clientName}</span>`:""}</td>
+                <td>${p.poNumber||"—"}</td>
+                <td><span class="badge">${p.status||"—"}</span></td>
+                <td style="text-align:right">${poValue>0?formatSarCompact(poValue):"—"}</td>
+                <td style="text-align:right">${formatSarCompact(p.totalInvoiced)}</td>
+                <td style="text-align:right">${formatSarCompact(p.totalCollected)}</td>
+                <td style="text-align:right;color:${p.totalDue>0?"#dc2626":"#16a34a"}">${formatSarCompact(p.totalDue)}</td>
+                <td>${poValue>0?`<div>${pct}%</div><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${pct>=80?"#16a34a":pct>=50?"#d97706":"#dc2626"}"></div></div>`:"—"}</td>
+                <td>${p.startDate||"—"}</td>
+                <td>${p.estEndDate||"—"}</td>
+              </tr>`;
+            }).join("");
+            printPage("Project Analysis Report", `
+              <h1>📊 PROJECT ANALYSIS</h1>
+              <div class="meta">Generated ${new Date().toLocaleDateString()} · ${visible.length} project${visible.length!==1?"s":""}${fStat!=="All"?` · Filter: ${fStat}`:""}${search?` · Search: "${search}"`:""}
+              </div>
+              <div class="kpi-grid">
+                <div class="kpi"><div class="kpi-val">${formatSarCompact(totalPO)}</div><div class="kpi-lbl">Total PO Value</div></div>
+                <div class="kpi"><div class="kpi-val">${formatSarCompact(totalInvoiced)}</div><div class="kpi-lbl">Total Invoiced</div></div>
+                <div class="kpi"><div class="kpi-val">${formatSarCompact(totalCollected)}</div><div class="kpi-lbl">Total Collected</div></div>
+                <div class="kpi"><div class="kpi-val" style="color:#dc2626">${formatSarCompact(totalDue)}</div><div class="kpi-lbl">Total Due</div></div>
+                <div class="kpi"><div class="kpi-val">${enriched.filter(x=>x.status==="In Progress").length}</div><div class="kpi-lbl">In Progress</div></div>
+                <div class="kpi"><div class="kpi-val">${enriched.filter(x=>x.status==="Completed").length}</div><div class="kpi-lbl">Completed</div></div>
+              </div>
+              <h2>Project Details</h2>
+              <table>
+                <thead><tr><th>Project</th><th>PO Number</th><th>Status</th><th>PO Value</th><th>Invoiced</th><th>Collected</th><th>Due</th><th>Progress</th><th>Start</th><th>End</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            `);
+          }} style={{background:T.card,border:`1px solid ${T.border}`,color:T.text,borderRadius:11,padding:"11px 20px",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+            🖨 Print
+          </button>
           <button onClick={()=>setShowDprConsolidate(true)}
             style={{background:T.card,border:`1px solid ${T.border}`,color:T.text,borderRadius:11,padding:"11px 20px",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
             📊 DPR Consolidation
@@ -4801,6 +4875,49 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
           </div>
           <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Invoices, work orders & financial overview · Restricted access</div>
         </div>
+        <button onClick={()=>{
+          const projRows = projectBreakdown.map(p=>`<tr>
+            <td><strong>${p.proj}</strong></td>
+            <td style="text-align:right">${formatSarCompact(p.invoiced)}</td>
+            <td style="text-align:right">${formatSarCompact(p.collected)}</td>
+            <td style="text-align:right;color:${p.due>0?"#dc2626":"#16a34a"}">${formatSarCompact(p.due)}</td>
+            <td>${p.count} invoice${p.count!==1?"s":""}</td>
+            <td><div>${p.pct}%</div><div class="bar-wrap"><div class="bar-fill" style="width:${p.pct}%;background:${p.pct>=80?"#16a34a":p.pct>=50?"#d97706":"#dc2626"}"></div></div></td>
+          </tr>`).join("");
+          const invRows = filteredInvoiceDocs.map(d=>`<tr>
+            <td>${d.project||"—"}</td>
+            <td>${d.docNo||d.name||"—"}</td>
+            <td>${d.dueDate||"—"}</td>
+            <td style="text-align:right">${formatSarCompact(parseFloat(d.amount)||0)}</td>
+            <td style="text-align:right">${formatSarCompact(getInvoiceCollectedAmount(d))}</td>
+            <td style="text-align:right;color:${getInvoiceRemainingAmount(d)>0?"#dc2626":"#16a34a"}">${formatSarCompact(getInvoiceRemainingAmount(d))}</td>
+            <td>${d.invoiceType||"—"}</td>
+          </tr>`).join("");
+          printPage("Finance Report", `
+            <h1>💰 FINANCE REPORT</h1>
+            <div class="meta">Generated ${new Date().toLocaleDateString()} · Year: ${selectedInvoiceYear}</div>
+            <div class="kpi-grid">
+              <div class="kpi"><div class="kpi-val">${formatSarCompact(totalInvoiceValue)}</div><div class="kpi-lbl">Total Invoiced</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:#16a34a">${formatSarCompact(totalReceived)}</div><div class="kpi-lbl">Total Received</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:#dc2626">${formatSarCompact(totalDue)}</div><div class="kpi-lbl">Total Due</div></div>
+              <div class="kpi"><div class="kpi-val">${collectionRate}%</div><div class="kpi-lbl">Collection Rate</div></div>
+              <div class="kpi"><div class="kpi-val">${formatSarCompact(incomeInvoiced)}</div><div class="kpi-lbl">Income Invoiced</div></div>
+              <div class="kpi"><div class="kpi-val">${formatSarCompact(advanceInvoiced)}</div><div class="kpi-lbl">Advance Invoiced</div></div>
+            </div>
+            <h2>Project Breakdown</h2>
+            <table>
+              <thead><tr><th>Project</th><th>Invoiced</th><th>Collected</th><th>Due</th><th>Invoices</th><th>Collection %</th></tr></thead>
+              <tbody>${projRows}</tbody>
+            </table>
+            <h2>Invoice List</h2>
+            <table>
+              <thead><tr><th>Project</th><th>Invoice No</th><th>Due Date</th><th>Amount</th><th>Received</th><th>Due</th><th>Type</th></tr></thead>
+              <tbody>${invRows}</tbody>
+            </table>
+          `);
+        }} style={{background:T.card,border:`1px solid ${T.border}`,color:T.text,borderRadius:11,padding:"11px 20px",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+          🖨 Print
+        </button>
       </div>
 
       {/* ── Tab bar ── */}
