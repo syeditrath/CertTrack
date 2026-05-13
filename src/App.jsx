@@ -3182,6 +3182,30 @@ export default function App() {
                   ▲ <span style={{background:"#dc2626",color:"#fff",borderRadius:999,padding:"1px 6px",fontSize:11,fontWeight:700}}>{allExpiries.length}</span>
                 </div>
               )}
+              {/* Restore from backup */}
+              <input id="restore-input" type="file" accept=".json" style={{display:"none"}} onChange={e=>{
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = ev => {
+                  try {
+                    const parsed = JSON.parse(ev.target.result);
+                    if (!parsed || typeof parsed !== "object") throw new Error("Invalid file");
+                    const restored = { ...EMPTY_DATA, ...parsed };
+                    setData(restored);
+                    saveAppData(restored).then(()=>showToast("✅ Data restored successfully")).catch(()=>showToast("Restored locally but Supabase save failed","error"));
+                  } catch(err) { showToast("Failed to restore: invalid backup file","error"); }
+                };
+                reader.readAsText(file);
+                e.target.value = "";
+              }}/>
+              <button onClick={()=>document.getElementById("restore-input").click()}
+                title="Restore data from backup JSON file"
+                style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:15,color:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=T.blue}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
+                📂
+              </button>
               {/* Backup button */}
               <button onClick={() => backupToDrive(false)} disabled={backingUp || loadingData} title={backupStatus ? `Last backup: ${backupStatus}` : "No backup yet"}
                 style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:15,color:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s",opacity:backingUp?0.5:1}}
