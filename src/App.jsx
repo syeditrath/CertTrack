@@ -586,6 +586,8 @@ const AUTH_KEY          = "cta_auth";
 const FINANCE_PASSWORD  = "finance2025"; // Change this to your desired finance password
 const ANALYSIS_PASSWORD = "analysis2025";
 const COST_PASSWORD     = "cost2025"; // Change this to your desired cost control password
+const ADMIN_PASSWORD    = "admin2025";  // Only admin can delete — change this
+const ADMIN_KEY         = "cta_admin";
 
 /* ─── Supabase config — paste your values here after setup ──────────────── */
 const SUPABASE_URL    = "https://mmvuqyupaxhlcqabvvad.supabase.co";
@@ -1974,7 +1976,7 @@ function ProjectDurationChart({ proj, reports }) {
 }
 
 /* ── Project Detail view ── */
-function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData, showToast, onUpdate, onDelete, onBack, go }) {
+function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData, showToast, onUpdate, onDelete, onBack, go, isAdmin }) {
   const [editProj, setEditProj]     = useState(false);
   const [drModal,  setDrModal]      = useState(null);
   const [expandDr, setExpandDr]     = useState(null);
@@ -2022,7 +2024,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
           </div>
         </div>
         <button onClick={()=>setEditProj(true)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✎ Edit</button>
-        <button onClick={()=>{if(window.confirm("Delete this project analysis?")) onDelete();}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✕ Delete</button>
+        {isAdmin && <button onClick={()=>{if(window.confirm("Delete this project analysis?")) onDelete();}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>✕ Delete</button>}
       </div>
 
       {/* Detail tab bar */}
@@ -2161,7 +2163,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
                         <div style={{textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.gold}}>{formatSarCompact(est)}</div>
                         <div style={{textAlign:"right",fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:act>0?(over?T.red:T.green):T.textMuted}}>{act>0?formatSarCompact(act):"—"}</div>
                         <div style={{textAlign:"right",fontSize:12,color:T.textMuted}}>{s.date||"—"}</div>
-                        <button onClick={()=>delSheet(s.id)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:0}}>✕</button>
+                        {isAdmin && <button onClick={()=>delSheet(s.id)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,padding:0}}>✕</button>}
                       </div>
                     );
                   })}
@@ -2517,7 +2519,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
                     </div>
                     <div style={{display:"flex",gap:6,alignItems:"center"}}>
                       <button onClick={e=>{e.stopPropagation();setDrModal(r);}} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✎</button>
-                      <button onClick={e=>{e.stopPropagation();delReport(r.id);}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✕</button>
+                      {isAdmin && <button onClick={e=>{e.stopPropagation();delReport(r.id);}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✕</button>}
                       <span style={{color:T.textMuted,fontSize:13,marginLeft:2}}>{isE?"▲":"▼"}</span>
                     </div>
                   </div>
@@ -2558,7 +2560,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
 }
 
 /* ── Project Analysis list page ── */
-function ProjectAnalysisPage({ data, setData, showToast, go }) {
+function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
   const [modal,  setModal]  = useState(null);
   const [detail, setDetail] = useState(null);
   const [fStat,  setFStat]  = useState("All");
@@ -2621,7 +2623,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
       proj={{...detailRec, poValue: woValue || detailRec.poValue}} projectDocs={projectDocs} projectNames={projects}
       data={data} setData={setData} showToast={showToast}
       onUpdate={p=>{update(p);setDetail(p.id);}} onDelete={()=>del(detailRec.id)}
-      onBack={()=>setDetail(null)} go={go}/>;
+      onBack={()=>setDetail(null)} go={go} isAdmin={isAdmin}/>;
   }
 
   // Enrich each record with live invoice stats + work order contract value
@@ -2761,7 +2763,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
                   </div>
                   <div style={{display:"flex",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                     <button onClick={()=>{ const {invs,jobs,ungroupedInvs,ungroupedCerts,totalInvoiced,totalCollected,totalDue,...clean}=p; setModal(clean); }} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✎</button>
-                    <button onClick={()=>del(p.id)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✕</button>
+                    {isAdmin && <button onClick={()=>del(p.id)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}}>✕</button>}
                   </div>
                 </div>
                 {/* Status + PO value */}
@@ -2832,6 +2834,8 @@ export default function App() {
   const [projMod, setProjMod] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [authed, setAuthed] = useState(() => isAuthenticated());
+  const [isAdmin, setIsAdmin] = useState(() => { try { return sessionStorage.getItem(ADMIN_KEY)==="true"; } catch { return false; } });
+  const loginAdmin = (pw) => { if (pw===ADMIN_PASSWORD) { try{sessionStorage.setItem(ADMIN_KEY,"true");}catch{} setIsAdmin(true); return true; } return false; };
   const [financeAuthed,  setFinanceAuthed]  = useState(false);
   const [analysisAuthed, setAnalysisAuthed] = useState(false);
   const [costAuthed,     setCostAuthed]     = useState(false);
@@ -2843,8 +2847,6 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [selectedInvoiceYear, setSelectedInvoiceYear] = useState("All");
   const { width: viewportWidth } = useViewport();
-  const initialLoadComplete = useRef(false);
-  const lastSavedJson = useRef("");
 
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
@@ -2856,72 +2858,34 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-  let mounted = true;
-
-  (async () => {
-    try {
-      const controller = new AbortController();
-
-      const timeout = setTimeout(() => {
-        controller.abort();
-      }, 10000);
-
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`,
-        {
-          headers: {
-            apikey: SUPABASE_ANON,
-            Authorization: `Bearer ${SUPABASE_ANON}`,
-          },
+    (async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
+          headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
           signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (res.ok) {
+          const rows = await res.json();
+          if (rows.length && rows[0].data) {
+            setData({ ...EMPTY_DATA, ...rows[0].data });
+            setLoadingData(false); // only mark loaded if we got real data back
+          } else {
+            console.warn("Supabase returned no data rows — staying in loading state to protect data");
+            setSupabaseError(true);
+          }
+        } else {
+          console.warn("Supabase fetch failed — staying in loading state to protect data");
+          setSupabaseError(true);
         }
-      );
-
-      clearTimeout(timeout);
-
-      if (!res.ok) {
-        throw new Error("Supabase fetch failed");
-      }
-
-      const rows = await res.json();
-
-      if (!rows.length || !rows[0]?.data) {
-        throw new Error("No data found in database");
-      }
-
-      const loadedData = {
-        ...EMPTY_DATA,
-        ...rows[0].data,
-      };
-
-      if (mounted) {
-        setData(loadedData);
-        lastSavedJson.current = JSON.stringify(loadedData);
-        setLoadingData(false);
-        setSupabaseError(false);
-
-        setTimeout(() => {
-          initialLoadComplete.current = true;
-        }, 1500);
-      }
-
-    } catch (err) {
-      console.error("Supabase load failed:", err);
-
-      if (mounted) {
+      } catch (err) {
+        console.error("Supabase load failed:", err);
         setSupabaseError(true);
-
-        // IMPORTANT:
-        // NEVER set EMPTY_DATA automatically
-        // NEVER disable loading after failed fetch
       }
-    }
-  })();
-
-  return () => {
-    mounted = false;
-  };
-}, []);
+    })();
+  }, []);
 
   const [notifySettings, setNotifySettings] = useState(() => loadNotifySettings());
   const [notifyModal, setNotifyModal] = useState(false);
@@ -2983,47 +2947,6 @@ export default function App() {
       backupToDrive(true);
     }
   }, [loadingData]);
-  useEffect(() => {
-  if (loadingData) return;
-
-  if (!initialLoadComplete.current) return;
-
-  if (!data) return;
-
-  const dangerousEmpty =
-    !data.manpower?.length &&
-    !data.equipment?.length &&
-    !data.projectDocs?.length &&
-    !data.scorpionDocs?.length &&
-    !data.projectAnalysis?.length;
-
-  // BLOCK EMPTY DATABASE OVERWRITE
-  if (dangerousEmpty) {
-    console.warn("Blocked dangerous empty autosave");
-    return;
-  }
-
-  const json = JSON.stringify(data);
-
-  // prevent unnecessary repeated saves
-  if (json === lastSavedJson.current) return;
-
-  const timer = setTimeout(async () => {
-    try {
-      await saveAppData(data);
-
-      lastSavedJson.current = json;
-
-      console.log("Autosave successful");
-
-    } catch (err) {
-      console.error("Autosave failed:", err);
-    }
-  }, 1200);
-
-  return () => clearTimeout(timer);
-
-}, [data, loadingData]);
 
   // Load EmailJS SDK once
   useEffect(() => {
@@ -3263,6 +3186,18 @@ export default function App() {
                   ▲ <span style={{background:"#dc2626",color:"#fff",borderRadius:999,padding:"1px 6px",fontSize:11,fontWeight:700}}>{allExpiries.length}</span>
                 </div>
               )}
+              {/* Admin toggle */}
+              <button
+                onClick={()=>{
+                  if (isAdmin) { try{sessionStorage.removeItem(ADMIN_KEY);}catch{} setIsAdmin(false); showToast("Admin mode off"); }
+                  else { const pw=window.prompt("Enter admin password:"); if(pw && loginAdmin(pw)) showToast("Admin mode on — delete enabled"); else if(pw) showToast("Wrong password","error"); }
+                }}
+                title={isAdmin ? "Admin mode ON — click to lock" : "Unlock admin (delete) access"}
+                style={{background:isAdmin?"rgba(239,68,68,0.12)":"transparent",border:`1px solid ${isAdmin?"#ef4444":T.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:14,color:isAdmin?"#ef4444":T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.borderColor=isAdmin?"#ef4444":T.textMuted}
+                onMouseLeave={e=>e.currentTarget.style.borderColor=isAdmin?"#ef4444":T.border}>
+                {isAdmin ? "🔓 Admin" : "🔒"}
+              </button>
               {/* Restore from backup */}
               <input id="restore-input" type="file" accept=".json" style={{display:"none"}} onChange={e=>{
                 const file = e.target.files[0];
@@ -3308,22 +3243,22 @@ export default function App() {
 
         <main style={{flex:1,overflowY:"auto",padding:"clamp(14px,2vw,28px) clamp(14px,2.5vw,32px)"}}>
           {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go}/></div>}
-          {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)}/></div>}
+          {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+          {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
           {page==="analysis"  && (
             analysisAuthed
-              ? <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go}/></div>
+              ? <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
               : <FinanceLoginPage title="PROJECT ANALYSIS ACCESS" subtitle="This section is restricted. Enter the analysis password to continue." passwordLabel="ANALYSIS PASSWORD" placeholder="Enter analysis password…" onLogin={(pw) => {
                   if (pw === ANALYSIS_PASSWORD) { setAnalysisAuthed(true); return true; }
                   return false;
                 }}/>
           )}
-          {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast}/></div>}
-          {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast}/></div>}
+          {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+          {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
           {page==="costs" && (
             costAuthed
-              ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go}/></div>
+              ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
               : <FinanceLoginPage title="COST CONTROL ACCESS" subtitle="This section contains sensitive financial data.\nEnter the cost control password to continue." passwordLabel="COST CONTROL PASSWORD" placeholder="Enter password…" onLogin={(pw) => {
                   if (pw === COST_PASSWORD) { setCostAuthed(true); return true; }
                   return false;
@@ -3331,7 +3266,7 @@ export default function App() {
           )}
           {page==="finance" && (
             financeAuthed
-              ? <div className="fade-in" key="finance"><FinancePage data={data} setData={setData} showToast={showToast} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear}/></div>
+              ? <div className="fade-in" key="finance"><FinancePage data={data} setData={setData} showToast={showToast} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear} isAdmin={isAdmin}/></div>
               : <FinanceLoginPage onLogin={(pw) => {
                   if (pw === FINANCE_PASSWORD) {
                     setFinanceAuthed(true);
@@ -3497,7 +3432,7 @@ function ProjectsModal({projects,onSave,onClose}) {
         }
       </div>
       <button onClick={()=>startEdit(p._idx,"name",p.name)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}} title="Rename">✎</button>
-      <button onClick={()=>del(p._idx)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}} title="Delete">✕</button>
+      {isAdmin && <button onClick={()=>del(p._idx)} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,cursor:"pointer"}} title="Delete">✕</button>}
     </div>
   );
 
@@ -4180,7 +4115,7 @@ const COST_CATS = [
 ];
 const COST_CAT_MAP = Object.fromEntries(COST_CATS.map(c=>[c.id,c]));
 
-function CostControlPage({data, setData, showToast, go}) {
+function CostControlPage({data, setData, showToast, go, isAdmin}) {
   const [selProj, setSelProj] = useState(null);
   const [modal,   setModal]   = useState(null);
   const [filterCat, setFilterCat] = useState("All");
@@ -4719,7 +4654,7 @@ function CostControlPage({data, setData, showToast, go}) {
                     </div>
                     <div style={{display:"flex",gap:4}}>
                       <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",entry})}>✎</ABtn>
-                      <ABtn color={T.red}  onClick={()=>delEntry(entry.id)}>✕</ABtn>
+                      {isAdmin && <ABtn color={T.red}  onClick={()=>delEntry(entry.id)}>✕</ABtn>}
                     </div>
                   </div>
                 </div>
@@ -4912,7 +4847,7 @@ const FIN_TABS = [
   {id:"workorders",  label:"Work Orders / Agreements", icon:"📋", color:T.purple, dim:T.purpleDim},
 ];
 
-function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelectedInvoiceYear }) {
+function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelectedInvoiceYear, isAdmin }) {
   const [finTab, setFinTab] = useState("overview");
   const [invoiceDetailView, setInvoiceDetailView] = useState(null);
   const [modal, setModal] = useState(null);
@@ -5285,7 +5220,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
                       </div>
                       <div style={{display:"flex",gap:6,flexShrink:0}}>
                         <ABtn color={T.blue} onClick={() => setModal({mode:"edit",doc})}>✎</ABtn>
-                        <ABtn color={T.red}  onClick={() => delDoc(doc.id)}>✕</ABtn>
+                        {isAdmin && <ABtn color={T.red}  onClick={() => delDoc(doc.id)}>✕</ABtn>}
                       </div>
                     </div>
                   );
@@ -5437,7 +5372,7 @@ const PD_TABS = [
 /* ════════════════════════════════════════════════════════════════════════════
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
-function ProjectDocs({data,setData,showToast,onManageProjects}) {
+function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   // ALL hooks must be at the top — never after a conditional return
   const [selectedProject, setSelectedProject] = useState(null);
   const [subTab,  setSubTab]  = useState("certificates");
@@ -5680,8 +5615,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
                   <span style={{fontWeight:700,fontSize:13,color:T.text}}>🔩 {r.name}</span>
                   <span style={{fontSize:11,color:T.textMuted}}>{eqCount} eq</span>
                   {maintCount>0&&<span style={{fontSize:11,color:"#f59e0b",fontWeight:700}}>⚠ {maintCount} open</span>}
-                  <button type="button" onClick={e=>{e.preventDefault();e.stopPropagation();delRig(r.id);}}
-                    style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>✕</button>
+                  {isAdmin && <button type="button" onClick={e=>{e.preventDefault();e.stopPropagation();delRig(r.id);}}
+                    style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1}}>✕</button>}
                 </div>
               );
             })}
@@ -5781,7 +5716,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
 
                 <div style={{display:"flex",gap:6,flexShrink:0}}>
                   <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
-                  <ABtn color={T.red} onClick={()=>delDoc(doc.id)}>✕</ABtn>
+                  {isAdmin && <ABtn color={T.red} onClick={()=>delDoc(doc.id)}>✕</ABtn>}
                 </div>
               </div>
             ))}
@@ -5895,7 +5830,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
             </div>
             <div style={{display:"flex",gap:6,flexShrink:0}}>
               <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
-              <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
+              {isAdmin && <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>}
             </div>
           </div>
         );
@@ -6022,7 +5957,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects}) {
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
                       <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
-                      <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
+                      {isAdmin && <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>}
                     </div>
                   </div>
                 ))}
@@ -6173,7 +6108,7 @@ function InvoiceCard({ doc, delay, onEdit, onDel }) {
 
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>
-        <ABtn color={T.red} onClick={onDel}>✕</ABtn>
+        {isAdmin && {isAdmin && <ABtn color={T.red} onClick={onDel}>✕</ABtn>}}
       </div>
     </div>
   );
@@ -6498,7 +6433,7 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClo
 /* ════════════════════════════════════════════════════════════════════════════
    SCORPION DOCUMENTS
 ════════════════════════════════════════════════════════════════════════════ */
-function ScorpionDocs({data,setData,showToast}) {
+function ScorpionDocs({data,setData,showToast,isAdmin}) {
   const [modal,    setModal]    = useState(null);
   const [catModal, setCatModal] = useState(false);
   const [selCat,   setSelCat]   = useState("All");
@@ -6671,7 +6606,7 @@ function ScorpionDocs({data,setData,showToast}) {
                   </div>
                   <div style={{display:"flex",gap:6,flexShrink:0}}>
                     <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
-                    <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>
+                    {isAdmin && <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>}
                   </div>
                 </div>
               );
@@ -6747,7 +6682,7 @@ function DocModal({mode,doc,cats,onClose,onSave}) {
 /* ════════════════════════════════════════════════════════════════════════════
    MANPOWER PAGE
 ════════════════════════════════════════════════════════════════════════════ */
-function ManpowerPage({data,setData,showToast}) {
+function ManpowerPage({data,setData,showToast,isAdmin}) {
   const [selCat,      setSelCat]      = useState("All");
   const [catModal,    setCatModal]    = useState(false);
   const [addModal,    setAddModal]    = useState(false);
@@ -7025,7 +6960,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
           </div>
         </div>
         <Btn color={T.blue}  onClick={onEdit}>✎ Edit</Btn>
-        <Btn color={T.red}   onClick={()=>{ if(window.confirm("Delete this person?")) onDelete(); }}>✕ Delete</Btn>
+        {isAdmin && <Btn color={T.red}   onClick={()=>{ if(window.confirm("Delete this person?")) onDelete(); }}>✕ Delete</Btn>}
       </div>
 
       {/* Status cards row */}
@@ -7094,7 +7029,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
                       <ABtn color={T.blue} onClick={()=>setCertModal({mode:"edit",cert:c})}>✎</ABtn>
-                      <ABtn color={T.red}  onClick={()=>delCert(c.id)}>✕</ABtn>
+                      {isAdmin && <ABtn color={T.red}  onClick={()=>delCert(c.id)}>✕</ABtn>}
                     </div>
                   </div>
                 );
@@ -7166,7 +7101,7 @@ function CertModal({mode,cert,onClose,onSave}) {
 /* ════════════════════════════════════════════════════════════════════════════
    EQUIPMENT PAGE
 ════════════════════════════════════════════════════════════════════════════ */
-function EquipmentPage({data,setData,showToast}) {
+function EquipmentPage({data,setData,showToast,isAdmin}) {
   const rigs = data.rigs || [];
   const [modal,   setModal]   = useState(null);
   const [selEq,   setSelEq]   = useState(null); // selected equipment
@@ -7320,7 +7255,7 @@ function EquipmentPage({data,setData,showToast}) {
                   </div>
                   <div style={{display:"flex",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                     <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",eq})}>✎</ABtn>
-                    <ABtn color={T.red}  onClick={()=>{if(window.confirm("Delete this equipment?"))delEq(eq.id);}}>✕</ABtn>
+                    {isAdmin && <ABtn color={T.red}  onClick={()=>{if(window.confirm("Delete this equipment?"))delEq(eq.id);}}>✕</ABtn>}
                   </div>
                 </div>
               </div>
@@ -7336,7 +7271,7 @@ function EquipmentPage({data,setData,showToast}) {
 }
 
 /* ─── Equipment Detail ───────────────────────────────────────────────────── */
-function MaintenancePage({data,setData,showToast}) {
+function MaintenancePage({data,setData,showToast,isAdmin}) {
   const [filterStatus, setFilterStatus] = useState("Open");  // "All" | "Open" | "Closed"
   const [filterProj,   setFilterProj]   = useState("All");
   const [filterRig,    setFilterRig]    = useState("All");
@@ -7952,7 +7887,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
           <div style={{fontSize:12,color:T.textMuted}}>{eq.model} · {eq.serialNo} · {eq.project}</div>
         </div>
         <Btn color={T.blue} onClick={onEdit}>✎ Edit</Btn>
-        <Btn color={T.red}  onClick={()=>{if(window.confirm("Delete?"))onDelete();}}>✕ Delete</Btn>
+        {isAdmin && <Btn color={T.red}  onClick={()=>{if(window.confirm("Delete?"))onDelete();}}>✕ Delete</Btn>}
       </div>
 
       {/* Info strip */}
@@ -8069,7 +8004,7 @@ function SubRecordCard({r,type,color,delay,onEdit,onDel}) {
       </div>
       <div style={{display:"flex",gap:6,flexShrink:0}}>
         <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>
-        <ABtn color={T.red}  onClick={onDel}>✕</ABtn>
+        {isAdmin && {isAdmin && <ABtn color={T.red}  onClick={onDel}>✕</ABtn>}}
       </div>
     </div>
   );
