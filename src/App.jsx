@@ -5121,7 +5121,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
             </div>
             {projInvs.length === 0
               ? <Empty icon="🧾" label="No invoices yet" sub="Add the first invoice for this project" color={T.green} onAdd={() => setModal({mode:"add",doc:{project:selProj}})}/>
-              : <div style={{display:"grid",gap:10}}>{projInvs.map((doc,i) => <InvoiceCard key={doc.id} doc={doc} delay={i*.03} onEdit={() => setModal({mode:"edit",doc})} onDel={() => delDoc(doc.id)}/>)}</div>
+              : <div style={{display:"grid",gap:10}}>{projInvs.map((doc,i) => <InvoiceCard key={doc.id} doc={doc} delay={i*.03} isAdmin={isAdmin} onEdit={() => setModal({mode:"edit",doc})} onDel={() => delDoc(doc.id)}/>)}</div>
             }
           </div>
         ) : (
@@ -6009,7 +6009,7 @@ function SubTabBar({tabs,active,counts,onChange}) {
 }
 
 /* ── Invoice card ────────────────────────────────────────────────────────── */
-function InvoiceCard({ doc, delay, onEdit, onDel }) {
+function InvoiceCard({ doc, delay, onEdit, onDel, isAdmin }) {
   const due = daysUntil(doc.dueDate);
   const paymentStatus = doc.paymentStatus || "Pending";
   const isPaid = paymentStatus === "Paid";
@@ -6107,7 +6107,7 @@ function InvoiceCard({ doc, delay, onEdit, onDel }) {
       </div>
 
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>
+        {isAdmin && <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>}
         {isAdmin && <ABtn color={T.red} onClick={onDel}>✕</ABtn>}
       </div>
     </div>
@@ -8003,7 +8003,7 @@ function SubRecordCard({r,type,color,delay,onEdit,onDel}) {
         {r.description&&<div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{r.description}</div>}
       </div>
       <div style={{display:"flex",gap:6,flexShrink:0}}>
-        <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>
+        {isAdmin && <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>}
         {isAdmin && <ABtn color={T.red}  onClick={onDel}>✕</ABtn>}
       </div>
     </div>
