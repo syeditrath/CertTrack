@@ -2843,6 +2843,8 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [selectedInvoiceYear, setSelectedInvoiceYear] = useState("All");
   const { width: viewportWidth } = useViewport();
+  const initialLoadComplete = useRef(false);
+  const lastSavedJson = useRef("");
 
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
@@ -2854,34 +2856,72 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
-          headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+  let mounted = true;
+
+  (async () => {
+    try {
+      const controller = new AbortController();
+
+      const timeout = setTimeout(() => {
+        controller.abort();
+      }, 10000);
+
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`,
+        {
+          headers: {
+            apikey: SUPABASE_ANON,
+            Authorization: `Bearer ${SUPABASE_ANON}`,
+          },
           signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (res.ok) {
-          const rows = await res.json();
-          if (rows.length && rows[0].data) {
-            setData({ ...EMPTY_DATA, ...rows[0].data });
-            setLoadingData(false); // only mark loaded if we got real data back
-          } else {
-            console.warn("Supabase returned no data rows — staying in loading state to protect data");
-            setSupabaseError(true);
-          }
-        } else {
-          console.warn("Supabase fetch failed — staying in loading state to protect data");
-          setSupabaseError(true);
         }
-      } catch (err) {
-        console.error("Supabase load failed:", err);
-        setSupabaseError(true);
+      );
+
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        throw new Error("Supabase fetch failed");
       }
-    })();
-  }, []);
+
+      const rows = await res.json();
+
+      if (!rows.length || !rows[0]?.data) {
+        throw new Error("No data found in database");
+      }
+
+      const loadedData = {
+        ...EMPTY_DATA,
+        ...rows[0].data,
+      };
+
+      if (mounted) {
+        setData(loadedData);
+        lastSavedJson.current = JSON.stringify(loadedData);
+        setLoadingData(false);
+        setSupabaseError(false);
+
+        setTimeout(() => {
+          initialLoadComplete.current = true;
+        }, 1500);
+      }
+
+    } catch (err) {
+      console.error("Supabase load failed:", err);
+
+      if (mounted) {
+        setSupabaseError(true);
+
+        // IMPORTANT:
+        // NEVER set EMPTY_DATA automatically
+        // NEVER disable loading after failed fetch
+      }
+    }
+  })();
+
+  return () => {
+    mounted = false;
+  };
+}, []);
 
   const [notifySettings, setNotifySettings] = useState(() => loadNotifySettings());
   const [notifyModal, setNotifyModal] = useState(false);
@@ -2943,6 +2983,47 @@ export default function App() {
       backupToDrive(true);
     }
   }, [loadingData]);
+  useEffect(() => {
+  if (loadingData) return;
+
+  if (!initialLoadComplete.current) return;
+
+  if (!data) return;
+
+  const dangerousEmpty =
+    !data.manpower?.length &&
+    !data.equipment?.length &&
+    !data.projectDocs?.length &&
+    !data.scorpionDocs?.length &&
+    !data.projectAnalysis?.length;
+
+  // BLOCK EMPTY DATABASE OVERWRITE
+  if (dangerousEmpty) {
+    console.warn("Blocked dangerous empty autosave");
+    return;
+  }
+
+  const json = JSON.stringify(data);
+
+  // prevent unnecessary repeated saves
+  if (json === lastSavedJson.current) return;
+
+  const timer = setTimeout(async () => {
+    try {
+      await saveAppData(data);
+
+      lastSavedJson.current = json;
+
+      console.log("Autosave successful");
+
+    } catch (err) {
+      console.error("Autosave failed:", err);
+    }
+  }, 1200);
+
+  return () => clearTimeout(timer);
+
+}, [data, loadingData]);
 
   // Load EmailJS SDK once
   useEffect(() => {
