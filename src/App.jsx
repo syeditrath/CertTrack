@@ -4851,6 +4851,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
   const [finTab, setFinTab] = useState("overview");
   const [invoiceDetailView, setInvoiceDetailView] = useState(null);
   const [modal, setModal] = useState(null);
+  const [bulkWoModal, setBulkWoModal] = useState(false);
   const [fProj, setFProj] = useState("");
   const [selProj, setSelProj] = useState(null);
 
@@ -5188,6 +5189,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
                 <option value="">All Projects</option>
                 {renderProjectOptions(projects)}
               </select>
+              <Btn color={T.blue} onClick={() => setBulkWoModal(true)}>⬆ Bulk Upload</Btn>
               <Btn color={T.purple} solid onClick={() => setModal({mode:"add"})}>+ Add Work Order</Btn>
             </div>
           </div>
@@ -5214,7 +5216,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
                           {doc.date     && <Chip>Signed: {fmtDate(doc.date)}</Chip>}
                           {hasExp       && <Chip color={s.color}>Expires: {fmtDate(doc.expiryDate)}</Chip>}
                           {hasExp && daysUntil(doc.expiryDate)!==null && daysUntil(doc.expiryDate)<=90 && <Chip color={s.color}>{daysUntil(doc.expiryDate)>=0?`${daysUntil(doc.expiryDate)}d left`:`${Math.abs(daysUntil(doc.expiryDate))}d overdue`}</Chip>}
-                          {doc.fileLink && <FileLink href={doc.fileLink}/>}
+                          {(doc.fileLinks?.length ? doc.fileLinks : doc.fileLink ? [{url:doc.fileLink,label:""}] : []).map((l,i)=><FileLink key={i} href={l.url} label={l.label}/>)}
                         </div>
                         {doc.notes && <div style={{marginTop:6,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
                       </div>
@@ -5233,6 +5235,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
       {/* ── Modals ── */}
       {modal && finTab === "invoices"   && <InvoiceModal   mode={modal.mode} doc={modal.doc} projects={data.projects||[]} defaultProject={selProj} onClose={() => setModal(null)} onSave={saveDoc}/>}
       {modal && finTab === "workorders" && <WorkOrderModal mode={modal.mode} doc={modal.doc} projects={data.projects||[]}                          onClose={() => setModal(null)} onSave={saveDoc}/>}
+      {bulkWoModal && <BulkWorkOrderUpload projects={projects} onClose={()=>setBulkWoModal(false)} onImport={docs=>{ docs.forEach(d=>{ setData(prev=>({...prev,projectDocs:[...(prev.projectDocs||[]),{...d,id:uid(),subTab:"workorders"}]})); }); setBulkWoModal(false); showToast(`✓ ${docs.length} work order${docs.length!==1?"s":""} uploaded`); }}/>
     </div>
   );
 }
@@ -6246,12 +6249,160 @@ function CertificateModal({mode,doc,projects,onClose,onSave}) {
 }
 
 /* ── Work Order modal ────────────────────────────────────────────────────── */
+function BulkWorkOrderUpload({ projects, onClose, onImport }) {
+  const [rows, setRows] = useState([]); // [{file, name, project, status, url, error}]
+  const [uploading, setUploading] = useState(false);
+  const [done, setDone] = useState(false);
+  const inputRef = useRef();
+  const pNames = (projects||[]).map(p => typeof p==="string"?p:(p.name||"")).filter(Boolean);
+
+  const guessProject = filename => {
+    const lower = filename.toLowerCase();
+    return pNames.find(p => lower.includes(p.toLowerCase())) || "";
+  };
+
+  const handleFiles = files => {
+    const arr = Array.from(files).map(file => ({
+      file,
+      name: file.name.replace(/\.[^/.]+$/, ""),
+      project: guessProject(file.name),
+      status: "pending",
+      url: "",
+      error: "",
+    }));
+    setRows(prev => [...prev, ...arr]);
+  };
+
+  const setRow = (i, patch) => setRows(prev => prev.map((r, idx) => idx===i ? {...r,...patch} : r));
+
+  const upload = async () => {
+    setUploading(true);
+    const updated = [...rows];
+    for (let i = 0; i < updated.length; i++) {
+      if (updated[i].status === "done") continue;
+      setRows(r => r.map((x,idx) => idx===i ? {...x, status:"uploading"} : x));
+      try {
+        const url = await uploadToSupabase(updated[i].file, "work-orders");
+        updated[i] = {...updated[i], url, status:"done", error:""};
+      } catch(e) {
+        updated[i] = {...updated[i], status:"error", error: e.message||"Upload failed"};
+      }
+      setRows([...updated]);
+    }
+    setUploading(false);
+    setDone(true);
+  };
+
+  const finish = () => {
+    const docs = rows.filter(r=>r.status==="done").map(r=>({
+      name: r.name,
+      project: r.project,
+      fileLinks: [{url:r.url, label:r.name}],
+      fileLink: r.url,
+    }));
+    onImport(docs);
+  };
+
+  const allDone = rows.length > 0 && rows.every(r=>r.status==="done"||r.status==="error");
+  const successCount = rows.filter(r=>r.status==="done").length;
+  const statusColor = s => s==="done"?T.green:s==="error"?T.red:s==="uploading"?T.gold:T.textMuted;
+  const statusIcon  = s => s==="done"?"✓":s==="error"?"✕":s==="uploading"?"⏳":"○";
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:T.card,borderRadius:18,padding:28,width:"min(700px,95vw)",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.4)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>
+            ⬆️ BULK WORK ORDER UPLOAD
+          </div>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:T.textMuted,fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+
+        {/* Drop zone */}
+        <div
+          onClick={()=>inputRef.current.click()}
+          onDragOver={e=>e.preventDefault()}
+          onDrop={e=>{e.preventDefault();handleFiles(e.dataTransfer.files);}}
+          style={{border:`2px dashed ${T.purple}66`,borderRadius:12,padding:"28px 20px",textAlign:"center",cursor:"pointer",background:T.bg,marginBottom:18,transition:"border-color .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor=T.purple}
+          onMouseLeave={e=>e.currentTarget.style.borderColor=T.purple+"66"}
+        >
+          <div style={{fontSize:32,marginBottom:8}}>📂</div>
+          <div style={{fontWeight:700,color:T.text,fontSize:15}}>Drop files here or click to browse</div>
+          <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>PDF, Word, Excel — one record created per file</div>
+          <input ref={inputRef} type="file" multiple style={{display:"none"}} onChange={e=>{handleFiles(e.target.files);e.target.value="";}}/>
+        </div>
+
+        {/* File rows */}
+        {rows.length > 0 && (
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
+            <div style={{fontWeight:700,fontSize:13,color:T.textSub,marginBottom:2}}>{rows.length} file{rows.length!==1?"s":""} queued</div>
+            {rows.map((r,i) => (
+              <div key={i} style={{display:"flex",gap:8,alignItems:"center",background:T.bg,borderRadius:10,padding:"10px 12px",border:`1px solid ${statusColor(r.status)}33`}}>
+                <span style={{fontSize:16,color:statusColor(r.status),flexShrink:0}}>{statusIcon(r.status)}</span>
+                <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
+                  <input
+                    value={r.name}
+                    onChange={e=>setRow(i,{name:e.target.value})}
+                    disabled={uploading||r.status==="done"}
+                    placeholder="Work order name…"
+                    style={{background:"transparent",border:"none",borderBottom:`1px solid ${T.border}`,color:T.text,fontSize:13,fontWeight:600,outline:"none",padding:"2px 0",width:"100%"}}
+                  />
+                  <select
+                    value={r.project}
+                    onChange={e=>setRow(i,{project:e.target.value})}
+                    disabled={uploading||r.status==="done"}
+                    style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 8px",fontSize:12,color:r.project?T.text:T.textMuted,outline:"none",colorScheme:"light"}}
+                  >
+                    <option value="">Assign to project (optional)…</option>
+                    {pNames.map(p=><option key={p} value={p}>{p}</option>)}
+                  </select>
+                  {r.error && <div style={{fontSize:11,color:T.red,fontWeight:600}}>{r.error}</div>}
+                </div>
+                {r.status!=="done" && r.status!=="uploading" && (
+                  <button onClick={()=>setRows(prev=>prev.filter((_,idx)=>idx!==i))} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,flexShrink:0}}>✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          {!done
+            ? <button onClick={upload} disabled={uploading||rows.length===0} style={{background:uploading||rows.length===0?"#555":`linear-gradient(135deg,${T.purple},#7c3aed)`,border:"none",color:"#fff",borderRadius:9,padding:"10px 22px",fontSize:13,fontWeight:700,cursor:uploading||rows.length===0?"not-allowed":"pointer"}}>
+                {uploading?"⏳ Uploading…":"⬆️ Upload All"}
+              </button>
+            : <button onClick={finish} disabled={successCount===0} style={{background:successCount===0?"#555":`linear-gradient(135deg,${T.green},#059669)`,border:"none",color:"#fff",borderRadius:9,padding:"10px 22px",fontSize:13,fontWeight:700,cursor:successCount===0?"not-allowed":"pointer"}}>
+                ✓ Save {successCount} Work Order{successCount!==1?"s":""}
+              </button>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
+  const initLinks = () => {
+    if (doc?.fileLinks?.length) return doc.fileLinks;
+    if (doc?.fileLink) return [{ url: doc.fileLink, label: "" }];
+    return [{ url: "", label: "" }];
+  };
   const [f,setF]=useState(doc||{});
+  const [links,setLinks]=useState(initLinks);
   const set=k=>v=>setF(p=>({...p,[k]:v}));
+  const setLink=(i,field)=>v=>setLinks(ls=>ls.map((l,idx)=>idx===i?{...l,[field]:v}:l));
+  const addLink=()=>setLinks(ls=>[...ls,{url:"",label:""}]);
+  const removeLink=i=>setLinks(ls=>ls.filter((_,idx)=>idx!==i));
   return (
     <FormModal title={`${mode==="add"?"ADD":"EDIT"} WORK ORDER / AGREEMENT`} color={T.purple} onClose={onClose}
-      onSave={()=>{if(!f.name){alert("Title required");return;}onSave(f,mode);}}>
+      onSave={()=>{
+        if(!f.name){alert("Title required");return;}
+        const cleanLinks=links.filter(l=>l.url.trim());
+        onSave({...f, fileLinks:cleanLinks, fileLink:cleanLinks[0]?.url||""},mode);
+      }}>
       <FieldRow label="Title *"><FInput value={f.name||""} onChange={set("name")} color={T.purple}/></FieldRow>
       <FieldRow label="Project *">
         <FSelect value={f.project||""} onChange={set("project")} color={T.purple}>
@@ -6264,7 +6415,18 @@ function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
       <FieldRow label="Contract Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.purple}/></FieldRow>
       <FieldRow label="Date Signed"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.purple}/></FieldRow>
       <FieldRow label="Expiry / End Date"><FInput type="date" value={f.expiryDate||""} onChange={set("expiryDate")} color={T.purple}/></FieldRow>
-      <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
+      <FieldRow label="File Links">
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {links.map((l,i)=>(
+            <div key={i} style={{display:"flex",gap:6,alignItems:"center"}}>
+              <FInput value={l.label||""} onChange={setLink(i,"label")} color={T.purple} placeholder="Label (optional)…" style={{width:120,flexShrink:0}}/>
+              <FLink value={l.url||""} onChange={setLink(i,"url")} style={{flex:1}}/>
+              {links.length>1&&<button type="button" onClick={()=>removeLink(i)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:18,lineHeight:1,padding:"0 4px"}} title="Remove">✕</button>}
+            </div>
+          ))}
+          <button type="button" onClick={addLink} style={{alignSelf:"flex-start",background:T.card,border:`1px dashed ${T.purple}66`,color:T.purple,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Add Another File Link</button>
+        </div>
+      </FieldRow>
       <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.purple}/></FieldRow>
     </FormModal>
   );
@@ -8498,12 +8660,12 @@ function FilePreviewModal({url,onClose}) {
 const Chip     = ({children,color}) => <span style={{background:T.bg,border:`1px solid ${T.borderLight}`,borderRadius:6,padding:"2px 9px",fontSize:12,color:color||T.textSub,fontWeight:500}}>{children}</span>;
 const Tag      = ({children,color}) => <span style={{background:`${color}18`,border:`1px solid ${color}33`,borderRadius:5,padding:"2px 8px",fontSize:11,color,fontWeight:700}}>{children}</span>;
 const ABtn     = ({onClick,color,children}) => <button onClick={onClick} style={{width:30,height:30,borderRadius:7,border:`1px solid ${color}33`,background:`${color}18`,color,fontSize:13,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{children}</button>;
-const FileLink = ({href}) => {
+const FileLink = ({href, label}) => {
   if(!href) return null;
   return (
     <a href={href} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
       style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:6,padding:"3px 10px",fontSize:12,color:T.blue,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4}}>
-      📎 View File
+      📎 {label||"View File"}
     </a>
   );
 };
