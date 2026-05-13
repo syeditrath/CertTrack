@@ -5829,7 +5829,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
               {doc.notes&&<div style={{marginTop:5,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
             </div>
             <div style={{display:"flex",gap:6,flexShrink:0}}>
-              <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
+              {doc.fileLink&&<a href={doc.fileLink} download onClick={e=>e.stopPropagation()} title="Download file" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:30,height:30,borderRadius:7,background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,fontSize:14,textDecoration:"none",cursor:"pointer"}}>⬇</a>}
+              {isAdmin && <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>}
               {isAdmin && <ABtn color={T.red}  onClick={()=>delDoc(doc.id)}>✕</ABtn>}
             </div>
           </div>
