@@ -6108,7 +6108,7 @@ function InvoiceCard({ doc, delay, onEdit, onDel }) {
 
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>
-        {isAdmin && {isAdmin && <ABtn color={T.red} onClick={onDel}>✕</ABtn>}}
+        {isAdmin && <ABtn color={T.red} onClick={onDel}>✕</ABtn>}
       </div>
     </div>
   );
