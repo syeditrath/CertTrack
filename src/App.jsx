@@ -5235,7 +5235,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
       {/* ── Modals ── */}
       {modal && finTab === "invoices"   && <InvoiceModal   mode={modal.mode} doc={modal.doc} projects={data.projects||[]} defaultProject={selProj} onClose={() => setModal(null)} onSave={saveDoc}/>}
       {modal && finTab === "workorders" && <WorkOrderModal mode={modal.mode} doc={modal.doc} projects={data.projects||[]}                          onClose={() => setModal(null)} onSave={saveDoc}/>}
-      {bulkWoModal && <BulkWorkOrderUpload projects={projects} onClose={()=>setBulkWoModal(false)} onImport={docs=>{ docs.forEach(d=>{ setData(prev=>({...prev,projectDocs:[...(prev.projectDocs||[]),{...d,id:uid(),subTab:"workorders"}]})); }); setBulkWoModal(false); showToast(`✓ ${docs.length} work order${docs.length!==1?"s":""} uploaded`); }}/>}
+      {bulkWoModal && <BulkWorkOrderUpload projects={projects} onClose={()=>setBulkWoModal(false)} onImport={docs=>{ setData(prev=>({...prev,projectDocs:[...(prev.projectDocs||[]),...docs.map(d=>({...d,id:uid(),subTab:"workorders"}))]})); setBulkWoModal(false); showToast(`✓ ${docs.length} work order${docs.length!==1?"s":""} uploaded`); }}/>}
     </div>
   );
 }
@@ -5976,7 +5976,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
       {modal && subTab==="certificates"  && <CertificateModal  mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} rigs={data.rigs||[]} onClose={()=>setModal(null)} onSave={saveDoc}/>}
-      {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ rows.forEach(r=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...r,id:uid(),subTab}]})); }); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
+      {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,...rows.map(r=>({...r,id:uid(),subTab}))]})); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
       {multiPdfModal && (
   <MultiPdfCertUpload
     project={multiPdfModal.project}
