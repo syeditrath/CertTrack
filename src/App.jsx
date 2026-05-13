@@ -2825,6 +2825,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go }) {
 export default function App() {
   const [data, setData] = useState(EMPTY_DATA);
   const [loadingData, setLoadingData] = useState(true);
+  const [supabaseError, setSupabaseError] = useState(false);
   const [page, setPage] = useState("dashboard");
   const [sideOpen, setSideOpen] = useState(false);
   const [toast, setToast] = useState(null);
@@ -2864,12 +2865,20 @@ export default function App() {
         clearTimeout(timeout);
         if (res.ok) {
           const rows = await res.json();
-          if (rows.length && rows[0].data) setData({ ...EMPTY_DATA, ...rows[0].data });
+          if (rows.length && rows[0].data) {
+            setData({ ...EMPTY_DATA, ...rows[0].data });
+            setLoadingData(false); // only mark loaded if we got real data back
+          } else {
+            console.warn("Supabase returned no data rows — staying in loading state to protect data");
+            setSupabaseError(true);
+          }
+        } else {
+          console.warn("Supabase fetch failed — staying in loading state to protect data");
+          setSupabaseError(true);
         }
       } catch (err) {
         console.error("Supabase load failed:", err);
-      } finally {
-        setLoadingData(false);
+        setSupabaseError(true);
       }
     })();
   }, []);
@@ -2952,10 +2961,17 @@ export default function App() {
 
   useEffect(() => {
     if (loadingData) return;
-    // Safety guard: never save if all core arrays are empty (prevents wiping real data on load failure)
-    const isEmpty = !data.manpower?.length && !data.equipment?.length && !data.projects?.length
-      && !data.scorpionDocs?.length && !data.projectDocs?.length && !data.invoices?.length;
-    if (isEmpty) return;
+    // Strict guard: only save if there is real user-entered data beyond just the project list
+    const hasRealData = (data.manpower?.length > 0)
+      || (data.equipment?.length > 0)
+      || (data.scorpionDocs?.length > 0)
+      || (data.projectDocs?.length > 0)
+      || (data.invoices?.length > 0)
+      || (data.workOrders?.length > 0)
+      || (data.costSheets?.length > 0)
+      || (data.rigs?.length > 0)
+      || (data.projectAnalysis?.some(p => p.poValue || p.dailyReports?.length > 0));
+    if (!hasRealData) return;
 
     const t = setTimeout(() => {
       saveAppData(data).catch(err => { console.error("Save failed:", err); });
@@ -2991,18 +3007,28 @@ export default function App() {
 
   if (loadingData) {
     return (
-      <div style={{
-        height: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: T.bg,
-        color: T.text,
-        fontFamily: "'Barlow Condensed',sans-serif",
-        fontSize: 24,
-        fontWeight: 700
-      }}>
-        Loading shared data...
+      <div style={{height:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:T.bg,color:T.text,fontFamily:"'Barlow Condensed',sans-serif",gap:16,padding:24}}>
+        {supabaseError ? (
+          <>
+            <div style={{fontSize:48}}>⚠️</div>
+            <div style={{fontSize:28,fontWeight:800,color:"#ef4444"}}>DATABASE CONNECTION ERROR</div>
+            <div style={{fontSize:15,color:T.textMuted,textAlign:"center",maxWidth:480,lineHeight:1.6}}>
+              Unable to connect to the database. Your data is safe — this is a connection issue.<br/>
+              Please check your internet connection and try again.
+            </div>
+            <button onClick={()=>window.location.reload()} style={{background:"#ef4444",border:"none",color:"#fff",borderRadius:10,padding:"12px 28px",fontSize:16,fontWeight:800,cursor:"pointer",marginTop:8}}>
+              🔄 Retry Connection
+            </button>
+            <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>
+              If this persists, contact your system administrator.
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{fontSize:32,fontWeight:800}}>SCORPION PORTAL</div>
+            <div style={{fontSize:16,color:T.textMuted}}>Connecting to database...</div>
+          </>
+        )}
       </div>
     );
   }
