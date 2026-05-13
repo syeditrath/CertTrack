@@ -601,7 +601,11 @@ async function fetchAppData() {
     },
   });
 
-  if (!res.ok) throw new Error("Failed to load app data");
+  if (!res.ok) {
+  const err = await res.text();
+  console.error("Supabase save error:", err);
+  throw new Error(err || "Failed to save app data");
+}
 
   const rows = await res.json();
   if (!rows.length || !rows[0].data) return EMPTY_DATA;
