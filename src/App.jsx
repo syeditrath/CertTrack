@@ -2549,7 +2549,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
               );
             })}
           </div>
-        ) : null)}
+        ))}
       </div>
 
       {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} workOrders={(data.projectDocs||[]).filter(d=>d.subTab==="workorders")} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
@@ -5235,7 +5235,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
       {/* ── Modals ── */}
       {modal && finTab === "invoices"   && <InvoiceModal   mode={modal.mode} doc={modal.doc} projects={data.projects||[]} defaultProject={selProj} onClose={() => setModal(null)} onSave={saveDoc}/>}
       {modal && finTab === "workorders" && <WorkOrderModal mode={modal.mode} doc={modal.doc} projects={data.projects||[]}                          onClose={() => setModal(null)} onSave={saveDoc}/>}
-      {bulkWoModal && <BulkWorkOrderUpload projects={projects} onClose={()=>setBulkWoModal(false)} onImport={docs=>{ docs.forEach(d=>{ setData(prev=>({...prev,projectDocs:[...(prev.projectDocs||[]),{...d,id:uid(),subTab:"workorders"}]})); }); setBulkWoModal(false); showToast(`✓ ${docs.length} work order${docs.length!==1?"s":""} uploaded`); }}/>
+      {bulkWoModal && <BulkWorkOrderUpload projects={projects} onClose={()=>setBulkWoModal(false)} onImport={docs=>{ docs.forEach(d=>{ setData(prev=>({...prev,projectDocs:[...(prev.projectDocs||[]),{...d,id:uid(),subTab:"workorders"}]})); }); setBulkWoModal(false); showToast(`✓ ${docs.length} work order${docs.length!==1?"s":""} uploaded`); }}/>}
     </div>
   );
 }
