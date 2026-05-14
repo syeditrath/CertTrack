@@ -601,11 +601,7 @@ async function fetchAppData() {
     },
   });
 
-  if (!res.ok) {
-  const err = await res.text();
-  console.error("Supabase save error:", err);
-  throw new Error(err || "Failed to save app data");
-}
+  if (!res.ok) throw new Error("Failed to load app data");
 
   const rows = await res.json();
   if (!rows.length || !rows[0].data) return EMPTY_DATA;
@@ -4856,6 +4852,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
   const [invoiceDetailView, setInvoiceDetailView] = useState(null);
   const [modal, setModal] = useState(null);
   const [bulkWoModal, setBulkWoModal] = useState(false);
+  const [bulkInvModal, setBulkInvModal] = useState(false);
   const [fProj, setFProj] = useState("");
   const [selProj, setSelProj] = useState(null);
 
@@ -5136,7 +5133,10 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>INVOICES</div>
                 <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>Select a project to view and manage invoices</div>
               </div>
-              <Btn color={T.green} solid onClick={() => setModal({mode:"add"})}>+ Add Invoice</Btn>
+              <div style={{display:"flex",gap:8}}>
+                <Btn color={T.green} onClick={() => setBulkInvModal(true)}>⬆ Bulk Import</Btn>
+                <Btn color={T.green} solid onClick={() => setModal({mode:"add"})}>+ Add Invoice</Btn>
+              </div>
             </div>
             {projects.length === 0
               ? <Empty icon="🧾" label="No projects yet" sub="Add projects via Manage Projects in the sidebar" color={T.green} onAdd={() => onManageProjects && onManageProjects()}/>
@@ -5240,6 +5240,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
       {modal && finTab === "invoices"   && <InvoiceModal   mode={modal.mode} doc={modal.doc} projects={data.projects||[]} defaultProject={selProj} onClose={() => setModal(null)} onSave={saveDoc}/>}
       {modal && finTab === "workorders" && <WorkOrderModal mode={modal.mode} doc={modal.doc} projects={data.projects||[]}                          onClose={() => setModal(null)} onSave={saveDoc}/>}
       {bulkWoModal && <BulkWorkOrderUpload projects={projects} onClose={()=>setBulkWoModal(false)} onImport={docs=>{ setData(prev=>({...prev,projectDocs:[...(prev.projectDocs||[]),...docs.map(d=>({...d,id:uid(),subTab:"workorders"}))]})); setBulkWoModal(false); showToast(`✓ ${docs.length} work order${docs.length!==1?"s":""} uploaded`); }}/>}
+      {bulkInvModal && <BulkInvoiceUpload projects={projects} onClose={()=>setBulkInvModal(false)} onImport={rows=>{ setData(prev=>({...prev,projectDocs:[...(prev.projectDocs||[]),...rows.map(r=>({...r,id:uid(),subTab:"invoices"}))]})); setBulkInvModal(false); showToast(`✓ ${rows.length} invoice${rows.length!==1?"s":""} imported`); }}/>}
     </div>
   );
 }
@@ -6253,6 +6254,354 @@ function CertificateModal({mode,doc,projects,onClose,onSave}) {
 }
 
 /* ── Work Order modal ────────────────────────────────────────────────────── */
+/* ─── Bulk Invoice Upload (Excel / CSV) ──────────────────────────────────── */
+function BulkInvoiceUpload({ projects, onClose, onImport }) {
+  const [step, setStep]         = useState(1); // 1=upload, 2=preview
+  const [rows, setRows]         = useState([]);
+  const [errors, setErrors]     = useState([]);
+  const [fileName, setFileName] = useState("");
+  const fileRef                 = useRef();
+  const pNames = (projects||[]).map(p => typeof p==="string" ? p : (p.name||"")).filter(Boolean);
+
+  // Flexible column header map (upper-cased keys)
+  const COL_MAP = {
+    // Invoice title / name
+    "INVOICE TITLE":"name","INVOICE NAME":"name","TITLE":"name","NAME":"name","DESCRIPTION":"name","DESC":"name",
+    // Project
+    "PROJECT":"project","PROJECT NAME":"project",
+    // Invoice / ref number
+    "INVOICE NO":"refNo","INVOICE NO.":"refNo","INVOICE NUMBER":"refNo","INV NO":"refNo","REF NO":"refNo","REF NO.":"refNo","REFERENCE":"refNo","REF":"refNo",
+    // Job number
+    "JOB NO":"jobNo","JOB NO.":"jobNo","JOB NUMBER":"jobNo","JOB":"jobNo","PHASE":"jobNo",
+    // Amount / value
+    "AMOUNT":"amount","AMOUNT (SAR)":"amount","VALUE":"amount","INVOICE VALUE":"amount","INVOICE VALUE (SAR)":"amount","SAR":"amount","TOTAL":"amount","TOTAL (SAR)":"amount",
+    // Due date
+    "DUE DATE":"dueDate","DUE":"dueDate","PAYMENT DATE":"dueDate","DATE DUE":"dueDate",
+    // Invoice date
+    "DATE":"date","INVOICE DATE":"date","ISSUED DATE":"date","ISSUE DATE":"date",
+    // Invoice type
+    "TYPE":"invoiceType","INVOICE TYPE":"invoiceType","KIND":"invoiceType",
+    // Payment status
+    "STATUS":"paymentStatus","PAYMENT STATUS":"paymentStatus","PAYMENT":"paymentStatus",
+    // Notes
+    "NOTES":"notes","REMARKS":"notes","COMMENT":"notes","COMMENTS":"notes",
+    // File link
+    "FILE":"fileLink","FILE LINK":"fileLink","LINK":"fileLink","URL":"fileLink","ATTACHMENT":"fileLink",
+  };
+
+  const parseFile = file => {
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type:"binary", cellDates:true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
+        if (!raw.length) { setErrors(["File appears to be empty."]); return; }
+
+        // Find header row (first row with recognisable columns)
+        let headerRowIdx = 0;
+        for (let r = 0; r < Math.min(6, raw.length); r++) {
+          const upper = raw[r].map(c => String(c).toUpperCase().trim());
+          if (upper.some(u => COL_MAP[u])) { headerRowIdx = r; break; }
+        }
+
+        const headers = raw[headerRowIdx].map(c => String(c).toUpperCase().trim());
+        const colIdx  = {};
+        headers.forEach((h, i) => { if (COL_MAP[h]) colIdx[COL_MAP[h]] = i; });
+
+        if (!colIdx.amount && !colIdx.name) {
+          setErrors(["Could not find required columns. Make sure your file has columns like: Invoice Title, Amount, Due Date, Project."]);
+          return;
+        }
+
+        const parsed = [];
+        const errs   = [];
+        for (let r = headerRowIdx + 1; r < raw.length; r++) {
+          const row = raw[r];
+          if (row.every(c => String(c).trim() === "")) continue; // skip blank rows
+
+          const get = key => {
+            const i = colIdx[key];
+            return i !== undefined ? String(row[i] ?? "").trim() : "";
+          };
+
+          const dateVal = v => {
+            if (!v) return "";
+            if (v instanceof Date) return v.toISOString().slice(0, 10);
+            if (typeof v === "number") {
+              const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+              return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+            }
+            const s = String(v).trim();
+            const d = new Date(s);
+            return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+          };
+
+          const rawDate = colIdx.dueDate !== undefined ? row[colIdx.dueDate] : "";
+          const rawInvoiceDate = colIdx.date !== undefined ? row[colIdx.date] : "";
+
+          const name    = get("name")   || `Invoice ${r - headerRowIdx}`;
+          const project = get("project") || "";
+          const amount  = parseFloat(get("amount").replace(/[^0-9.-]/g, "")) || "";
+          const dueDate = dateVal(rawDate);
+          const date    = dateVal(rawInvoiceDate);
+          const refNo   = get("refNo");
+          const jobNo   = get("jobNo");
+          const notes   = get("notes");
+          const fileLink= get("fileLink");
+
+          // Normalise invoiceType
+          const rawType = get("invoiceType").toLowerCase();
+          const invoiceType = rawType.includes("adv") ? "Advance" : "Income";
+
+          // Normalise paymentStatus
+          const rawStatus = get("paymentStatus").toLowerCase();
+          const paymentStatus = rawStatus.includes("paid") && !rawStatus.includes("partial") ? "Paid"
+            : rawStatus.includes("partial") ? "Partial"
+            : "Pending";
+
+          if (!amount && amount !== 0) errs.push(`Row ${r - headerRowIdx}: No amount found`);
+
+          parsed.push({ name, project, amount, dueDate, date, refNo, jobNo, invoiceType, paymentStatus, notes, fileLink });
+        }
+
+        setRows(parsed);
+        setErrors(errs);
+        if (parsed.length) setStep(2);
+      } catch(err) {
+        setErrors(["Failed to parse file: " + (err.message || "unknown error")]);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleFilePick = e => { if (e.target.files[0]) { parseFile(e.target.files[0]); e.target.value=""; } };
+  const onDrop = e => { e.preventDefault(); if (e.dataTransfer.files[0]) parseFile(e.dataTransfer.files[0]); };
+
+  const updateRow = (i, key, val) => setRows(prev => prev.map((r, idx) => idx===i ? {...r, [key]:val} : r));
+
+  const confirm = () => onImport(rows);
+
+  const statusColor = s => s==="Paid"?T.green:s==="Partial"?T.gold:T.red;
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:T.card,borderRadius:20,width:"min(860px,96vw)",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(0,0,0,0.5)"}} onClick={e=>e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{padding:"20px 26px 16px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>
+                ⬆ BULK INVOICE IMPORT
+              </div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>
+                Upload an Excel or CSV file — one row per invoice
+              </div>
+            </div>
+            <button onClick={onClose} style={{background:"transparent",border:"none",color:T.textMuted,fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
+          </div>
+
+          {/* Step indicator */}
+          <div style={{display:"flex",gap:6,marginTop:14,alignItems:"center"}}>
+            {["Upload File","Preview & Confirm"].map((label,i) => (
+              <Fragment key={label}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:step>i?T.green:step===i+1?T.greenDim:T.border,border:`2px solid ${step>i?T.green:step===i+1?T.green:T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:step>i?"#000":step===i+1?T.green:T.textMuted}}>
+                    {step>i+1?"✓":i+1}
+                  </div>
+                  <span style={{fontSize:12,fontWeight:step===i+1?700:500,color:step===i+1?T.text:T.textMuted}}>{label}</span>
+                </div>
+                {i<1&&<div style={{width:24,height:2,background:step>1?T.green:T.border,borderRadius:1}}/>}
+              </Fragment>
+            ))}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{flex:1,overflowY:"auto",padding:"20px 26px"}}>
+
+          {/* ── Step 1: Upload ── */}
+          {step===1 && (
+            <div>
+              {/* Drop zone */}
+              <div
+                onDragOver={e=>e.preventDefault()} onDrop={onDrop}
+                onClick={()=>fileRef.current.click()}
+                style={{border:`2px dashed ${T.green}55`,borderRadius:14,padding:"44px 24px",textAlign:"center",cursor:"pointer",background:`${T.green}06`,marginBottom:20,transition:"all .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background=`${T.green}12`;e.currentTarget.style.borderColor=T.green;}}
+                onMouseLeave={e=>{e.currentTarget.style.background=`${T.green}06`;e.currentTarget.style.borderColor=`${T.green}55`;}}
+              >
+                <div style={{fontSize:40,marginBottom:10}}>📊</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,marginBottom:6}}>
+                  Drag & drop your Excel or CSV file here
+                </div>
+                <div style={{fontSize:13,color:T.textMuted}}>or click to browse · .xlsx, .xls, .csv supported</div>
+                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={handleFilePick}/>
+              </div>
+
+              {errors.length > 0 && (
+                <div style={{background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+                  {errors.map((e,i) => <div key={i} style={{fontSize:13,color:T.red,fontWeight:600}}>⚠ {e}</div>)}
+                </div>
+              )}
+
+              {/* Column guide */}
+              <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 20px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,color:T.textSub,marginBottom:10,letterSpacing:".5px"}}>EXPECTED COLUMNS (flexible — headers are auto-detected)</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:6}}>
+                  {[
+                    {col:"Invoice Title",req:true,note:"Required"},
+                    {col:"Project",req:false,note:"Match project name"},
+                    {col:"Amount (SAR)",req:true,note:"Required"},
+                    {col:"Due Date",req:false,note:"YYYY-MM-DD or DD/MM/YYYY"},
+                    {col:"Invoice No.",req:false,note:"Reference number"},
+                    {col:"Job No.",req:false,note:"Phase / job grouping"},
+                    {col:"Invoice Type",req:false,note:"Income or Advance"},
+                    {col:"Payment Status",req:false,note:"Pending / Paid / Partial"},
+                    {col:"Invoice Date",req:false,note:"Date of issue"},
+                    {col:"Notes",req:false,note:"Optional remarks"},
+                  ].map(({col,req,note}) => (
+                    <div key={col} style={{display:"flex",alignItems:"flex-start",gap:6}}>
+                      <span style={{color:req?T.green:T.textMuted,fontWeight:700,fontSize:12,flexShrink:0,marginTop:1}}>{req?"●":"○"}</span>
+                      <div>
+                        <div style={{fontSize:12,fontWeight:700,color:T.text}}>{col}</div>
+                        <div style={{fontSize:10,color:T.textMuted}}>{note}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 2: Preview ── */}
+          {step===2 && (
+            <div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
+                <div>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{rows.length} invoice{rows.length!==1?"s":""} detected</span>
+                  <span style={{fontSize:12,color:T.textMuted,marginLeft:10}}>from {fileName}</span>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{setStep(1);setRows([]);setErrors([]);}} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>← Re-upload</button>
+                  <span style={{fontSize:12,color:T.textMuted,alignSelf:"center"}}>Review and edit before confirming</span>
+                </div>
+              </div>
+
+              {errors.length > 0 && (
+                <div style={{background:T.goldDim,border:`1px solid ${T.gold}44`,borderRadius:10,padding:"10px 14px",marginBottom:12}}>
+                  {errors.map((e,i) => <div key={i} style={{fontSize:12,color:T.gold}}>⚠ {e}</div>)}
+                </div>
+              )}
+
+              <div style={{display:"grid",gap:8}}>
+                {rows.map((row,i) => (
+                  <div key={i} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.green}`,borderRadius:10,padding:"12px 16px",animationDelay:`${i*.02}s`}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>INVOICE TITLE *</label>
+                        <input value={row.name} onChange={e=>updateRow(i,"name",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>PROJECT</label>
+                        <select value={row.project} onChange={e=>updateRow(i,"project",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:row.project?T.text:T.textMuted,outline:"none",colorScheme:"light"}}>
+                          <option value="">— select —</option>
+                          {pNames.map(p=><option key={p} value={p}>{p}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>AMOUNT (SAR) *</label>
+                        <input type="number" value={row.amount} onChange={e=>updateRow(i,"amount",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${!row.amount?T.red+"88":T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=row.amount?T.border:T.red+"88"}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>DUE DATE</label>
+                        <input type="date" value={row.dueDate} onChange={e=>updateRow(i,"dueDate",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>INVOICE NO.</label>
+                        <input value={row.refNo} onChange={e=>updateRow(i,"refNo",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>JOB NO.</label>
+                        <input value={row.jobNo} onChange={e=>updateRow(i,"jobNo",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                      {/* Invoice Type toggle */}
+                      <div style={{display:"flex",gap:4,background:T.card,borderRadius:8,padding:3,border:`1px solid ${T.border}`}}>
+                        {["Income","Advance"].map(t=>(
+                          <button key={t} onClick={()=>updateRow(i,"invoiceType",t)}
+                            style={{padding:"4px 10px",borderRadius:6,border:"none",fontSize:11,fontWeight:700,cursor:"pointer",background:row.invoiceType===t?(t==="Income"?T.blueDim:T.purpleDim):"transparent",color:row.invoiceType===t?(t==="Income"?T.blue:T.purple):T.textMuted,transition:"all .15s"}}>
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Payment status toggle */}
+                      <div style={{display:"flex",gap:4,background:T.card,borderRadius:8,padding:3,border:`1px solid ${T.border}`}}>
+                        {["Pending","Paid","Partial"].map(s=>(
+                          <button key={s} onClick={()=>updateRow(i,"paymentStatus",s)}
+                            style={{padding:"4px 10px",borderRadius:6,border:"none",fontSize:11,fontWeight:700,cursor:"pointer",background:row.paymentStatus===s?`${statusColor(s)}22`:"transparent",color:row.paymentStatus===s?statusColor(s):T.textMuted,transition:"all .15s"}}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Amount preview */}
+                      {row.amount && (
+                        <span style={{fontSize:13,fontWeight:700,color:T.green,marginLeft:"auto"}}>
+                          SAR {Number(row.amount).toLocaleString()}
+                        </span>
+                      )}
+                      {/* Remove row */}
+                      <button onClick={()=>setRows(prev=>prev.filter((_,idx)=>idx!==i))}
+                        style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer",flexShrink:0}}>✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Summary bar */}
+              {rows.length > 0 && (
+                <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:10,padding:"10px 16px",marginTop:14,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.green}}>{rows.length} invoice{rows.length!==1?"s":""}</span>
+                  <span style={{fontSize:13,color:T.textMuted}}>·</span>
+                  <span style={{fontSize:14,fontWeight:700,color:T.green}}>SAR {rows.reduce((s,r)=>s+(parseFloat(r.amount)||0),0).toLocaleString()} total value</span>
+                  <span style={{fontSize:13,color:T.textMuted}}>·</span>
+                  <span style={{fontSize:12,color:T.textMuted}}>{rows.filter(r=>r.dueDate).length} have due dates</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"14px 26px 22px",borderTop:`1px solid ${T.border}`,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end",alignItems:"center"}}>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"11px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          {step===2 && rows.length>0 && (
+            <button onClick={confirm}
+              disabled={rows.some(r=>!r.name||!r.amount)}
+              style={{background:`linear-gradient(135deg,${T.green},#059669)`,border:"none",color:"#000",borderRadius:10,padding:"11px 28px",fontSize:14,fontWeight:800,cursor:rows.some(r=>!r.name||!r.amount)?"not-allowed":"pointer",opacity:rows.some(r=>!r.name||!r.amount)?0.6:1,display:"flex",alignItems:"center",gap:8,boxShadow:`0 4px 16px ${T.green}44`}}>
+              ✓ Import {rows.length} Invoice{rows.length!==1?"s":""}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BulkWorkOrderUpload({ projects, onClose, onImport }) {
   const [rows, setRows] = useState([]); // [{file, name, project, status, url, error}]
   const [uploading, setUploading] = useState(false);
