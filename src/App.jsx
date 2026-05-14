@@ -4853,6 +4853,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
   const [modal, setModal] = useState(null);
   const [bulkWoModal, setBulkWoModal] = useState(false);
   const [bulkInvModal, setBulkInvModal] = useState(false);
+  const [multiPdfInvModal, setMultiPdfInvModal] = useState(null); // {project?:string}
   const [fProj, setFProj] = useState("");
   const [selProj, setSelProj] = useState(null);
 
@@ -5119,6 +5120,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selProj}</div>
                 <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>{projInvs.length} invoice{projInvs.length!==1?"s":""} · Total: <span style={{color:T.green,fontWeight:700}}>SAR {projInvTotal.toLocaleString()}</span></div>
               </div>
+              <Btn color={T.teal} onClick={() => setMultiPdfInvModal({project:selProj})}>📄 Bulk PDF Upload</Btn>
               <Btn color={T.green} solid onClick={() => setModal({mode:"add",doc:{project:selProj}})}>+ Add Invoice</Btn>
             </div>
             {projInvs.length === 0
@@ -5135,6 +5137,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
               </div>
               <div style={{display:"flex",gap:8}}>
                 <Btn color={T.green} onClick={() => setBulkInvModal(true)}>⬆ Bulk Import</Btn>
+                <Btn color={T.teal} onClick={() => setMultiPdfInvModal({})}>📄 Bulk PDF Upload</Btn>
                 <Btn color={T.green} solid onClick={() => setModal({mode:"add"})}>+ Add Invoice</Btn>
               </div>
             </div>
@@ -5241,6 +5244,21 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
       {modal && finTab === "workorders" && <WorkOrderModal mode={modal.mode} doc={modal.doc} projects={data.projects||[]}                          onClose={() => setModal(null)} onSave={saveDoc}/>}
       {bulkWoModal && <BulkWorkOrderUpload projects={projects} onClose={()=>setBulkWoModal(false)} onImport={docs=>{ setData(prev=>({...prev,projectDocs:[...(prev.projectDocs||[]),...docs.map(d=>({...d,id:uid(),subTab:"workorders"}))]})); setBulkWoModal(false); showToast(`✓ ${docs.length} work order${docs.length!==1?"s":""} uploaded`); }}/>}
       {bulkInvModal && <BulkInvoiceUpload projects={projects} onClose={()=>setBulkInvModal(false)} onImport={rows=>{ setData(prev=>({...prev,projectDocs:[...(prev.projectDocs||[]),...rows.map(r=>({...r,id:uid(),subTab:"invoices"}))]})); setBulkInvModal(false); showToast(`✓ ${rows.length} invoice${rows.length!==1?"s":""} imported`); }}/>}
+      {multiPdfInvModal && (
+        <MultiPdfInvoiceUpload
+          project={multiPdfInvModal.project}
+          projects={projects}
+          onClose={() => setMultiPdfInvModal(null)}
+          onImport={records => {
+            setData(prev => ({
+              ...prev,
+              projectDocs: [...prev.projectDocs, ...records.map(r => ({...r, id:uid(), subTab:"invoices"}))]
+            }));
+            setMultiPdfInvModal(null);
+            showToast(`✓ ${records.length} invoice${records.length!==1?"s":""} uploaded`);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -6254,6 +6272,347 @@ function CertificateModal({mode,doc,projects,onClose,onSave}) {
 }
 
 /* ── Work Order modal ────────────────────────────────────────────────────── */
+/* ─── Multi-PDF Invoice Upload ────────────────────────────────────────────── */
+function MultiPdfInvoiceUpload({ project, projects, onClose, onImport }) {
+  const [files,       setFiles]       = useState([]);
+  const [uploading,   setUploading]   = useState(false);
+  const [progress,    setProgress]    = useState({});
+  const [selProj,     setSelProj]     = useState(project || "");
+  const dropRef                       = useRef();
+  const fileInputRef                  = useRef();
+
+  const STATUS_COLOR = { pending: T.textMuted, uploading: T.blue, done: T.green, error: T.red };
+  const STATUS_ICON  = { pending: "⏳", uploading: "↑", done: "✓", error: "✕" };
+
+  const cleanName = filename =>
+    filename.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+  const addFiles = newFiles => {
+    const pdfs = Array.from(newFiles).filter(f => /\.(pdf|png|jpg|jpeg|webp|doc|docx)$/i.test(f.name));
+    if (!pdfs.length) return;
+    const entries = pdfs.map(f => ({
+      id:             uid(),
+      file:           f,
+      displayName:    cleanName(f.name),
+      refNo:          "",
+      jobNo:          "",
+      amount:         "",
+      paymentStatus:  "Pending",
+      invoiceType:    "Income",
+      dueDate:        "",
+      remainingAmount:"",
+      notes:          "",
+    }));
+    setFiles(prev => [...prev, ...entries]);
+    setProgress(prev => {
+      const next = {...prev};
+      entries.forEach(e => { next[e.id] = "pending"; });
+      return next;
+    });
+  };
+
+  const removeFile = id => {
+    setFiles(prev => prev.filter(f => f.id !== id));
+    setProgress(prev => { const n={...prev}; delete n[id]; return n; });
+  };
+
+  const updateField = (id, key, val) =>
+    setFiles(prev => prev.map(f => f.id === id ? {...f, [key]: val} : f));
+
+  const onDragOver  = e => { e.preventDefault(); dropRef.current.style.borderColor = T.green; };
+  const onDragLeave = ()  => { dropRef.current.style.borderColor = `${T.green}44`; };
+  const onDrop      = e   => {
+    e.preventDefault();
+    dropRef.current.style.borderColor = `${T.green}44`;
+    addFiles(e.dataTransfer.files);
+  };
+
+  const handleUploadAll = async () => {
+    if (!selProj) { alert("Please select a project first."); return; }
+    if (!files.length) { alert("No files selected."); return; }
+    setUploading(true);
+    const results = [];
+    for (const entry of files) {
+      setProgress(prev => ({...prev, [entry.id]: "uploading"}));
+      try {
+        const url = await uploadToSupabase(entry.file, `invoices/${selProj.replace(/\s+/g,"_")}`);
+        setProgress(prev => ({...prev, [entry.id]: "done"}));
+        results.push({
+          project:        selProj,
+          name:           entry.displayName,
+          refNo:          entry.refNo || "",
+          jobNo:          entry.jobNo || "",
+          amount:         entry.amount || "",
+          paymentStatus:  entry.paymentStatus || "Pending",
+          invoiceType:    entry.invoiceType || "Income",
+          dueDate:        entry.dueDate || "",
+          remainingAmount:entry.remainingAmount || "",
+          notes:          entry.notes || "",
+          fileLink:       url,
+        });
+      } catch (err) {
+        setProgress(prev => ({...prev, [entry.id]: "error"}));
+        console.error("Upload failed for", entry.file.name, err);
+      }
+    }
+    setUploading(false);
+    if (results.length) onImport(results);
+    else alert("All uploads failed. Check your Supabase configuration.");
+  };
+
+  const doneCount    = Object.values(progress).filter(s => s === "done").length;
+  const errorCount   = Object.values(progress).filter(s => s === "error").length;
+  const pendingCount = Object.values(progress).filter(s => s === "pending").length;
+  const allDone      = uploading && doneCount + errorCount === files.length && files.length > 0;
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="slide-up" style={{
+        background: T.sidebar, border: `1px solid ${T.border}`, borderRadius: 18,
+        width: "100%", maxWidth: 720, maxHeight: "calc(100vh - 48px)",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+      }}>
+        {/* ── Header ── */}
+        <div style={{padding:"20px 24px 16px", borderBottom:`1px solid ${T.border}`, flexShrink:0}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start"}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:20, color:T.text}}>
+                📄 BULK INVOICE PDF UPLOAD
+              </div>
+              <div style={{fontSize:12, color:T.textMuted, marginTop:3}}>
+                Select multiple PDFs — fill invoice details for each, then upload all at once
+              </div>
+            </div>
+            <button onClick={onClose} style={{background:T.bg, border:`1px solid ${T.border}`, color:T.textSub, borderRadius:8, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, cursor:"pointer"}}>×</button>
+          </div>
+          {/* Project selector */}
+          <div style={{marginTop:14}}>
+            <label style={{display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:".5px"}}>PROJECT *</label>
+            <select
+              value={selProj}
+              onChange={e => setSelProj(e.target.value)}
+              style={{width:"100%", background:T.inputBg, border:`1px solid ${selProj ? T.green+"66" : T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:selProj ? T.text : T.textMuted, outline:"none", colorScheme:"light"}}
+            >
+              <option value="">Select project…</option>
+              {renderProjectOptions(projects)}
+            </select>
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div style={{flex:1, overflowY:"auto", padding:"16px 24px"}}>
+          {/* Drop zone */}
+          <div
+            ref={dropRef}
+            onClick={() => !uploading && fileInputRef.current.click()}
+            onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={!uploading ? onDrop : undefined}
+            style={{
+              border: `2px dashed ${T.green}44`, borderRadius: 12,
+              padding: files.length ? "16px" : "36px 24px",
+              textAlign: "center", cursor: uploading ? "not-allowed" : "pointer",
+              transition: "all .2s", background: `${T.green}06`, marginBottom: 14,
+            }}
+            onMouseEnter={e => { if (!uploading) { e.currentTarget.style.borderColor=T.green; e.currentTarget.style.background=`${T.green}12`; }}}
+            onMouseLeave={e => { e.currentTarget.style.borderColor=`${T.green}44`; e.currentTarget.style.background=`${T.green}06`; }}
+          >
+            {files.length === 0 ? (
+              <>
+                <div style={{fontSize:40, marginBottom:8}}>🧾</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:700, fontSize:17, color:T.text, marginBottom:4}}>
+                  Drag & drop invoice PDFs here, or click to browse
+                </div>
+                <div style={{fontSize:12, color:T.textMuted}}>PDF, Word, PNG, JPG — select as many as you need</div>
+              </>
+            ) : (
+              <div style={{fontSize:13, color:T.green, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:8}}>
+                <span>+</span> Click or drop more files ({files.length} selected)
+              </div>
+            )}
+          </div>
+          <input ref={fileInputRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+            style={{display:"none"}} onChange={e => { addFiles(e.target.files); e.target.value=""; }}/>
+
+          {/* Upload progress bar */}
+          {uploading && (
+            <div style={{background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 16px", marginBottom:14}}>
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                <span style={{fontSize:13, fontWeight:700, color:T.text}}>Uploading…</span>
+                <span style={{fontSize:13, color:T.textMuted}}>{doneCount + errorCount} / {files.length}</span>
+              </div>
+              <div style={{height:6, background:T.border, borderRadius:999, overflow:"hidden"}}>
+                <div style={{height:"100%", width:`${files.length ? ((doneCount + errorCount) / files.length * 100) : 0}%`, background:`linear-gradient(90deg, ${T.green}, ${T.teal})`, borderRadius:999, transition:"width .3s ease"}}/>
+              </div>
+              <div style={{display:"flex", gap:14, marginTop:8, fontSize:12}}>
+                <span style={{color:T.green}}>✓ {doneCount} done</span>
+                {errorCount > 0 && <span style={{color:T.red}}>✕ {errorCount} failed</span>}
+                <span style={{color:T.textMuted}}>{pendingCount} remaining</span>
+              </div>
+            </div>
+          )}
+
+          {/* File list */}
+          {files.length > 0 && (
+            <div style={{display:"grid", gap:12}}>
+              {files.map((entry, i) => {
+                const st      = progress[entry.id] || "pending";
+                const stColor = STATUS_COLOR[st];
+                const stIcon  = STATUS_ICON[st];
+                const isExp   = st === "pending" || st === "error";
+                const psColor = entry.paymentStatus === "Paid" ? T.green : entry.paymentStatus === "Partial" ? T.gold : T.red;
+
+                return (
+                  <div key={entry.id} className="fade-up" style={{
+                    background: T.bg, border: `1px solid ${st==="done"?T.green+"44":st==="error"?T.red+"44":T.border}`,
+                    borderLeft: `4px solid ${stColor}`, borderRadius: 10, padding: "12px 14px",
+                    animationDelay: `${i * 0.03}s`,
+                  }}>
+                    {/* File header */}
+                    <div style={{display:"flex", alignItems:"center", gap:10, marginBottom: isExp ? 10 : 0}}>
+                      <span style={{fontSize:18, flexShrink:0}}>{/\.pdf$/i.test(entry.file.name) ? "📄" : "🖼️"}</span>
+                      <div style={{flex:1, minWidth:0}}>
+                        <div style={{fontSize:13, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{entry.displayName}</div>
+                        <div style={{fontSize:11, color:T.textMuted, marginTop:1}}>{(entry.file.size/1024/1024).toFixed(2)} MB</div>
+                      </div>
+                      <div style={{background:`${stColor}18`, border:`1px solid ${stColor}44`, borderRadius:6, padding:"3px 10px", fontSize:11, fontWeight:700, color:stColor, flexShrink:0, display:"flex", alignItems:"center", gap:5}}>
+                        <span>{stIcon}</span><span style={{textTransform:"capitalize"}}>{st}</span>
+                      </div>
+                      {!uploading && (
+                        <button onClick={() => removeFile(entry.id)} style={{background:T.redDim, border:`1px solid ${T.red}33`, color:T.red, borderRadius:6, width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, cursor:"pointer", flexShrink:0}}>✕</button>
+                      )}
+                    </div>
+
+                    {/* Editable fields */}
+                    {isExp && !uploading && (
+                      <div style={{display:"grid", gap:8, paddingTop:8, borderTop:`1px solid ${T.border}`}}>
+
+                        {/* Row 1: Invoice No + Job No */}
+                        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>INVOICE NO.</label>
+                            <input value={entry.refNo} onChange={e => updateField(entry.id,"refNo",e.target.value)} placeholder="e.g. INV-2025-01"
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                          </div>
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>JOB NO.</label>
+                            <input value={entry.jobNo} onChange={e => updateField(entry.id,"jobNo",e.target.value)} placeholder="e.g. JOB-001"
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Amount + Due Date */}
+                        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>INVOICE VALUE (SAR)</label>
+                            <input type="number" value={entry.amount} onChange={e => updateField(entry.id,"amount",e.target.value)} placeholder="0"
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                          </div>
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>DUE DATE</label>
+                            <input type="date" value={entry.dueDate} onChange={e => updateField(entry.id,"dueDate",e.target.value)}
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                          </div>
+                        </div>
+
+                        {/* Row 3: Payment Status toggle */}
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>PAYMENT STATUS</label>
+                          <div style={{display:"flex", gap:6}}>
+                            {["Pending","Paid","Partial"].map(s => {
+                              const active = entry.paymentStatus === s;
+                              const col = s==="Paid"?T.green:s==="Partial"?T.gold:T.red;
+                              return (
+                                <button key={s} type="button" onClick={() => updateField(entry.id,"paymentStatus",s)}
+                                  style={{flex:1, padding:"7px 0", borderRadius:7, border:`1px solid ${active?col:T.border}`, background:active?`${col}18`:"transparent", color:active?col:T.textMuted, fontSize:11, fontWeight:active?700:500, cursor:"pointer", transition:"all .15s"}}>
+                                  {s==="Paid"?"✓ Paid":s==="Partial"?"½ Partial":"⏳ Pending"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Remaining amount — only for Partial */}
+                        {entry.paymentStatus === "Partial" && (
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.gold, marginBottom:4, letterSpacing:".5px"}}>REMAINING AMOUNT (SAR)</label>
+                            <input type="number" value={entry.remainingAmount} onChange={e => updateField(entry.id,"remainingAmount",e.target.value)} placeholder="Amount still outstanding"
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.gold}66`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=`${T.gold}66`}/>
+                          </div>
+                        )}
+
+                        {/* Row 4: Invoice Type toggle */}
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>INVOICE TYPE</label>
+                          <div style={{display:"flex", gap:6}}>
+                            {["Income","Advance"].map(s => {
+                              const active = entry.invoiceType === s;
+                              const col = s==="Income"?T.blue:T.purple;
+                              return (
+                                <button key={s} type="button" onClick={() => updateField(entry.id,"invoiceType",s)}
+                                  style={{flex:1, padding:"7px 0", borderRadius:7, border:`1px solid ${active?col:T.border}`, background:active?`${col}18`:"transparent", color:active?col:T.textMuted, fontSize:11, fontWeight:active?700:500, cursor:"pointer", transition:"all .15s"}}>
+                                  {s==="Income"?"💰 Income":"⏫ Advance"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Row 5: Notes */}
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>NOTES</label>
+                          <input value={entry.notes} onChange={e => updateField(entry.id,"notes",e.target.value)} placeholder="Optional notes…"
+                            style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                            onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                        </div>
+                      </div>
+                    )}
+
+                    {st === "done" && (
+                      <div style={{marginTop:6, fontSize:11, color:T.green, display:"flex", alignItems:"center", gap:6}}>✓ Uploaded successfully</div>
+                    )}
+                    {st === "error" && (
+                      <div style={{marginTop:6, fontSize:11, color:T.red}}>✕ Upload failed — check Supabase config or file size</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Footer ── */}
+        <div style={{padding:"14px 24px 22px", borderTop:`1px solid ${T.border}`, flexShrink:0, display:"flex", gap:10, alignItems:"center"}}>
+          <div style={{flex:1, fontSize:12, color:T.textMuted}}>
+            {files.length > 0
+              ? `${files.length} file${files.length!==1?"s":""} selected — each becomes one invoice record`
+              : "No files selected yet"}
+          </div>
+          <button onClick={onClose} disabled={uploading}
+            style={{background:T.bg, border:`1px solid ${T.border}`, color:T.textSub, borderRadius:10, padding:"11px 20px", fontSize:14, fontWeight:600, cursor:uploading?"not-allowed":"pointer", opacity:uploading?0.5:1}}>
+            {allDone ? "Close" : "Cancel"}
+          </button>
+          {!uploading && files.length > 0 && (
+            <button onClick={handleUploadAll} style={{
+              background: `linear-gradient(135deg, ${T.green}, ${T.teal})`,
+              border: "none", color: "#000", borderRadius: 10,
+              padding: "11px 28px", fontSize: 14, fontWeight: 800, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 8,
+              boxShadow: `0 4px 16px ${T.green}44`,
+            }}>
+              ⬆ Upload {files.length} Invoice{files.length!==1?"s":""}
+            </button>
+          )}
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
 /* ─── Bulk Invoice Upload (Excel / CSV) ──────────────────────────────────── */
 function BulkInvoiceUpload({ projects, onClose, onImport }) {
   const [step, setStep]         = useState(1); // 1=upload, 2=preview
