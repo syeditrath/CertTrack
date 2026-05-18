@@ -608,16 +608,33 @@ async function fetchAppData() {
 
   return { ...EMPTY_DATA, ...rows[0].data };
 }
+/* ── Cloudflare R2 upload via Worker ─────────────────────────────────────
+   Set R2_WORKER_URL to your deployed Worker URL, e.g.:
+   "https://scorpion-upload.YOUR-SUBDOMAIN.workers.dev"
+──────────────────────────────────────────────────────────────────────── */
+const R2_WORKER_URL = "https://bucket.syed-itrath.workers.dev";
+
 async function uploadToSupabase(file, folder) {
-  const ext   = file.name.split(".").pop();
-  const safeFolder = folder.replace(/[^a-zA-Z0-9._\-\/]/g,"_"); const safeFile = file.name.replace(/[^a-zA-Z0-9._-]/g,"_"); const path = `${safeFolder}/${Date.now()}_${safeFile}`;
-  const res   = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`, {
-    method:"POST",
-    headers:{"Authorization":`Bearer ${SUPABASE_ANON}`,"Content-Type":file.type,"x-upsert":"true"},
-    body: file,
+  if (R2_WORKER_URL === "YOUR_WORKER_URL") {
+    throw new Error("R2 Worker URL not configured. Set R2_WORKER_URL in App.jsx.");
+  }
+  const safeFolder = folder.replace(/[^a-zA-Z0-9._\-/]/g, "_");
+  const safeFile   = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const key        = `${safeFolder}/${Date.now()}_${safeFile}`;
+
+  const res = await fetch(`${R2_WORKER_URL}/upload/${key}`, {
+    method:  "PUT",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body:    file,
   });
-  if (!res.ok) { const e=await res.json(); throw new Error(e.message||"Upload failed"); }
-  return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${path}`;
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || "R2 upload failed");
+  }
+
+  const { url } = await res.json();
+  return url;
 }
 async function saveAppData(data) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main`, {
@@ -639,6 +656,9 @@ async function saveAppData(data) {
 function isSupabaseConfigured() {
   return SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON !== "YOUR_SUPABASE_ANON_KEY";
 }
+function isR2Configured() {
+  return R2_WORKER_URL !== "YOUR_WORKER_URL";
+}
 
 function getPreviewUrl(url) {
   if (!url) return null;
@@ -658,6 +678,8 @@ function getPreviewUrl(url) {
   }
   // Supabase public URL (PDF/image — direct embed)
   if (url.includes("supabase.co/storage")) return url;
+  // Cloudflare R2 public URL — direct embed
+  if (url.includes(".r2.dev") || url.includes("workers.dev")) return url;
   return url;
 }
 
