@@ -7195,8 +7195,9 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClo
           file,
           `daily-reports/${(f.project || defaultProject || "general").replace(/[^a-zA-Z0-9]/g, "_")}`
         );
-      } catch {
-        fileUrl = "";
+      } catch (uploadErr) {
+        console.error("File upload failed:", uploadErr);
+        setMsg("⚠ File uploaded to app but could not be stored in cloud: " + (uploadErr.message || "Unknown error"));
       }
 
       const extracted = {
