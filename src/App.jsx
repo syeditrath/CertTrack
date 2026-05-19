@@ -4992,8 +4992,8 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
               <div class="kpi"><div class="kpi-val" style="color:#16a34a">${formatSarCompact(totalReceived)}</div><div class="kpi-lbl">Total Received</div></div>
               <div class="kpi"><div class="kpi-val" style="color:#dc2626">${formatSarCompact(totalDue)}</div><div class="kpi-lbl">Total Due</div></div>
               <div class="kpi"><div class="kpi-val">${collectionRate}%</div><div class="kpi-lbl">Collection Rate</div></div>
-              <div class="kpi"><div class="kpi-val">${formatSarCompact(incomeInvoiced)}</div><div class="kpi-lbl">Income Invoiced</div></div>
-              <div class="kpi"><div class="kpi-val">${formatSarCompact(advanceInvoiced)}</div><div class="kpi-lbl">Advance Invoiced</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:#2563eb">${formatSarCompact(incomeInvoiced)}</div><div class="kpi-lbl">Income Invoiced</div></div>
+              <div class="kpi"><div class="kpi-val" style="color:#d97706">${formatSarCompact(advanceInvoiced)}</div><div class="kpi-lbl">Advance Invoiced</div></div>
             </div>
             <h2>Project Breakdown</h2>
             <table>
