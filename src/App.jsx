@@ -2023,15 +2023,21 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
     ? Math.ceil((new Date(proj.estEndDate) - new Date(proj.startDate)) / 86400000)
     : null;
   const stColor = { "Not Started":T.textMuted,"In Progress":T.blue,"On Hold":T.gold,"Completed":T.green,"Cancelled":T.red }[proj.status]||T.textMuted;
-  const reports = (proj.dailyReports||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  // Pull daily reports from projectDocs (same source as Project Docs tab — has rig correctly set)
+  const reports = (projectDocs||[])
+    .filter(d => d.subTab==="dailyreports" && d.project===proj.project)
+    .slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
 
   const saveReport = r => {
-    const existing = (proj.dailyReports||[]).find(x=>x.id===r.id);
-    const updated  = existing ? (proj.dailyReports||[]).map(x=>x.id===r.id?r:x) : [...(proj.dailyReports||[]),r];
-    onUpdate({...proj,dailyReports:updated});
+    const rec = {...r, subTab:"dailyreports", project:proj.project, id:r.id||uid()};
+    setData(prev => {
+      const docs = prev.projectDocs||[];
+      const exists = docs.find(x=>x.id===rec.id);
+      return {...prev, projectDocs: exists ? docs.map(x=>x.id===rec.id?rec:x) : [...docs, rec]};
+    });
     setDrModal(null);
   };
-  const delReport = id => onUpdate({...proj,dailyReports:(proj.dailyReports||[]).filter(r=>r.id!==id)});
+  const delReport = id => setData(prev=>({...prev, projectDocs:(prev.projectDocs||[]).filter(d=>d.id!==id)}));
 
   return (
     <div style={{maxWidth:"min(1200px,98vw)",margin:"0 auto"}}>
@@ -2592,8 +2598,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
 
           // Quick-assign rig for a report
           const assignRig = (reportId, rigName) => {
-            const updated = (proj.dailyReports||[]).map(r => r.id===reportId ? {...r, rig:rigName} : r);
-            onUpdate({...proj, dailyReports:updated});
+            setData(prev=>({...prev, projectDocs:(prev.projectDocs||[]).map(d=>d.id===reportId?{...d,rig:rigName}:d)}));
           };
 
           if (reports.length===0) return (
@@ -2655,7 +2660,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
                   <div style={{background:`${T.gold}08`,borderBottom:`1px solid ${T.gold}33`,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
                     <div>
                       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.gold}}>⚠ Unassigned Reports</div>
-                      <div style={{fontSize:11,color:T.textMuted}}>{unassignedPA.length} report{unassignedPA.length!==1?"s":""} — use the dropdown on each to assign to a rig</div>
+                      <div style={{fontSize:11,color:T.textMuted}}>{unassignedPA.length} report{unassignedPA.length!==1?"s":""} — click Auto-Assign to match by filename</div>
                     </div>
                     <button onClick={()=>exportRigReports(unassignedPA,"Unassigned")}
                       style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
