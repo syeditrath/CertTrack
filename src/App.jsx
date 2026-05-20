@@ -5895,6 +5895,24 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           const unassigned = projDRs.filter(d=>!d.rig||!projRigs.some(r=>r.name===d.rig))
             .sort((a,b)=>(b.date||"").localeCompare(a.date||""));
 
+          const exportDRs = (docs, filename) => {
+            if (!docs.length) return;
+            exportToExcel(docs.map(r => ({
+              "Project":            r.project || selectedProject,
+              "Rig / Spread":       r.rig || "",
+              "Date":               r.date || "",
+              "Work Profile":       r.profile || "",
+              "Activity":           r.activity || "",
+              "Permit Received":    r.permitReceived || "",
+              "Permit Hours":       r.permitHours != null ? String(r.permitHours) : "",
+              "Standby Reason":     r.standbyReason || "",
+              "Progress Today (m)": r.progressToday != null ? String(r.progressToday) : "",
+              "Accumulated (m)":    r.accumulated != null ? String(r.accumulated) : "",
+              "Activity Summary":   r.activities || "",
+              "Notes":              r.notes || "",
+            })), filename);
+          };
+
           return (
             <div>
               {/* Header */}
@@ -5904,6 +5922,13 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                   <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selectedProject}</div>
                   <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>{projDRs.length} report{projDRs.length!==1?"s":""} · {projRigs.length} rig{projRigs.length!==1?"s":""}</div>
                 </div>
+                {projDRs.length > 0 && (
+                  <button
+                    onClick={() => exportDRs(projDRs, `Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_ALL_RIGS`)}
+                    style={{background:`${T.green}18`,border:`1px solid ${T.green}44`,color:T.green,borderRadius:9,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                    ⬇ Export All Rigs
+                  </button>
+                )}
               </div>
 
               {projRigs.length === 0 ? (
@@ -5933,7 +5958,16 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                             <div style={{fontSize:12,color:T.textMuted,marginTop:1}}>{reports.length} report{reports.length!==1?"s":""}</div>
                           </div>
                         </div>
-                        <Btn color={color} solid onClick={()=>setModal({mode:"add",doc:{project:selProj, rig:rig.name}})}>+ Add Report</Btn>
+                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                          {reports.length > 0 && (
+                            <button
+                              onClick={() => exportDRs(reports, `Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_${rig.name.replace(/\s+/g,"_")}`)}
+                              style={{background:`${color}18`,border:`1px solid ${color}44`,color,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                              ⬇ Export {rig.name}
+                            </button>
+                          )}
+                          <Btn color={color} solid onClick={()=>setModal({mode:"add",doc:{project:selProj, rig:rig.name}})}>+ Add Report</Btn>
+                        </div>
                       </div>
                       {/* Reports */}
                       <div style={{padding:"14px 16px"}}>
