@@ -2487,21 +2487,23 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
             {reports.length>0&&(
               <button onClick={()=>exportToExcel(
                 reports.map(r=>({
-                  "Project":               proj.project,
-                  "Date":                  r.date || "",
-                  "Work Profile":          r.profile || "",
-                  "Activity":              r.activity || "",
-                  "Permit Received":       r.permitReceived || "",
-                  "Permit Hours":          (r.permitHours !== undefined && r.permitHours !== null) ? String(r.permitHours) : "",
-                  "Standby Reason":        r.standbyReason || "",
-                  "Progress Today (m)":   (r.progressToday !== undefined && r.progressToday !== null) ? String(r.progressToday) : "",
-                  "Accumulated (m)":      (r.accumulated !== undefined && r.accumulated !== null) ? String(r.accumulated) : "",
-                  "Activity Summary":      r.activities || "",
+                  "Project":            proj.project,
+                  "Rig / Spread":       r.rig||"",
+                  "Date":               r.date||"",
+                  "Work Profile":       r.profile||"",
+                  "Activity":           r.activity||"",
+                  "Permit Received":    r.permitReceived||"",
+                  "Permit Hours":       r.permitHours!=null?String(r.permitHours):"",
+                  "Standby Reason":     r.standbyReason||"",
+                  "Progress Today (m)": r.progressToday!=null?String(r.progressToday):"",
+                  "Accumulated (m)":    r.accumulated!=null?String(r.accumulated):"",
+                  "Activity Summary":   r.activities||"",
+                  "Notes":              r.notes||"",
                 })),
-                `Daily_Reports_${(proj.project||"Project").replace(/\s+/g,"_")}`
+                `Daily_Reports_${(proj.project||"Project").replace(/\s+/g,"_")}_ALL_RIGS`
               )}
                 style={{background:"rgba(52,211,153,0.12)",border:"1px solid rgba(52,211,153,0.3)",color:"#34d399",borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-                ⬇ Export Excel
+                ⬇ Export All Rigs
               </button>
             )}
             {/* Bulk import multiple rows from Excel */}
@@ -2517,61 +2519,150 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
           </div>
           <span style={{color:T.textMuted,fontSize:14,marginLeft:8,flexShrink:0,pointerEvents:"none"}}>{expandDailySection?"▲":"▼"}</span>
         </div>
-        {expandDailySection && (reports.length===0 ? (
-          <div style={{textAlign:"center",padding:"30px 20px",color:T.textMuted,fontSize:14}}>
-            <div style={{fontSize:36,marginBottom:10}}>📋</div>
-            No daily reports yet. Click <strong>+ Add Report</strong> to start tracking site progress.
-          </div>
-        ) : (
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {reports.map(r=>{
-              const isE = expandDr===r.id;
-              return (
-                <div key={r.id} style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",background:isE?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandDr(isE?null:r.id)}>
-                    <div style={{width:34,height:34,borderRadius:8,background:T.blueDim,border:`1px solid ${T.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>📅</div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:13,fontWeight:700,color:T.text}}>{fmtDate(r.date)}</div>
-                      <div style={{fontSize:11,color:T.textMuted,marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
-                        {r.weather&&<span>🌤 {r.weather}</span>}
-                        {r.manpower&&<span>👷 {r.manpower} workers</span>}
-                        {r.equipment&&<span>🚧 {r.equipment}</span>}
-                        {r.fileLink&&<span style={{color:T.blue,fontWeight:600}}>📎 {r.fileName||"File attached"}</span>}
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                      <button onClick={e=>{e.stopPropagation();setDrModal(r);}} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✎</button>
-                      {isAdmin && <button onClick={e=>{e.stopPropagation();delReport(r.id);}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✕</button>}
-                      <span style={{color:T.textMuted,fontSize:13,marginLeft:2}}>{isE?"▲":"▼"}</span>
+        {expandDailySection && (() => {
+          const projRigsPA = (data.rigs||[]).filter(r=>r.project===proj.project);
+          const rigColors  = ["#a78bfa","#38bdf8","#34d399","#f472b6","#fb923c","#fbbf24"];
+
+          const exportRigReports = (rigReports, rigName) => {
+            if (!rigReports.length) return;
+            exportToExcel(rigReports.map(r=>({
+              "Project":            proj.project,
+              "Rig / Spread":       r.rig||rigName||"",
+              "Date":               r.date||"",
+              "Work Profile":       r.profile||"",
+              "Activity":           r.activity||"",
+              "Permit Received":    r.permitReceived||"",
+              "Permit Hours":       r.permitHours!=null?String(r.permitHours):"",
+              "Standby Reason":     r.standbyReason||"",
+              "Progress Today (m)": r.progressToday!=null?String(r.progressToday):"",
+              "Accumulated (m)":    r.accumulated!=null?String(r.accumulated):"",
+              "Activity Summary":   r.activities||"",
+              "Notes":              r.notes||"",
+            })), `Daily_Reports_${(proj.project||"Project").replace(/\s+/g,"_")}_${(rigName||"Unassigned").replace(/\s+/g,"_")}`);
+          };
+
+          // Report card shared renderer
+          const DrCardPA = ({r}) => {
+            const isE = expandDr===r.id;
+            return (
+              <div key={r.id} style={{border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                <div style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",background:isE?T.card2:T.card,cursor:"pointer"}} onClick={()=>setExpandDr(isE?null:r.id)}>
+                  <div style={{width:34,height:34,borderRadius:8,background:T.blueDim,border:`1px solid ${T.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>📅</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:T.text}}>{fmtDate(r.date)}</div>
+                    <div style={{fontSize:11,color:T.textMuted,marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
+                      {r.weather&&<span>🌤 {r.weather}</span>}
+                      {r.manpower&&<span>👷 {r.manpower} workers</span>}
+                      {r.equipment&&<span>🚧 {r.equipment}</span>}
+                      {r.fileLink&&<span style={{color:T.blue,fontWeight:600}}>📎 {r.fileName||"File attached"}</span>}
                     </div>
                   </div>
-                  {isE&&(
-                    <div style={{padding:"12px 14px 14px 60px",borderTop:`1px solid ${T.border}`,background:T.card2,display:"flex",flexDirection:"column",gap:12}}>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
-                        {r.activities&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>ACTIVITIES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.activities}</div></div>}
-                        {r.issues&&<div><div style={{fontSize:10,fontWeight:700,color:T.red,marginBottom:4}}>ISSUES / DELAYS</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.issues}</div></div>}
-                        {r.notes&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>NOTES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.notes}</div></div>}
-                      </div>
-                      {r.fileLink&&(
-                        <div style={{display:"flex",alignItems:"center",gap:10,background:T.card,border:`1px solid ${T.border}`,borderRadius:9,padding:"9px 14px"}}>
-                          <span style={{fontSize:18}}>{/\.pdf$/i.test(r.fileName||r.fileLink)?"📄":/\.(xlsx?|csv)$/i.test(r.fileName||r.fileLink)?"📊":/\.(png|jpe?g|webp)$/i.test(r.fileName||r.fileLink)?"🖼️":"📎"}</span>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:12,fontWeight:700,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.fileName||"Daily Report File"}</div>
-                            <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>Attached report sheet</div>
-                          </div>
-                          <a href={r.fileLink} target="_blank" rel="noreferrer"
-                            style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,textDecoration:"none",flexShrink:0}}>
-                            ↗ Open
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <button onClick={e=>{e.stopPropagation();setDrModal(r);}} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✎</button>
+                    {isAdmin&&<button onClick={e=>{e.stopPropagation();delReport(r.id);}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✕</button>}
+                    <span style={{color:T.textMuted,fontSize:13,marginLeft:2}}>{isE?"▲":"▼"}</span>
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        ))}
+                {isE&&(
+                  <div style={{padding:"12px 14px 14px 60px",borderTop:`1px solid ${T.border}`,background:T.card2,display:"flex",flexDirection:"column",gap:12}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:12}}>
+                      {r.activities&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>ACTIVITIES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.activities}</div></div>}
+                      {r.issues&&<div><div style={{fontSize:10,fontWeight:700,color:T.red,marginBottom:4}}>ISSUES / DELAYS</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.issues}</div></div>}
+                      {r.notes&&<div><div style={{fontSize:10,fontWeight:700,color:T.textMuted,marginBottom:4}}>NOTES</div><div style={{fontSize:13,color:T.text,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{r.notes}</div></div>}
+                    </div>
+                    {r.fileLink&&(
+                      <div style={{display:"flex",alignItems:"center",gap:10,background:T.card,border:`1px solid ${T.border}`,borderRadius:9,padding:"9px 14px"}}>
+                        <span style={{fontSize:18}}>{/\.pdf$/i.test(r.fileName||r.fileLink)?"📄":/\.(xlsx?|csv)$/i.test(r.fileName||r.fileLink)?"📊":/\.(png|jpe?g|webp)$/i.test(r.fileName||r.fileLink)?"🖼️":"📎"}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:700,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.fileName||"Daily Report File"}</div>
+                          <div style={{fontSize:11,color:T.textMuted,marginTop:1}}>Attached report sheet</div>
+                        </div>
+                        <a href={r.fileLink} target="_blank" rel="noreferrer"
+                          style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,textDecoration:"none",flexShrink:0}}>
+                          ↗ Open
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          };
+
+          if (reports.length===0) return (
+            <div style={{textAlign:"center",padding:"30px 20px",color:T.textMuted,fontSize:14}}>
+              <div style={{fontSize:36,marginBottom:10}}>📋</div>
+              No daily reports yet. Click <strong>+ Add Report</strong> to start tracking site progress.
+            </div>
+          );
+
+          if (!projRigsPA.length) return (
+            <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
+              {reports.map(r=><DrCardPA key={r.id} r={r}/>)}
+            </div>
+          );
+
+          // Grouped by rig
+          const unassignedPA = reports.filter(r=>!r.rig||!projRigsPA.some(x=>x.name===r.rig));
+          return (
+            <div style={{display:"flex",flexDirection:"column",gap:12,padding:"4px 0"}}>
+              {projRigsPA.map((rig,ri)=>{
+                const color    = rigColors[ri%rigColors.length];
+                const rigReps  = reports.filter(r=>r.rig===rig.name).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+                return (
+                  <div key={rig.id||rig.name} style={{border:`2px solid ${color}44`,borderRadius:14,overflow:"hidden"}}>
+                    {/* Rig header */}
+                    <div style={{background:`${color}14`,borderBottom:`1px solid ${color}33`,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:18}}>🔩</span>
+                        <div>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:17,color}}>{rig.name}</div>
+                          <div style={{fontSize:11,color:T.textMuted}}>{rigReps.length} report{rigReps.length!==1?"s":""}</div>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        {rigReps.length>0&&(
+                          <button onClick={()=>exportRigReports(rigReps,rig.name)}
+                            style={{background:`${color}18`,border:`1px solid ${color}44`,color,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                            ⬇ Export {rig.name}
+                          </button>
+                        )}
+                        <button onClick={()=>setDrModal({rig:rig.name})}
+                          style={{background:`${color}22`,border:`1px solid ${color}55`,color,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                          + Add Report
+                        </button>
+                      </div>
+                    </div>
+                    {/* Rig reports */}
+                    <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
+                      {rigReps.length===0
+                        ?<div style={{textAlign:"center",padding:"16px",fontSize:13,color:T.textMuted}}>No reports yet for {rig.name}</div>
+                        :rigReps.map(r=><DrCardPA key={r.id} r={r}/>)
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+              {unassignedPA.length>0&&(
+                <div style={{border:`1px dashed ${T.border}`,borderRadius:14,overflow:"hidden"}}>
+                  <div style={{background:T.bg,borderBottom:`1px solid ${T.border}`,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.textSub}}>Unassigned Reports</div>
+                      <div style={{fontSize:11,color:T.textMuted}}>{unassignedPA.length} report{unassignedPA.length!==1?"s":""} not linked to a rig</div>
+                    </div>
+                    <button onClick={()=>exportRigReports(unassignedPA,"Unassigned")}
+                      style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                      ⬇ Export Unassigned
+                    </button>
+                  </div>
+                  <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
+                    {unassignedPA.map(r=><DrCardPA key={r.id} r={r}/>)}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} workOrders={(data.projectDocs||[]).filter(d=>d.subTab==="workorders")} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
