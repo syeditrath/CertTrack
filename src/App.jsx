@@ -1114,6 +1114,7 @@ function parseScorpionDprSheet(wb) {
     id: uid(),
     dprSource: "scorpion_template",
     project:        get("project_name",  "C8"),
+    rig:            rd("G6"),
     date:           date,
     profile:        get("profile",       "C13"),
     activity:       get("activity",      "H13"),
