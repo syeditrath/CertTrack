@@ -2590,6 +2590,12 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
             );
           };
 
+          // Quick-assign rig for a report
+          const assignRig = (reportId, rigName) => {
+            const updated = (proj.dailyReports||[]).map(r => r.id===reportId ? {...r, rig:rigName} : r);
+            onUpdate({...proj, dailyReports:updated});
+          };
+
           if (reports.length===0) return (
             <div style={{textAlign:"center",padding:"30px 20px",color:T.textMuted,fontSize:14}}>
               <div style={{fontSize:36,marginBottom:10}}>📋</div>
@@ -2645,11 +2651,11 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
                 );
               })}
               {unassignedPA.length>0&&(
-                <div style={{border:`1px dashed ${T.border}`,borderRadius:14,overflow:"hidden"}}>
-                  <div style={{background:T.bg,borderBottom:`1px solid ${T.border}`,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{border:`1px dashed ${T.gold}55`,borderRadius:14,overflow:"hidden"}}>
+                  <div style={{background:`${T.gold}08`,borderBottom:`1px solid ${T.gold}33`,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
                     <div>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.textSub}}>Unassigned Reports</div>
-                      <div style={{fontSize:11,color:T.textMuted}}>{unassignedPA.length} report{unassignedPA.length!==1?"s":""} not linked to a rig</div>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.gold}}>⚠ Unassigned Reports</div>
+                      <div style={{fontSize:11,color:T.textMuted}}>{unassignedPA.length} report{unassignedPA.length!==1?"s":""} — use the dropdown on each to assign to a rig</div>
                     </div>
                     <button onClick={()=>exportRigReports(unassignedPA,"Unassigned")}
                       style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
@@ -2657,7 +2663,28 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
                     </button>
                   </div>
                   <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
-                    {unassignedPA.map(r=><DrCardPA key={r.id} r={r}/>)}
+                    {unassignedPA.map(r=>(
+                      <div key={r.id} style={{border:`1px solid ${T.border}`,borderRadius:10,overflow:"hidden"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:T.card}}>
+                          <div style={{width:32,height:32,borderRadius:7,background:T.goldDim,border:`1px solid ${T.gold}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>📅</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:700,color:T.text}}>{fmtDate(r.date)}</div>
+                            {r.fileLink&&<div style={{fontSize:11,color:T.blue,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📎 {r.fileName||"File attached"}</div>}
+                          </div>
+                          {/* Quick-assign rig dropdown */}
+                          <select
+                            defaultValue=""
+                            onChange={e=>{ if(e.target.value) assignRig(r.id, e.target.value); }}
+                            style={{background:T.inputBg,border:`1px solid ${T.gold}55`,borderRadius:7,padding:"6px 10px",fontSize:12,color:T.text,outline:"none",cursor:"pointer",colorScheme:"light",minWidth:140}}
+                          >
+                            <option value="">Assign to rig…</option>
+                            {projRigsPA.map(rig=><option key={rig.id||rig.name} value={rig.name}>{rig.name}</option>)}
+                          </select>
+                          <button onClick={e=>{e.stopPropagation();setDrModal(r);}} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer",flexShrink:0}}>✎</button>
+                          {isAdmin&&<button onClick={e=>{e.stopPropagation();delReport(r.id);}} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer",flexShrink:0}}>✕</button>}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
