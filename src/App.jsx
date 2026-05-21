@@ -5750,8 +5750,10 @@ function AlertRow({a}) {
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
 const PD_TABS = [
-  {id:"certificates",  label:"Job Completion Certificates", icon:"📜", color:T.blue,   dim:T.blueDim},
-  {id:"dailyreports",  label:"Daily Reports",               icon:"📅", color:T.gold,   dim:T.goldDim},
+  {id:"certificates",    label:"Job Completion Certificates", icon:"📜", color:T.blue,   dim:T.blueDim},
+  {id:"dailyreports",    label:"Daily Reports",               icon:"📅", color:T.gold,   dim:T.goldDim},
+  {id:"hse",             label:"HSE",                         icon:"🦺", color:"#22c55e", dim:"rgba(34,197,94,0.12)"},
+  {id:"projectdocuments",label:"Project Documents",           icon:"📁", color:"#a78bfa", dim:"rgba(167,139,250,0.12)"},
 ];
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -6389,6 +6391,34 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
       )}
 
+      {/* ══ HSE ════════════════════════════════════════════════════════ */}
+      {subTab==="hse" && (
+        <HseSection
+          docs={docs.filter(d=>d.subTab==="hse" && (!selectedProject||d.project===selectedProject))}
+          projects={projects}
+          selectedProject={selectedProject}
+          isAdmin={isAdmin}
+          showToast={showToast}
+          onAdd={doc=>setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...doc,id:uid(),subTab:"hse"}]}))}
+          onEdit={doc=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===doc.id?{...doc,subTab:"hse"}:d)}))}
+          onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}))}
+        />
+      )}
+
+      {/* ══ PROJECT DOCUMENTS ════════════════════════════════════════════ */}
+      {subTab==="projectdocuments" && (
+        <ProjectDocumentsSection
+          docs={docs.filter(d=>d.subTab==="projectdocuments" && (!selectedProject||d.project===selectedProject))}
+          projects={projects}
+          selectedProject={selectedProject}
+          isAdmin={isAdmin}
+          showToast={showToast}
+          onAdd={doc=>setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...doc,id:uid(),subTab:"projectdocuments"}]}))}
+          onEdit={doc=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===doc.id?{...doc,subTab:"projectdocuments"}:d)}))}
+          onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}))}
+        />
+      )}
+
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
       {modal && subTab==="certificates"  && <CertificateModal  mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} rigs={data.rigs||[]} onClose={()=>setModal(null)} onSave={saveDoc}/>}
@@ -6412,6 +6442,251 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   );
 }
 
+/* ─── HSE Categories ────────────────────────────────────────────────────── */
+const HSE_CATEGORIES = [
+  "Pre-Mobilization Checklist","NAPD Certification","Risk Assessment",
+  "Method Statement","JSA / Job Safety Analysis","Toolbox Talk Records",
+  "Incident Report","Near Miss Report","Emergency Response Plan",
+  "PPE Inspection","Environmental Permit","Safety Audit","Other",
+];
+
+const PROJDOC_CATEGORIES = [
+  "Contract","Purchase Order","Work Order","Subcontract","Insurance Certificate",
+  "Performance Bond","Project Schedule","Drawings / Blueprints","Inspection Report",
+  "Material Approval","Site Survey","As-Built Document","Correspondence","Other",
+];
+
+function DocUploadModal({ title, categories, projects, selectedProject, onClose, onSave }) {
+  const [form, setForm] = useState({
+    project:  selectedProject||"",
+    category: "",
+    name:     "",
+    notes:    "",
+    fileLink: "",
+    fileName: "",
+    expiryDate:"",
+  });
+  const [file,      setFile]      = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [msg,       setMsg]       = useState("");
+  const fileRef = useRef();
+
+  const set = (k,v) => setForm(p=>({...p,[k]:v}));
+
+  const handleSave = async () => {
+    if (!form.project)  { setMsg("Please select a project."); return; }
+    if (!form.category) { setMsg("Please select a category."); return; }
+    if (!form.name)     { setMsg("Please enter a document name."); return; }
+    setUploading(true);
+    let fileLink = form.fileLink, fileName = form.fileName;
+    if (file) {
+      try {
+        fileLink = await uploadToSupabase(file, `docs/${form.project.replace(/\s+/g,"_")}`);
+        fileName = file.name;
+      } catch(e) {
+        setMsg("⚠ File upload failed: " + e.message);
+        setUploading(false);
+        return;
+      }
+    }
+    onSave({ ...form, fileLink, fileName, date: new Date().toISOString().slice(0,10) });
+    onClose();
+  };
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:520,padding:"24px 28px",boxShadow:"0 24px 64px rgba(0,0,0,0.6)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.text}}>{title}</div>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,cursor:"pointer"}}>×</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {/* Project */}
+          <div>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:".5px"}}>PROJECT *</label>
+            <select value={form.project} onChange={e=>set("project",e.target.value)}
+              style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}>
+              <option value="">Select project…</option>
+              {renderProjectOptions(projects)}
+            </select>
+          </div>
+          {/* Category */}
+          <div>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:".5px"}}>CATEGORY *</label>
+            <select value={form.category} onChange={e=>set("category",e.target.value)}
+              style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}>
+              <option value="">Select category…</option>
+              {categories.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          {/* Document Name */}
+          <div>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:".5px"}}>DOCUMENT NAME *</label>
+            <input value={form.name} onChange={e=>set("name",e.target.value)} placeholder="e.g. Pre-Mobilization Checklist – May 2026"
+              style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none"}}
+              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+          </div>
+          {/* Expiry Date */}
+          <div>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:".5px"}}>EXPIRY DATE (optional)</label>
+            <input type="date" value={form.expiryDate} onChange={e=>set("expiryDate",e.target.value)}
+              style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+          </div>
+          {/* File Upload */}
+          <div>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:".5px"}}>UPLOAD FILE</label>
+            <div onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${T.green}44`,borderRadius:10,padding:"14px",textAlign:"center",cursor:"pointer",background:`${T.green}06`}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=T.green;e.currentTarget.style.background=`${T.green}12`;}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=`${T.green}44`;e.currentTarget.style.background=`${T.green}06`;}}>
+              {file ? <span style={{fontSize:13,color:T.green,fontWeight:600}}>📎 {file.name}</span>
+                    : <span style={{fontSize:13,color:T.textMuted}}>Click to select file (PDF, Word, Image…)</span>}
+            </div>
+            <input ref={fileRef} type="file" style={{display:"none"}} onChange={e=>setFile(e.target.files[0])}/>
+          </div>
+          {/* Notes */}
+          <div>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:5,letterSpacing:".5px"}}>NOTES</label>
+            <textarea value={form.notes} onChange={e=>set("notes",e.target.value)} rows={2} placeholder="Optional notes…"
+              style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",resize:"vertical"}}/>
+          </div>
+          {msg && <div style={{fontSize:12,color:T.red}}>{msg}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:4}}>
+            <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+            <button onClick={handleSave} disabled={uploading}
+              style={{background:`linear-gradient(135deg,${T.green},${T.teal})`,border:"none",color:"#000",borderRadius:10,padding:"10px 24px",fontSize:14,fontWeight:800,cursor:uploading?"not-allowed":"pointer",opacity:uploading?0.7:1}}>
+              {uploading?"Uploading…":"Save Document"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+function DocSectionUI({ docs, categories, accentColor, accentDim, projects, selectedProject, isAdmin, showToast, onAdd, onEdit, onDel, title, icon, catList }) {
+  const [modal,   setModal]   = useState(null); // null | "add" | doc
+  const [selCat,  setSelCat]  = useState("All");
+  const [selProj, setSelProj] = useState(selectedProject||"All");
+
+  const filtered = docs.filter(d =>
+    (selCat==="All"  || d.category===selCat) &&
+    (selProj==="All" || d.project===selProj)
+  );
+
+  const grouped = catList.reduce((acc, cat) => {
+    const catDocs = filtered.filter(d=>d.category===cat);
+    if (catDocs.length) acc[cat] = catDocs;
+    return acc;
+  }, {});
+
+  const uncategorised = filtered.filter(d=>!catList.includes(d.category));
+  if (uncategorised.length) grouped["Other"] = [...(grouped["Other"]||[]), ...uncategorised];
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:16,flexWrap:"wrap"}}>
+        <div style={{flex:1,display:"flex",gap:8,flexWrap:"wrap"}}>
+          {/* Project filter */}
+          {!selectedProject && (
+            <select value={selProj} onChange={e=>setSelProj(e.target.value)}
+              style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:12,color:T.text,outline:"none",colorScheme:"light"}}>
+              <option value="All">All Projects</option>
+              {projects.map(p=><option key={p.project} value={p.project}>{p.project}</option>)}
+            </select>
+          )}
+          {/* Category filter */}
+          <select value={selCat} onChange={e=>setSelCat(e.target.value)}
+            style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:12,color:T.text,outline:"none",colorScheme:"light"}}>
+            <option value="All">All Categories</option>
+            {catList.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        {isAdmin && (
+          <button onClick={()=>setModal("add")}
+            style={{background:`linear-gradient(135deg,${accentColor},${accentColor}cc)`,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+            + Add Document
+          </button>
+        )}
+      </div>
+
+      {/* Empty state */}
+      {!filtered.length && (
+        <div style={{textAlign:"center",padding:"48px 24px",color:T.textMuted}}>
+          <div style={{fontSize:48,marginBottom:12}}>{icon}</div>
+          <div style={{fontSize:16,fontWeight:700,color:T.textSub,marginBottom:6}}>No {title} documents yet</div>
+          <div style={{fontSize:13}}>Click <strong>+ Add Document</strong> to upload your first one</div>
+        </div>
+      )}
+
+      {/* Grouped by category */}
+      {Object.entries(grouped).map(([cat, catDocs])=>(
+        <div key={cat} style={{marginBottom:20}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <div style={{width:4,height:20,background:accentColor,borderRadius:2}}/>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:accentColor}}>{cat}</div>
+            <div style={{background:accentDim,border:`1px solid ${accentColor}44`,borderRadius:20,padding:"1px 8px",fontSize:11,fontWeight:700,color:accentColor}}>{catDocs.length}</div>
+          </div>
+          <div style={{display:"grid",gap:10}}>
+            {catDocs.map(doc=>(
+              <div key={doc.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:40,height:40,borderRadius:10,background:accentDim,border:`1px solid ${accentColor}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>
+                  {/\.pdf$/i.test(doc.fileName||"")?"📄":/\.(xlsx?|csv)$/i.test(doc.fileName||"")?"📊":/\.(png|jpe?g|webp)$/i.test(doc.fileName||"")?"🖼️":"📁"}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:700,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.name}</div>
+                  <div style={{fontSize:11,color:T.textMuted,marginTop:2,display:"flex",gap:10,flexWrap:"wrap"}}>
+                    <span>📂 {doc.project}</span>
+                    {doc.date&&<span>📅 {doc.date}</span>}
+                    {doc.expiryDate&&<span style={{color:new Date(doc.expiryDate)<new Date()?T.red:T.gold}}>⏳ Expires {doc.expiryDate}</span>}
+                    {doc.notes&&<span>💬 {doc.notes}</span>}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  {doc.fileLink&&(
+                    <a href={doc.fileLink} target="_blank" rel="noreferrer"
+                      style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,padding:"6px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
+                      ↗ View
+                    </a>
+                  )}
+                  {isAdmin&&<button onClick={()=>setModal(doc)} style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:7,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✎</button>}
+                  {isAdmin&&<button onClick={()=>{ if(confirm(`Delete "${doc.name}"?`)) onDel(doc.id); }} style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:7,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer"}}>✕</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* Add/Edit Modal */}
+      {modal && (
+        <DocUploadModal
+          title={modal==="add" ? `Add ${title} Document` : `Edit Document`}
+          categories={catList}
+          projects={projects}
+          selectedProject={selectedProject}
+          onClose={()=>setModal(null)}
+          onSave={doc => {
+            if (modal==="add") onAdd(doc);
+            else onEdit({...modal,...doc});
+            setModal(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function HseSection(props) {
+  return <DocSectionUI {...props} title="HSE" icon="🦺" accentColor="#22c55e" accentDim="rgba(34,197,94,0.12)" catList={HSE_CATEGORIES}/>;
+}
+
+function ProjectDocumentsSection(props) {
+  return <DocSectionUI {...props} title="Project Documents" icon="📁" accentColor="#a78bfa" accentDim="rgba(167,139,250,0.12)" catList={PROJDOC_CATEGORIES}/>;
+}
+
+/* ─── SubTabBar ─────────────────────────────────────────────────────────── */
 function SubTabBar({tabs,active,counts,onChange}) {
   return (
     <div style={{display:"flex",gap:8,marginBottom:20,overflowX:"auto",paddingBottom:4}}>
