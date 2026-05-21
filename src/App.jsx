@@ -428,7 +428,7 @@ function exportToExcel(rows, filename, opts = {}) {
   for (let c=0;c<nCols;c++) {
     const addr = XLSX.utils.encode_cell({r:0,c});
     if (!ws[addr]) ws[addr] = {t:"s",v:""};
-    ws[addr].s = S("C8A020","FFFFFF",true,18,"center");
+    ws[addr].s = S("1E3A5F","FFFFFF",true,18,"center");
   }
 
   // Row 2 — Title: dark grey bg, white bold centered
@@ -451,7 +451,7 @@ function exportToExcel(rows, filename, opts = {}) {
       const addr = XLSX.utils.encode_cell({r,c});
       if (!ws[addr]) ws[addr] = {t:"s",v:""};
       ws[addr].s = c===0
-        ? S("EEF2F7","8B6914",true,11,"left")   // label cell
+        ? S("EEF2F7","2563EB",true,11,"left")   // label cell
         : S("EEF2F7","1E2A3A",false,11,"left");  // value cell
     }
   }
@@ -472,8 +472,8 @@ function exportToExcel(rows, filename, opts = {}) {
       font: {name:"Arial", sz:10, bold:true, color:{rgb:"FFFFFF"}},
       alignment: {horizontal:"center", vertical:"center", wrapText:false},
       border: {
-        top:    {style:"medium",color:{rgb:"C8A020"}},
-        bottom: {style:"medium",color:{rgb:"C8A020"}},
+        top:    {style:"medium",color:{rgb:"1E3A5F"}},
+        bottom: {style:"medium",color:{rgb:"1E3A5F"}},
         left:   {style:"thin",  color:{rgb:"FFFFFF"}},
         right:  {style:"thin",  color:{rgb:"FFFFFF"}},
       },
@@ -511,8 +511,8 @@ function exportToExcel(rows, filename, opts = {}) {
         font: {name:"Arial", sz:10, bold:true, color:{rgb:"FFFFFF"}},
         alignment: {horizontal:"center", vertical:"center"},
         border: {
-          top:    {style:"medium",color:{rgb:"C8A020"}},
-          bottom: {style:"medium",color:{rgb:"C8A020"}},
+          top:    {style:"medium",color:{rgb:"1E3A5F"}},
+          bottom: {style:"medium",color:{rgb:"1E3A5F"}},
           left:   {style:"thin",  color:{rgb:"FFFFFF"}},
           right:  {style:"thin",  color:{rgb:"FFFFFF"}},
         },
