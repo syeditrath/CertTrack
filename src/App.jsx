@@ -5749,6 +5749,20 @@ function AlertRow({a}) {
 /* ════════════════════════════════════════════════════════════════════════════
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
+/* ─── HSE & Project Document Categories ─────────────────────────────────── */
+const HSE_CATEGORIES = [
+  "Pre-Mobilization Checklist","NAPD Certification","Risk Assessment",
+  "Method Statement","JSA / Job Safety Analysis","Toolbox Talk Records",
+  "Incident Report","Near Miss Report","Emergency Response Plan",
+  "PPE Inspection","Environmental Permit","Safety Audit","Other",
+];
+
+const PROJDOC_CATEGORIES = [
+  "Contract","Purchase Order","Work Order","Subcontract","Insurance Certificate",
+  "Performance Bond","Project Schedule","Drawings / Blueprints","Inspection Report",
+  "Material Approval","Site Survey","As-Built Document","Correspondence","Other",
+];
+
 const PD_TABS = [
   {id:"certificates",    label:"Job Completion Certificates", icon:"📜", color:T.blue,   dim:T.blueDim},
   {id:"dailyreports",    label:"Daily Reports",               icon:"📅", color:T.gold,   dim:T.goldDim},
@@ -6389,8 +6403,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
         );
       })()}
 
-      )}
-
       {/* ══ HSE ════════════════════════════════════════════════════════ */}
       {subTab==="hse" && (
         <HseSection
@@ -6441,20 +6453,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     </div>
   );
 }
-
-/* ─── HSE Categories ────────────────────────────────────────────────────── */
-const HSE_CATEGORIES = [
-  "Pre-Mobilization Checklist","NAPD Certification","Risk Assessment",
-  "Method Statement","JSA / Job Safety Analysis","Toolbox Talk Records",
-  "Incident Report","Near Miss Report","Emergency Response Plan",
-  "PPE Inspection","Environmental Permit","Safety Audit","Other",
-];
-
-const PROJDOC_CATEGORIES = [
-  "Contract","Purchase Order","Work Order","Subcontract","Insurance Certificate",
-  "Performance Bond","Project Schedule","Drawings / Blueprints","Inspection Report",
-  "Material Approval","Site Survey","As-Built Document","Correspondence","Other",
-];
 
 function DocUploadModal({ title, categories, projects, selectedProject, onClose, onSave }) {
   const [form, setForm] = useState({
