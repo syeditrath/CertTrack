@@ -3637,7 +3637,7 @@ export default function App() {
         </main>
       </div>
 
-      {projMod && <ProjectsModal projects={data.projects||[]} onSave={saveProjects} onClose={()=>setProjMod(false)}/>}
+      {projMod && <ProjectsModal projects={data.projects||[]} onSave={saveProjects} onClose={()=>setProjMod(false)} isAdmin={isAdmin}/>}
 
       {toast && (
         <div className="pop-in" style={{position:"fixed",bottom:24,right:24,zIndex:999,background:toast.type==="del"?"#fee2e2":"#d1fae5",border:`1px solid ${toast.type==="del"?T.red:T.green}`,color:toast.type==="del"?T.red:T.green,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:10}}>
@@ -3731,7 +3731,7 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
 }
 
 /* ── Projects Manager Modal ──────────────────────────────────────────────── */
-function ProjectsModal({projects,onSave,onClose}) {
+function ProjectsModal({projects,onSave,onClose,isAdmin}) {
   const [list,    setList]    = useState(projects.map(p=>typeof p==="string"?{name:p,client:"",contractValue:""}:{contractValue:"",...p}));
   const [newName, setNewName] = useState("");
   const [newClient,setNewClient]=useState("");
