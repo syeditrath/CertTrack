@@ -8331,7 +8331,8 @@ function ManpowerPage({data,setData,showToast,isAdmin}) {
           onUpdate={updatePerson}
           onDelete={()=>delPerson(personFresh.id)}
           onEdit={()=>{setEditingFrom(personFresh);setPerson(null);setAddModal({mode:"edit",person:personFresh});}}
-          showToast={showToast}/>
+          showToast={showToast}
+          isAdmin={isAdmin}/>
       )}
       {/* Show list when no person selected */}
       {!personFresh && <>
@@ -8457,7 +8458,7 @@ function MpImportModal({file,cats,onClose,onImport}) {
 }
 
 /* ─── Person Detail view ─────────────────────────────────────────────────── */
-function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast}) {
+function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast,isAdmin}) {
   const [certModal, setCertModal] = useState(null);
   const [activeTab, setActiveTab] = useState("profile");
 
@@ -8734,7 +8735,7 @@ function EquipmentPage({data,setData,showToast,isAdmin}) {
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
       {/* Show EquipmentDetail when equipment selected */}
-      {eqFresh && <EquipmentDetail eq={eqFresh} projects={projects} onBack={()=>setSelEq(null)} onUpdate={updateEq} onDelete={()=>delEq(eqFresh.id)} onEdit={()=>setModal({mode:"edit",eq:eqFresh})} showToast={showToast}/>}
+      {eqFresh && <EquipmentDetail eq={eqFresh} projects={projects} onBack={()=>setSelEq(null)} onUpdate={updateEq} onDelete={()=>delEq(eqFresh.id)} onEdit={()=>setModal({mode:"edit",eq:eqFresh})} showToast={showToast} isAdmin={isAdmin}/>}
       {/* Show list when nothing selected */}
       {!eqFresh && <>
       <PageHeader title="EQUIPMENT" sub="Assets with certifications, invoices, insurance & permits" color={T.gold}>
@@ -9355,7 +9356,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
 }
 
 
-  function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast}) {
+  function EquipmentDetail({eq,projects,onBack,onUpdate,onDelete,onEdit,showToast,isAdmin}) {
   const [activeTab,setActiveTab]=useState("certifications");
   const [subModal, setSubModal] =useState(null);
 
@@ -9505,7 +9506,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
       {records.length===0
         ?<Empty icon={curTab.icon} label={`No ${curTab.label.toLowerCase()}`} sub={`Add the first record`} color={curTab.color} onAdd={()=>setSubModal({mode:"add",type:activeTab})}/>
         :<div style={{display:"grid",gap:10}}>
-          {records.map((r,i)=><SubRecordCard key={r.id} r={r} type={activeTab} color={curTab.color} delay={i*.03} onEdit={()=>setSubModal({mode:"edit",type:activeTab,rec:r})} onDel={()=>delSubRecord(activeTab,r.id)}/>)}
+          {records.map((r,i)=><SubRecordCard key={r.id} r={r} type={activeTab} color={curTab.color} delay={i*.03} onEdit={()=>setSubModal({mode:"edit",type:activeTab,rec:r})} onDel={()=>delSubRecord(activeTab,r.id)} isAdmin={isAdmin}/>)}
         </div>
       }
 
@@ -9514,7 +9515,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
   );
 }
 
-function SubRecordCard({r,type,color,delay,onEdit,onDel}) {
+function SubRecordCard({r,type,color,delay,onEdit,onDel,isAdmin}) {
   const expDate=r.expiryDate;
   const days=daysUntil(expDate);
   const s=getStatus(days);
