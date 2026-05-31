@@ -6611,41 +6611,22 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     .length;
 
   return (
-    // ✅ Simple name badge — same as before
-<span
-  key={r.id}
-  style={{
-    background: T.card2,
-    border: `1px solid ${T.border}`,
-    borderRadius: 6,
-    padding: "2px 8px",
-    fontSize: 11,
-    color: T.textMuted,
-    fontWeight: 600
-  }}
->
-  🔩 {r.name}
-</span>
-        style={{
-          height: "25%",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          fontSize: 24,
-          fontWeight: 800,
-          color: T.gold,
-          fontFamily: "'Barlow Condensed', sans-serif"
-        }}
-      >
-        {r.name}
-      </div>
-    </div>
-  );
+  <span
+    key={r.id}
+    style={{
+      background: T.card2,
+      border: `1px solid ${T.border}`,
+      borderRadius: 6,
+      padding: "2px 8px",
+      fontSize: 11,
+      color: T.textMuted,
+      fontWeight: 600
+    }}
+  >
+    🔩 {r.name}
+  </span>
+);
 })}
-          </div>
-        )}
-        {projRigs.length===0&&<div style={{fontSize:12,color:T.textMuted,marginTop:10}}>No rigs defined yet — add one above, then assign equipment to it in the Equipment section.</div>}
-      </div>
 
       {/* ══ INVOICES ════════════════════════════════════════════════════ */}
       {/* ══ CERTIFICATES ════════════════════════════════════════════════ */}
