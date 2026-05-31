@@ -6350,13 +6350,14 @@ const PD_TABS = [
   {id:"hse",             label:"HSE",                         icon:"🦺", color:"#22c55e", dim:"rgba(34,197,94,0.12)"},
   {id:"projectdocuments",label:"Project Documents",           icon:"📁", color:"#a78bfa", dim:"rgba(167,139,250,0.12)"},
 ];
-const [selectedRig, setSelectedRig] = useState(null);
+
 /* ════════════════════════════════════════════════════════════════════════════
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
 function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   // ALL hooks must be at the top — never after a conditional return
   const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedRig, setSelectedRig] = useState(null);
   const [subTab,  setSubTab]  = useState("certificates");
   const [selProj, setSelProj] = useState(null);
   const [modal,   setModal]   = useState(null);
