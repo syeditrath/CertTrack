@@ -3656,6 +3656,16 @@ export default function App() {
           )}
           {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
           {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+          {page==="rigs" && (
+  <div className="fade-in">
+    <RigsPage
+      data={data}
+      setData={setData}
+      showToast={showToast}
+      isAdmin={isAdmin}
+    />
+  </div>
+)}
           {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
           {page==="costs" && (
             costAuthed
@@ -3703,6 +3713,7 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
     {id:"costs",     icon:"⊕", label:"Cost Control",       desc:"Budget vs actual, margin",  locked:!costAuthed},
     {id:"manpower",  icon:"◈", label:"Manpower",           desc:"Staff & certifications"},
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
+    {id:"rigs", icon:"🔩", label:"RIGS", desc:"Rig fleet & attached equipment"},
     {id:"maintenance", icon:"🛠", label:"Maintenance", desc:"Equipment maintenance requests",},
     {id:"finance",   icon:"$", label:"Finance",            desc:"Invoices & work orders",    locked:!financeAuthed},
   ];
@@ -4504,7 +4515,351 @@ function NotificationSettingsModal({ settings, allExpiries, sending, testResult,
     </div>
   );
 }
+* ════════════════════════════════════════════════════════════════════════════
+   RIGS PAGE
+════════════════════════════════════════════════════════════════════════════ */
+  function RigsPage({ data, setData, showToast, isAdmin }) {
+  const rigs = data.rigs || [];
+  const equipment = data.equipment || [];
 
+  const getRigEquipment = (rigName) =>
+    equipment.filter(eq => eq.rig === rigName);
+
+  const getOpenMaintenance = (rigName) =>
+    equipment
+      .filter(eq => eq.rig === rigName)
+      .reduce(
+        (count, eq) =>
+          count +
+          (eq.maintenance || []).filter(
+            t => t.status !== "Closed"
+          ).length,
+        0
+      );
+
+  const getExpiringCerts = (rigName) => {
+    const today = new Date();
+
+    return equipment
+      .filter(eq => eq.rig === rigName)
+      .reduce((count, eq) => {
+        return (
+          count +
+          (eq.certifications || []).filter(cert => {
+            if (!cert.expiryDate) return false;
+
+            const expiry = new Date(cert.expiryDate);
+            const diff =
+              (expiry - today) /
+              (1000 * 60 * 60 * 24);
+
+            return diff >= 0 && diff <= 30;
+          }).length
+        );
+      }, 0);
+  };
+
+  const statusColor = status => {
+    switch (status) {
+      case "Active":
+        return T.green;
+      case "Standby":
+        return T.gold;
+      case "Maintenance":
+        return T.red;
+      default:
+        return T.blue;
+    }
+  };
+
+  return (
+    <div
+      style={{
+        maxWidth: "min(1600px,95vw)",
+        margin: "0 auto"
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 20
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontFamily:
+                "'Barlow Condensed',sans-serif",
+              fontSize: 30,
+              fontWeight: 800,
+              color: T.text
+            }}
+          >
+            RIGS
+          </div>
+
+          <div
+            style={{
+              fontSize: 13,
+              color: T.textMuted
+            }}
+          >
+            View all rigs and attached equipment
+          </div>
+        </div>
+      </div>
+
+      {rigs.length === 0 ? (
+        <Empty
+          icon="🔩"
+          label="No rigs available"
+          sub="Add rigs from Project Documents"
+          color={T.gold}
+        />
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fill,minmax(420px,1fr))",
+            gap: 18
+          }}
+        >
+          {rigs.map(rig => {
+            const rigEquipment =
+              getRigEquipment(rig.name);
+
+            const openMaintenance =
+              getOpenMaintenance(rig.name);
+
+            const expiringCerts =
+              getExpiringCerts(rig.name);
+
+            return (
+              <div
+                key={rig.id}
+                className="card-hover"
+                style={{
+                  background: T.card,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 18,
+                  padding: 18,
+                  boxShadow: T.shadow,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent:
+                        "space-between",
+                      alignItems: "center"
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 24,
+                        fontWeight: 800,
+                        color: T.gold,
+                        fontFamily:
+                          "'Barlow Condensed',sans-serif"
+                      }}
+                    >
+                      🔩 {rig.name}
+                    </div>
+
+                    <div
+                      style={{
+                        padding:
+                          "5px 10px",
+                        borderRadius: 20,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        background:
+                          statusColor(
+                            rig.status
+                          ) + "22",
+                        color:
+                          statusColor(
+                            rig.status
+                          )
+                      }}
+                    >
+                      {rig.status ||
+                        "Active"}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 13,
+                      color: T.textSub
+                    }}
+                  >
+                    <div>
+                      Project:
+                      {" "}
+                      {rig.project}
+                    </div>
+
+                    {rig.supervisor && (
+                      <div>
+                        Supervisor:
+                        {" "}
+                        {rig.supervisor}
+                      </div>
+                    )}
+
+                    {rig.location && (
+                      <div>
+                        Location:
+                        {" "}
+                        {rig.location}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap"
+                  }}
+                >
+                  <Chip>
+                    🚜 Equipment:
+                    {" "}
+                    {rigEquipment.length}
+                  </Chip>
+
+                  <Chip>
+                    🛠 Open Tickets:
+                    {" "}
+                    {openMaintenance}
+                  </Chip>
+
+                  <Chip>
+                    ⚠ Expiring Certs:
+                    {" "}
+                    {expiringCerts}
+                  </Chip>
+                </div>
+
+                <div
+                  style={{
+                    borderTop:
+                      `1px solid ${T.border}`,
+                    paddingTop: 12
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      marginBottom: 10,
+                      color: T.text
+                    }}
+                  >
+                    Attached Equipment
+                  </div>
+
+                  {rigEquipment.length === 0 ? (
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color:
+                          T.textMuted
+                      }}
+                    >
+                      No equipment assigned
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 8
+                      }}
+                    >
+                      {rigEquipment.map(
+                        eq => (
+                          <div
+                            key={eq.id}
+                            style={{
+                              background:
+                                T.bg,
+                              border:
+                                `1px solid ${T.border}`,
+                              borderRadius: 10,
+                              padding:
+                                "10px 12px"
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontWeight: 700,
+                                color:
+                                  T.text
+                              }}
+                            >
+                              {eq.name}
+                            </div>
+
+                            <div
+                              style={{
+                                marginTop: 3,
+                                fontSize: 12,
+                                color:
+                                  T.textMuted
+                              }}
+                            >
+                              {eq.model ||
+                                "No model"}
+                            </div>
+
+                            <div
+                              style={{
+                                display:
+                                  "flex",
+                                gap: 6,
+                                flexWrap:
+                                  "wrap",
+                                marginTop: 8
+                              }}
+                            >
+                              {eq.serialNo && (
+                                <Chip>
+                                  SN:
+                                  {" "}
+                                  {eq.serialNo}
+                                </Chip>
+                              )}
+
+                              {eq.status && (
+                                <Chip>
+                                  {eq.status}
+                                </Chip>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 /* ════════════════════════════════════════════════════════════════════════════
    COST CONTROL PAGE
 ════════════════════════════════════════════════════════════════════════════ */
