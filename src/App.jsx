@@ -6629,23 +6629,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     })}
   </div>
 )}
-  return (
-  <span
-    key={r.id}
-    style={{
-      background: T.card2,
-      border: `1px solid ${T.border}`,
-      borderRadius: 6,
-      padding: "2px 8px",
-      fontSize: 11,
-      color: T.textMuted,
-      fontWeight: 600
-    }}
-  >
-    🔩 {r.name}
-  </span>
-);
-})}
 
       {/* ══ INVOICES ════════════════════════════════════════════════════ */}
       {/* ══ CERTIFICATES ════════════════════════════════════════════════ */}
