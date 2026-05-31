@@ -4615,76 +4615,88 @@ function RigDetailsPage({ rig, equipment, onBack }) {
       </div>
 
       {/* ── Hero image + stats row ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 18, marginBottom: 18 }}>
-        {/* Hero */}
-        <div
-          style={{
-            borderRadius: 14,
-            overflow: "hidden",
-            border: `1px solid ${T.border}`,
-            height: 320,
-            position: "relative"
-          }}
-        >
-          <img
-            src={rig.image || "/rig-placeholder.webp"}
-            alt={rig.name}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: "linear-gradient(to top, #00000088 0%, transparent 50%)"
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              bottom: 16,
-              left: 20,
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: 36,
-              fontWeight: 800,
-              color: "#fff",
-              textShadow: "0 2px 12px #0008"
-            }}
-          >
-            {rig.name}
-          </div>
-        </div>
+      {/* ── Hero image + stats row ── */}
+<div style={{
+  display: "grid",
+  gridTemplateColumns: "1fr 300px",   // slightly narrower stats col
+  gap: 18,
+  marginBottom: 18
+}}>
+  {/* Hero */}
+  <div
+    style={{
+      borderRadius: 14,
+      overflow: "hidden",
+      border: `1px solid ${T.border}`,
+      height: 320,
+      position: "relative",
+      background: "#0a0a0a"           // ✅ dark bg so image doesn't float
+    }}
+  >
+    <img
+      src={rig.image || "/rig-placeholder.webp"}
+      alt={rig.name}
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: "contain",         // ✅ was "cover" — shows full rig
+        objectPosition: "center"
+      }}
+    />
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: "linear-gradient(to top, #00000099 0%, transparent 55%)"
+      }}
+    />
+    <div
+      style={{
+        position: "absolute",
+        bottom: 16,
+        left: 20,
+        fontFamily: "'Barlow Condensed', sans-serif",
+        fontSize: 36,
+        fontWeight: 800,
+        color: "#fff",
+        textShadow: "0 2px 12px #0008"
+      }}
+    >
+      {rig.name}
+    </div>
+  </div>
 
-        {/* Stat cards */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {[
-            { label: "Equipment Attached", value: equipment.length, icon: "🔧", color: T.blue },
-            { label: "Open Maintenance", value: openMaintenance, icon: "⚠️", color: openMaintenance > 0 ? T.red : T.green },
-            { label: "Certs Expiring (30d)", value: expiringCerts, icon: "📋", color: expiringCerts > 0 ? T.gold : T.green },
-          ].map(stat => (
-            <div
-              key={stat.label}
-              style={{
-                background: T.card,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                padding: "18px 20px",
-                display: "flex",
-                alignItems: "center",
-                gap: 14,
-                flex: 1
-              }}
-            >
-              <div style={{ fontSize: 28 }}>{stat.icon}</div>
-              <div>
-                <div style={{ fontSize: 28, fontWeight: 800, color: stat.color, fontFamily: "'Barlow Condensed', sans-serif", lineHeight: 1 }}>
-                  {stat.value}
-                </div>
-                <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{stat.label}</div>
-              </div>
-            </div>
-          ))}
+  {/* Stat cards — add minWidth so grid doesn't collapse on small screens */}
+  <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+    {[
+      { label: "Equipment Attached",  value: equipment.length,   icon: "🔧", color: T.blue },
+      { label: "Open Maintenance",    value: openMaintenance,    icon: "⚠️", color: openMaintenance > 0 ? T.red  : T.green },
+      { label: "Certs Expiring (30d)",value: expiringCerts,      icon: "📋", color: expiringCerts  > 0 ? T.gold : T.green },
+    ].map(stat => (
+      <div
+        key={stat.label}
+        style={{
+          background: T.card,
+          border: `1px solid ${T.border}`,
+          borderRadius: 12,
+          padding: "18px 20px",
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          flex: 1
+        }}
+      >
+        <div style={{ fontSize: 28 }}>{stat.icon}</div>
+        <div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: stat.color, fontFamily: "'Barlow Condensed', sans-serif", lineHeight: 1 }}>
+            {stat.value}
+          </div>
+          <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>{stat.label}</div>
         </div>
       </div>
+    ))}
+  </div>
+</div>
 
       {/* ── Equipment list ── */}
       <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 20, fontWeight: 700, color: T.text, marginBottom: 12 }}>
@@ -4888,7 +4900,7 @@ function RigsPage({ data, setData, showToast, isAdmin }) {
                 {/* ── 75%: Image ── */}
                 <div style={{ height: "75%", position: "relative", overflow: "hidden" }}>
                   <img
-                    src={rig.image || "/rig-placeholder.jpg"}
+                    src={rig.image || "/rig-placeholder.webp"}
                     alt={rig.name}
                     style={{
                       width: "100%",
