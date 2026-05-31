@@ -7055,6 +7055,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   />
 )}
     </div>
+    </div>
   );
 }
 
