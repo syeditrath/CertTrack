@@ -100,12 +100,45 @@ const GLOBAL_CSS = `
 
   /* Mobile responsive */
   @media (max-width:1200px) {
-  .hide-mobile { display:none !important; }
-  .mobile-full { width:100% !important; }
-}
-@media (min-width:1201px) {
-  .show-mobile-only { display:none !important; }
-}
+    .hide-mobile { display:none !important; }
+    .mobile-full { width:100% !important; }
+  }
+  @media (min-width:1201px) {
+    .show-mobile-only { display:none !important; }
+  }
+
+  /* ── Phone-specific fixes ── */
+  @media (max-width:600px) {
+    /* Prevent horizontal scroll */
+    html, body { overflow-x: hidden; }
+
+    /* Stack 2-col grids to 1 col */
+    .grid-2col { grid-template-columns: 1fr !important; }
+
+    /* Tighter card padding on phones */
+    .app-card { border-radius: 10px !important; }
+
+    /* Modal full-width on phones */
+    .slide-up { border-radius: 16px 16px 0 0 !important; }
+
+    /* Top bar: reduce header height slightly */
+    header { padding: 0 12px !important; }
+
+    /* Shrink the top-bar action buttons on very small screens */
+    .topbar-actions button { padding: 5px 7px !important; font-size: 13px !important; }
+
+    /* Make toast full-width on mobile */
+    .toast-fixed { right: 12px !important; left: 12px !important; bottom: 16px !important; }
+  }
+
+  /* Prevent modal overflow on all small screens */
+  @media (max-width:768px) {
+    .mobile-modal-pad { padding-left: 16px !important; padding-right: 16px !important; }
+    /* Fix grid-map-columns that are fixed-width on mobile */
+    .resp-grid-2 { grid-template-columns: 1fr !important; }
+    .resp-grid-3 { grid-template-columns: 1fr !important; }
+    .resp-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+  }
 
   /* Export button pulse */
   @keyframes exportPulse { 0%,100%{opacity:1;}50%{opacity:0.6;} }
@@ -3486,8 +3519,8 @@ export default function App() {
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         {/* ── Top bar ── */}
-        <header style={{background:T.sidebar,borderBottom:"2px solid transparent",backgroundImage:`linear-gradient(${T.sidebar},${T.sidebar}), linear-gradient(90deg,#fbbf24,#38bdf8,#34d399,#fbbf24)`,backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",padding:"0 20px",flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
-          <div style={{display:"flex",alignItems:"center",height:56,position:"relative"}}>
+        <header style={{background:T.sidebar,borderBottom:"2px solid transparent",backgroundImage:`linear-gradient(${T.sidebar},${T.sidebar}), linear-gradient(90deg,#fbbf24,#38bdf8,#34d399,#fbbf24)`,backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",padding:`0 ${viewportWidth < 600 ? "10px" : "20px"}`,flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
+          <div style={{display:"flex",alignItems:"center",height:viewportWidth < 600 ? 50 : 56,position:"relative",gap:viewportWidth < 480 ? 6 : 0}}>
             {viewportWidth < 1200 && (
   <button
     onClick={() => setSideOpen(true)}
@@ -3496,8 +3529,8 @@ export default function App() {
       border:"1px solid rgba(255,255,255,0.15)",
       color:"#ffffff",
       borderRadius:8,
-      width:40,
-      height:40,
+      width:36,
+      height:36,
       display:"flex",
       alignItems:"center",
       justifyContent:"center",
@@ -3509,22 +3542,29 @@ export default function App() {
     ☰
   </button>
 )}
-            <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"2px",color:"#f59e0b",textTransform:"uppercase"}}>SCORPION ARABIA</div>
-              <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>ENTERPRISE RESOURCE PLANNING</div>
-            </div>
-            <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",zIndex:1}}>
+            {/* Title — absolute on desktop for centering, inline on mobile to avoid overlap */}
+            {viewportWidth >= 500 ? (
+              <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"2px",color:"#f59e0b",textTransform:"uppercase"}}>SCORPION ARABIA</div>
+                <div style={{fontSize:11,color:"#93c5fd",letterSpacing:"1.5px",marginTop:1}}>ENTERPRISE RESOURCE PLANNING</div>
+              </div>
+            ) : (
+              <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,letterSpacing:"1px",color:"#f59e0b",textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>SCORPION ARABIA</div>
+              </div>
+            )}
+            <div style={{marginLeft:"auto",display:"flex",gap:viewportWidth < 480 ? 4 : 8,alignItems:"center",zIndex:1,flexShrink:0}}>
               {/* Global search */}
               <div style={{position:"relative"}}>
                 {showSearch
                   ? <input autoFocus value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)}
                       onBlur={()=>{if(!globalSearch)setShowSearch(false);}}
-                      placeholder="Search everything…"
-                      style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:8,padding:"7px 12px",fontSize:13,color:"#fff",outline:"none",width:220}}/>
-                  : <button onClick={()=>setShowSearch(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⌕</button>
+                      placeholder="Search…"
+                      style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:8,padding:"7px 10px",fontSize:13,color:"#fff",outline:"none",width:viewportWidth < 480 ? 140 : 200}}/>
+                  : <button onClick={()=>setShowSearch(true)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#fff",borderRadius:8,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⌕</button>
                 }
                 {searchResults.length>0&&showSearch&&(
-                  <div style={{position:"absolute",top:42,right:0,background:T.card,border:`1px solid ${T.border}`,borderRadius:12,width:320,maxHeight:380,overflowY:"auto",boxShadow:T.shadow,zIndex:200}}>
+                  <div style={{position:"absolute",top:42,right:0,background:T.card,border:`1px solid ${T.border}`,borderRadius:12,width:viewportWidth < 480 ? "90vw" : 320,maxHeight:380,overflowY:"auto",boxShadow:T.shadow,zIndex:200}}>
                     {searchResults.map((r,i)=>(
                       <div key={i} onClick={()=>{go(r.page);setShowSearch(false);setGlobalSearch("");}}
                         style={{padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${darkMode?DARK.border:T.border}`,transition:"background .15s"}}
@@ -3541,23 +3581,24 @@ export default function App() {
                 )}
               </div>
               {allExpiries.length>0 && (
-                <div style={{background:"rgba(220,38,38,0.25)",border:"1px solid rgba(220,38,38,0.5)",color:"#fca5a5",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>
+                <div style={{background:"rgba(220,38,38,0.25)",border:"1px solid rgba(220,38,38,0.5)",color:"#fca5a5",borderRadius:8,padding:viewportWidth < 480 ? "5px 8px" : "6px 12px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
                   ▲ <span style={{background:"#dc2626",color:"#fff",borderRadius:999,padding:"1px 6px",fontSize:11,fontWeight:700}}>{allExpiries.length}</span>
                 </div>
               )}
-              {/* Admin toggle */}
+              {/* Admin toggle — hide label on very small screens */}
               <button
                 onClick={()=>{
                   if (isAdmin) { try{sessionStorage.removeItem(ADMIN_KEY);}catch{} setIsAdmin(false); showToast("Admin mode off"); }
                   else { const pw=window.prompt("Enter admin password:"); if(pw && loginAdmin(pw)) showToast("Admin mode on — delete enabled"); else if(pw) showToast("Wrong password","error"); }
                 }}
                 title={isAdmin ? "Admin mode ON — click to lock" : "Unlock admin (delete) access"}
-                style={{background:isAdmin?"rgba(239,68,68,0.12)":"transparent",border:`1px solid ${isAdmin?"#ef4444":T.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:14,color:isAdmin?"#ef4444":T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}
+                style={{background:isAdmin?"rgba(239,68,68,0.12)":"transparent",border:`1px solid ${isAdmin?"#ef4444":T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:13,color:isAdmin?"#ef4444":T.textMuted,display:"flex",alignItems:"center",gap:4,transition:"all .15s",flexShrink:0}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=isAdmin?"#ef4444":T.textMuted}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=isAdmin?"#ef4444":T.border}>
-                {isAdmin ? "🔓 Admin" : "🔒"}
+                {isAdmin ? (viewportWidth < 480 ? "🔓" : "🔓 Admin") : "🔒"}
               </button>
-              {/* Restore from backup */}
+              {/* Restore from backup — hide on very small phones */}
+              {viewportWidth >= 400 && <>
               <input id="restore-input" type="file" accept=".json" style={{display:"none"}} onChange={e=>{
                 const file = e.target.files[0];
                 if (!file) return;
@@ -3576,31 +3617,32 @@ export default function App() {
               }}/>
               <button onClick={()=>document.getElementById("restore-input").click()}
                 title="Restore data from backup JSON file"
-                style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:15,color:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}
+                style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:14,color:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s",flexShrink:0}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=T.blue}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
                 📂
               </button>
               {/* Backup button */}
               <button onClick={() => backupToDrive(false)} disabled={backingUp || loadingData} title={backupStatus ? `Last backup: ${backupStatus}` : "No backup yet"}
-                style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:15,color:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s",opacity:backingUp?0.5:1}}
+                style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:14,color:T.textMuted,display:"flex",alignItems:"center",gap:4,transition:"all .15s",opacity:backingUp?0.5:1,flexShrink:0}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=T.green}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
                 {backingUp ? "⏳" : "💾"}
-                {backupStatus && <span style={{fontSize:9,fontWeight:700,color:T.green,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {backupStatus && viewportWidth >= 640 && <span style={{fontSize:9,fontWeight:700,color:T.green,maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {backupStatus.split(",")[0]}
                 </span>}
               </button>
+              </>}
               {/* Notification bell */}
               <button onClick={() => setNotifyModal(true)} title="Email Notification Settings"
-                style={{background:notifySettings.enabled?"rgba(251,191,36,0.15)":"transparent",border:`1px solid ${notifySettings.enabled?T.gold:T.border}`,borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:16,color:notifySettings.enabled?T.gold:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
-                🔔{notifySettings.enabled && <span style={{fontSize:10,fontWeight:700,color:T.gold}}>ON</span>}
+                style={{background:notifySettings.enabled?"rgba(251,191,36,0.15)":"transparent",border:`1px solid ${notifySettings.enabled?T.gold:T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:15,color:notifySettings.enabled?T.gold:T.textMuted,display:"flex",alignItems:"center",gap:4,transition:"all .15s",flexShrink:0}}>
+                🔔{notifySettings.enabled && viewportWidth >= 480 && <span style={{fontSize:10,fontWeight:700,color:T.gold}}>ON</span>}
               </button>
             </div>
           </div>
         </header>
 
-        <main style={{flex:1,overflowY:"auto",padding:"clamp(14px,2vw,28px) clamp(14px,2.5vw,32px)"}}>
+        <main style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"clamp(10px,2vw,28px) clamp(10px,2.5vw,32px)"}}>
           {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go}/></div>}
           {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
@@ -3640,7 +3682,7 @@ export default function App() {
       {projMod && <ProjectsModal projects={data.projects||[]} onSave={saveProjects} onClose={()=>setProjMod(false)} isAdmin={isAdmin}/>}
 
       {toast && (
-        <div className="pop-in" style={{position:"fixed",bottom:24,right:24,zIndex:999,background:toast.type==="del"?"#fee2e2":"#d1fae5",border:`1px solid ${toast.type==="del"?T.red:T.green}`,color:toast.type==="del"?T.red:T.green,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:10}}>
+        <div className="pop-in" style={{position:"fixed",bottom:viewportWidth < 600 ? 16 : 24,right:viewportWidth < 600 ? 12 : 24,left:viewportWidth < 600 ? 12 : "auto",zIndex:999,background:toast.type==="del"?"#fee2e2":"#d1fae5",border:`1px solid ${toast.type==="del"?T.red:T.green}`,color:toast.type==="del"?T.red:T.green,borderRadius:10,padding:"12px 20px",fontSize:14,fontWeight:600,boxShadow:T.shadow,display:"flex",alignItems:"center",gap:10}}>
           {toast.type==="del"?"✕":"✓"} {toast.msg}
         </div>
       )}
@@ -3664,37 +3706,41 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
     {id:"maintenance", icon:"🛠", label:"Maintenance", desc:"Equipment maintenance requests",},
     {id:"finance",   icon:"$", label:"Finance",            desc:"Invoices & work orders",    locked:!financeAuthed},
   ];
+  const handleNav = (id) => {
+    go(id);
+    // auto-close sidebar on mobile after navigation
+  };
   return (
     <aside style={{width:"clamp(220px,18vw,280px)",flexShrink:0,background:T.sidebar,borderRight:"none",display:"flex",flexDirection:"column",zIndex:50,position:isMobile?"fixed":"relative",top:0,left:0,height:"100%",transform:isMobile?(sideOpen?"translateX(0)":"translateX(-100%)"):"none",transition:"transform .28s ease",boxShadow:"2px 0 12px rgba(0,0,0,0.06)"}}>
-      <div style={{padding:"22px 20px 18px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
-          <div style={{position:"relative",flexShrink:0,width:72,height:72}}>
+      <div style={{padding:"16px 16px 14px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{position:"relative",flexShrink:0,width:56,height:56}}>
           {/* Spinning rings — thin and tight */}
           <div className="logo-ring-spin" style={{position:"absolute",inset:-2,borderRadius:"50%",border:"1px solid rgba(251,191,36,0.4)",pointerEvents:"none"}}/>
           <div className="logo-ring-spin-rev" style={{position:"absolute",inset:-5,borderRadius:"50%",border:"1px dashed rgba(56,189,248,0.18)",pointerEvents:"none"}}/>
-          {/* Logo — bigger, black border minimal */}
-          <div className="logo-animate" style={{width:72,height:72,borderRadius:"50%",background:"#000",overflow:"hidden",boxShadow:"0 0 16px rgba(251,191,36,0.35)",border:"1.5px solid rgba(251,191,36,0.4)",position:"relative",zIndex:1}}>
+          {/* Logo */}
+          <div className="logo-animate" style={{width:56,height:56,borderRadius:"50%",background:"#000",overflow:"hidden",boxShadow:"0 0 16px rgba(251,191,36,0.35)",border:"1.5px solid rgba(251,191,36,0.4)",position:"relative",zIndex:1}}>
             <img src="logo.png" alt="Scorpion Arabia" style={{width:"100%",height:"100%",objectFit:"cover",mixBlendMode:"lighten"}}/>
           </div>
         </div>
-          <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(16px,1.4vw,22px)",letterSpacing:"1px",lineHeight:1.1,background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 8s linear infinite",filter:"drop-shadow(0 0 8px rgba(251,191,36,0.6))"}}>SCORPION ARABIA</div>
-            <div style={{fontSize:12,color:T.textSub,fontWeight:600,letterSpacing:"1.4px",marginTop:3,color:"#93c5fd"}}>PORTAL</div>
+          <div style={{minWidth:0}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(14px,1.4vw,20px)",letterSpacing:"1px",lineHeight:1.1,background:"linear-gradient(90deg,#92400e,#fbbf24,#fef3c7,#fbbf24,#f59e0b,#92400e)",backgroundSize:"300% auto",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",animation:"shimmer 8s linear infinite",filter:"drop-shadow(0 0 8px rgba(251,191,36,0.6))",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>SCORPION ARABIA</div>
+            <div style={{fontSize:11,fontWeight:600,letterSpacing:"1.4px",marginTop:2,color:"#93c5fd"}}>PORTAL</div>
           </div>
         </div>
       </div>
-      <nav style={{padding:"14px 10px",flex:1,overflowY:"auto"}}>
+      <nav style={{padding:"10px 8px",flex:1,overflowY:"auto"}}>
           {NAV.map(n=>{
           const active=page===n.id;
           const badge=n.id==="dashboard"?alerts:0;
           return (
-            <button key={n.id} onClick={()=>go(n.id)} className="nav-item" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 12px",borderRadius:8,border:"none",marginBottom:3,textAlign:"left",background:active?"rgba(59,130,246,0.15)":"transparent",borderLeft:`2px solid ${active?"#93c5fd":"transparent"}`,transition:"all .15s",cursor:"pointer"}}>
-              <span style={{fontSize:20,color:active?"#93c5fd":n.locked?"#64748b":"#94a3b8"}}>{n.icon}</span>
-              <div style={{flex:1}}>
-                <div style={{fontSize:"clamp(12px,1vw,14px)",fontWeight:600,color:active?"#93c5fd":n.locked?"#64748b":"#e2e8f0"}}>{n.label}</div>
-                <div style={{fontSize:10,color:"#64748b",marginTop:1}}>{n.locked?"🔒 Finance access required":n.desc}</div>
+            <button key={n.id} onClick={()=>handleNav(n.id)} className="nav-item" style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,border:"none",marginBottom:2,textAlign:"left",background:active?"rgba(59,130,246,0.15)":"transparent",borderLeft:`2px solid ${active?"#93c5fd":"transparent"}`,transition:"all .15s",cursor:"pointer"}}>
+              <span style={{fontSize:18,color:active?"#93c5fd":n.locked?"#64748b":"#94a3b8",flexShrink:0}}>{n.icon}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:active?"#93c5fd":n.locked?"#64748b":"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.label}</div>
+                <div style={{fontSize:10,color:"#64748b",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.locked?"🔒 Locked":n.desc}</div>
               </div>
-              {badge>0&&<span style={{background:T.red,color:"#fff",borderRadius:999,padding:"1px 7px",fontSize:10,fontWeight:700}}>{badge}</span>}
+              {badge>0&&<span style={{background:T.red,color:"#fff",borderRadius:999,padding:"1px 7px",fontSize:10,fontWeight:700,flexShrink:0}}>{badge}</span>}
             </button>
           );
         })}
@@ -9636,9 +9682,9 @@ function EqModal({mode,eq,projects,rigs,onClose,onSave}) {
 ════════════════════════════════════════════════════════════════════════════ */
 function PageHeader({title,sub,color,children}) {
   return (
-    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:22}}>
-      <div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{title}</div>
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:18}}>
+      <div style={{minWidth:0}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(20px,4vw,26px)",color:T.text}}>{title}</div>
         <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>{sub}</div>
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>{children}</div>
@@ -9658,9 +9704,8 @@ function Empty({icon,label,sub,color,onAdd}) {
 }
 
 function Overlay({ children, onClose }) {
-  const { height: viewportHeight } = useViewport();
-
-  // Smart centering logic
+  const { height: viewportHeight, width: viewportWidth } = useViewport();
+  const isMobile = viewportWidth < 600;
   const isShortScreen = viewportHeight < 700;
 
   return (
@@ -9676,21 +9721,18 @@ function Overlay({ children, onClose }) {
         zIndex: 200,
         display: "flex",
         justifyContent: "center",
-
-        // 👇 KEY CHANGE
-        alignItems: isShortScreen ? "flex-start" : "center",
-
-        // 👇 dynamic spacing
-        padding: isShortScreen ? "20px 16px" : "32px 16px",
-
+        alignItems: isMobile ? "flex-end" : isShortScreen ? "flex-start" : "center",
+        padding: isMobile ? "0" : isShortScreen ? "20px 16px" : "32px 16px",
         overflowY: "auto",
       }}
     >
       <div
         style={{
           width: "100%",
+          maxWidth: isMobile ? "100%" : undefined,
           display: "flex",
           justifyContent: "center",
+          // On mobile, let child take full width with rounded top corners
         }}
         onClick={e => e.stopPropagation()}
       >
@@ -9701,6 +9743,8 @@ function Overlay({ children, onClose }) {
 }
 
 function FormModal({ title, color, children, onClose, onSave }) {
+  const { width: vw } = useViewport();
+  const isMobile = vw < 600;
   return (
     <Overlay onClose={onClose}>
       <div
@@ -9708,10 +9752,10 @@ function FormModal({ title, color, children, onClose, onSave }) {
         style={{
           background: T.sidebar,
           border: `1px solid ${T.border}`,
-          borderRadius: 18,
+          borderRadius: isMobile ? "18px 18px 0 0" : 18,
           width: "100%",
-          maxWidth: 560,
-          maxHeight: "calc(100vh - 48px)",
+          maxWidth: isMobile ? "100%" : 560,
+          maxHeight: isMobile ? "92vh" : "calc(100vh - 48px)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
