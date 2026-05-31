@@ -4627,7 +4627,7 @@ function RigDetailsPage({ rig, equipment, onBack }) {
           }}
         >
           <img
-            src={rig.image || "/rig-placeholder.jpg"}
+            src={rig.image || "/rig-placeholder.webp"}
             alt={rig.name}
             style={{ width: "100%", height: "100%", objectFit: "cover" }}
           />
