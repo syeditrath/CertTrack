@@ -6600,16 +6600,35 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           </div>
         </div>
         {projRigs.length > 0 && (
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>
-            {projRigs.map(r => {
-  const eqCount = (data.equipment || []).filter(
-    e => e.rig === r.name && e.project === selectedProject
-  ).length;
-  const maintCount = (data.equipment || [])
-    .filter(e => e.rig === r.name && e.project === selectedProject)
-    .flatMap(e => (e.maintenance || []).filter(t => (t.status || "Open") !== "Closed"))
-    .length;
+  <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>
+    {projRigs.map(r => {
+      const eqCount = (data.equipment || []).filter(
+        e => e.rig === r.name && e.project === selectedProject
+      ).length;
+      const maintCount = (data.equipment || [])
+        .filter(e => e.rig === r.name && e.project === selectedProject)
+        .flatMap(e => (e.maintenance || []).filter(t => (t.status || "Open") !== "Closed"))
+        .length;
 
+      return (
+        <span
+          key={r.id}
+          style={{
+            background: T.card2,
+            border: `1px solid ${T.border}`,
+            borderRadius: 6,
+            padding: "2px 8px",
+            fontSize: 11,
+            color: T.textMuted,
+            fontWeight: 600
+          }}
+        >
+          🔩 {r.name}
+        </span>
+      );
+    })}
+  </div>
+)}
   return (
   <span
     key={r.id}
