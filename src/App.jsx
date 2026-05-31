@@ -6350,7 +6350,7 @@ const PD_TABS = [
   {id:"hse",             label:"HSE",                         icon:"🦺", color:"#22c55e", dim:"rgba(34,197,94,0.12)"},
   {id:"projectdocuments",label:"Project Documents",           icon:"📁", color:"#a78bfa", dim:"rgba(167,139,250,0.12)"},
 ];
-
+const [selectedRig, setSelectedRig] = useState(null);
 /* ════════════════════════════════════════════════════════════════════════════
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
@@ -6588,63 +6588,54 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
         </div>
         {projRigs.length > 0 && (
           <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>
-            {projRigs.map(r=>{
-              const eqCount = (data.equipment||[]).filter(e=>e.rig===r.name&&e.project===selectedProject).length;
-              const maintCount = (data.equipment||[]).filter(e=>e.rig===r.name&&e.project===selectedProject)
-                .flatMap(e=>(e.maintenance||[]).filter(t=>(t.status||"Open")!=="Closed")).length;
-              return (
-  <div
-    key={rig.id}
-    className="card-hover"
-    onClick={() => setSelectedRig(rig)}
-    style={{
-      background: T.card,
-      border: `1px solid ${T.border}`,
-      borderRadius: 18,
-      overflow: "hidden",
-      cursor: "pointer",
-      boxShadow: T.shadow,
-      height: 320
-    }}
-  >
-    <div
-      style={{
-        height: "75%",
-        overflow: "hidden"
-      }}
-    >
-      <img
-        src={
-          rig.image ||
-          "/rig-placeholder.jpg"
-        }
-        alt={rig.name}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover"
-        }}
-      />
-    </div>
+            {projRigs.map(r => {
+  const eqCount = (data.equipment || []).filter(
+    e => e.rig === r.name && e.project === selectedProject
+  ).length;
+  const maintCount = (data.equipment || [])
+    .filter(e => e.rig === r.name && e.project === selectedProject)
+    .flatMap(e => (e.maintenance || []).filter(t => (t.status || "Open") !== "Closed"))
+    .length;
 
+  return (
     <div
+      key={r.id}
+      className="card-hover"
+      onClick={() => setSelectedRig(r)}
       style={{
-        height: "25%",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        fontSize: 24,
-        fontWeight: 800,
-        color: T.gold,
-        fontFamily:
-          "'Barlow Condensed',sans-serif"
+        background: T.card,
+        border: `1px solid ${T.border}`,
+        borderRadius: 18,
+        overflow: "hidden",
+        cursor: "pointer",
+        boxShadow: T.shadow,
+        height: 320
       }}
     >
-      {rig.name}
+      <div style={{ height: "75%", overflow: "hidden" }}>
+        <img
+          src={r.image || "/rig-placeholder.jpg"}
+          alt={r.name}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      </div>
+      <div
+        style={{
+          height: "25%",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          fontSize: 24,
+          fontWeight: 800,
+          color: T.gold,
+          fontFamily: "'Barlow Condensed', sans-serif"
+        }}
+      >
+        {r.name}
+      </div>
     </div>
-  </div>
-);
-            })}
+  );
+})}
           </div>
         )}
         {projRigs.length===0&&<div style={{fontSize:12,color:T.textMuted,marginTop:10}}>No rigs defined yet — add one above, then assign equipment to it in the Equipment section.</div>}
