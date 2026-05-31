@@ -4515,7 +4515,7 @@ function NotificationSettingsModal({ settings, allExpiries, sending, testResult,
     </div>
   );
 }
-* ════════════════════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════════════
    RIGS PAGE
 ════════════════════════════════════════════════════════════════════════════ */
   function RigsPage({ data, setData, showToast, isAdmin }) {
