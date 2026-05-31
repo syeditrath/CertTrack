@@ -6611,28 +6611,21 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     .length;
 
   return (
-    <div
-      key={r.id}
-      className="card-hover"
-      onClick={() => setSelectedRig(r)}
-      style={{
-        background: T.card,
-        border: `1px solid ${T.border}`,
-        borderRadius: 18,
-        overflow: "hidden",
-        cursor: "pointer",
-        boxShadow: T.shadow,
-        height: 320
-      }}
-    >
-      <div style={{ height: "75%", overflow: "hidden" }}>
-        <img
-          src={r.image || "/rig-placeholder.jpg"}
-          alt={r.name}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
-      </div>
-      <div
+    // ✅ Simple name badge — same as before
+<span
+  key={r.id}
+  style={{
+    background: T.card2,
+    border: `1px solid ${T.border}`,
+    borderRadius: 6,
+    padding: "2px 8px",
+    fontSize: 11,
+    color: T.textMuted,
+    fontWeight: 600
+  }}
+>
+  🔩 {r.name}
+</span>
         style={{
           height: "25%",
           display: "flex",
