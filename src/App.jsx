@@ -6843,6 +6843,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
         if (selProj) {
           // ── Per-project view: grouped by rig ──
+          const [collapsedRigs, setCollapsedRigs] = useState({});
+          const toggleRig = (rigId) => setCollapsedRigs(p => ({...p, [rigId]: !p[rigId]}));
           const rigColors = ["#a78bfa","#38bdf8","#34d399","#f472b6","#fb923c","#fbbf24"];
           const rigSections = projRigs.map((rig, ri) => ({
             rig,
@@ -6902,30 +6904,53 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                   }
                 </div>
               ) : (
-                /* Rigs defined — show one section per rig */
-                <div style={{display:"grid",gap:16}}>
-                  {rigSections.map(({rig, color, reports})=>(
-                    <div key={rig.id} style={{background:T.card,border:`2px solid ${color}44`,borderRadius:16,overflow:"hidden"}}>
-                      {/* Rig header */}
-                      <div style={{background:`${color}18`,borderBottom:`1px solid ${color}33`,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:10}}>
-                          <span style={{fontSize:20}}>🔩</span>
-                          <div>
-                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color}}>{rig.name}</div>
-                            <div style={{fontSize:12,color:T.textMuted,marginTop:1}}>{reports.length} report{reports.length!==1?"s":""}</div>
-                          </div>
-                        </div>
-                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                          {reports.length > 0 && (
-                            <button
-                              onClick={() => exportDRs(reports, `Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_${rig.name.replace(/\s+/g,"_")}`)}
-                              style={{background:`${color}18`,border:`1px solid ${color}44`,color,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-                              ⬇ Export {rig.name}
-                            </button>
-                          )}
-                          <Btn color={color} solid onClick={()=>setModal({mode:"add",doc:{project:selProj, rig:rig.name}})}>+ Add Report</Btn>
-                        </div>
-                      </div>
+                {/* Rigs defined — show one section per rig */}
+<div style={{display:"grid",gap:16}}>
+  {rigSections.map(({rig, color, reports})=>{
+    const isCollapsed = collapsedRigs[rig.id];
+    return (
+      <div key={rig.id} style={{background:T.card,border:`2px solid ${color}44`,borderRadius:16,overflow:"hidden"}}>
+        {/* Rig header — click anywhere to collapse */}
+        <div
+          onClick={()=>toggleRig(rig.id)}
+          style={{background:`${color}18`,borderBottom:isCollapsed?"none":`1px solid ${color}33`,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",cursor:"pointer",userSelect:"none"}}
+        >
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {/* Chevron */}
+            <span style={{fontSize:13,color,transition:"transform 0.2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▼</span>
+            <span style={{fontSize:20}}>🔩</span>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color}}>{rig.name}</div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:1}}>
+                {isCollapsed ? `${reports.length} report${reports.length!==1?"s":""} — click to expand` : `${reports.length} report${reports.length!==1?"s":""}`}
+              </div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+            {reports.length > 0 && (
+              <button
+                onClick={()=>exportDRs(reports,`Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_${rig.name.replace(/\s+/g,"_")}`)}
+                style={{background:`${color}18`,border:`1px solid ${color}44`,color,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                ⬇ Export {rig.name}
+              </button>
+            )}
+            <Btn color={color} solid onClick={()=>setModal({mode:"add",doc:{project:selProj,rig:rig.name}})}>+ Add Report</Btn>
+          </div>
+        </div>
+
+        {/* Collapsible reports body */}
+        {!isCollapsed && (
+          <div style={{padding:"14px 16px",display:"grid",gap:8}}>
+            {reports.length===0
+              ? <div style={{textAlign:"center",padding:"24px 0",color:T.textMuted,fontSize:13}}>No reports for {rig.name} yet</div>
+              : reports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)
+            }
+          </div>
+        )}
+      </div>
+    );
+  })}
+</div>
                       {/* Reports */}
                       <div style={{padding:"14px 16px"}}>
                         {reports.length===0
