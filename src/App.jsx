@@ -3759,15 +3759,16 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
       {/* Manage Projects */}
      
       <div style={{padding:"6px 10px 0"}}>
+        {isAdmin && (
         <button onClick={onManageProjects} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"transparent",textAlign:"left",transition:"all .15s",marginBottom:4}}
-          onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.1)";e.currentTarget.style.borderColor="#93c5fd";}}
-          onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#334155";}}>
+          onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.1)";e.currentTarget.style.borderColor="#93c5fd";
+          onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#334155";}}>)}
           <span style={{fontSize:16,color:T.blue}}>⊕</span>
           <div>
             <div style={{fontSize:12,fontWeight:600,color:"#e2e8f0"}}>Manage Projects</div>
             <div style={{fontSize:10,color:"#64748b"}}>Add, rename, delete</div>
           </div>
-        </button>
+        </button>)}
       </div>
     
       <div style={{padding:"10px 10px 16px",borderTop:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",gap:6}}>
