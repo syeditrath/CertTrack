@@ -6872,85 +6872,43 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
             })), filename);
           };
 
-          return (
-            <div>
-              {/* Header */}
-              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20,flexWrap:"wrap"}}>
-                <button onClick={backToProjects} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>← Back</button>
-                <div style={{flex:1}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selectedProject}</div>
-                  <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>{projDRs.length} report{projDRs.length!==1?"s":""} · {projRigs.length} rig{projRigs.length!==1?"s":""}</div>
-                </div>
-                {projDRs.length > 0 && (
-                  <button
-                    onClick={() => exportDRs(projDRs, `Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_ALL_RIGS`)}
-                    style={{background:`${T.green}18`,border:`1px solid ${T.green}44`,color:T.green,borderRadius:9,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-                    ⬇ Export All Rigs
-                  </button>
-                )}
-              </div>
+          ) : (
+                /* Rigs defined — show one section per rig */
+                <div style={{display:"grid",gap:16}}>
+                  {rigSections.map(({rig, color, reports})=>{
+                    const isCollapsed = collapsedRigs[rig.id];
+                    return (
+                      <div key={rig.id} style={{background:T.card,border:`2px solid ${color}44`,borderRadius:16,overflow:"hidden"}}>
+                        {/* Rig header — click anywhere to collapse */}
+                        <div
+                          onClick={()=>toggleRig(rig.id)}
+                          style={{background:`${color}18`,borderBottom:isCollapsed?"none":`1px solid ${color}33`,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",cursor:"pointer",userSelect:"none"}}
+                        >
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <span style={{fontSize:13,color,transition:"transform 0.2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▼</span>
+                            <span style={{fontSize:20}}>🔩</span>
+                            <div>
+                              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color}}>{rig.name}</div>
+                              <div style={{fontSize:12,color:T.textMuted,marginTop:1}}>
+                                {isCollapsed ? `${reports.length} report${reports.length!==1?"s":""} — click to expand` : `${reports.length} report${reports.length!==1?"s":""}`}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                            {reports.length > 0 && (
+                              <button
+                                onClick={()=>exportDRs(reports,`Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_${rig.name.replace(/\s+/g,"_")}`)}
+                                style={{background:`${color}18`,border:`1px solid ${color}44`,color,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                                ⬇ Export {rig.name}
+                              </button>
+                            )}
+                            <Btn color={color} solid onClick={()=>setModal({mode:"add",doc:{project:selProj,rig:rig.name}})}>+ Add Report</Btn>
+                          </div>
+                        </div>
 
-              {projRigs.length === 0 ? (
-                /* No rigs — show flat list with prompt */
-                <div>
-                  <div style={{background:`${T.gold}10`,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"14px 16px",marginBottom:16,fontSize:13,color:T.gold}}>
-                    🔩 No rigs defined for this project yet. Add rigs using the panel above — reports will then be organised per rig.
-                  </div>
-                  {projDRs.length===0
-                    ?<Empty icon="📅" label="No daily reports yet" sub="Add rigs first, then add daily reports per rig" color={T.gold} onAdd={()=>setModal({mode:"add",doc:{project:selProj}})}/>
-                    :<div style={{display:"grid",gap:8}}>
-                      {projDRs.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)}
-                    </div>
-                  }
-                </div>
-              ) : (
-                {/* Rigs defined — show one section per rig */}
-<div style={{display:"grid",gap:16}}>
-  {rigSections.map(({rig, color, reports})=>{
-    const isCollapsed = collapsedRigs[rig.id];
-    return (
-      <div key={rig.id} style={{background:T.card,border:`2px solid ${color}44`,borderRadius:16,overflow:"hidden"}}>
-        {/* Rig header — click anywhere to collapse */}
-        <div
-          onClick={()=>toggleRig(rig.id)}
-          style={{background:`${color}18`,borderBottom:isCollapsed?"none":`1px solid ${color}33`,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",cursor:"pointer",userSelect:"none"}}
-        >
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {/* Chevron */}
-            <span style={{fontSize:13,color,transition:"transform 0.2s",display:"inline-block",transform:isCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▼</span>
-            <span style={{fontSize:20}}>🔩</span>
-            <div>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color}}>{rig.name}</div>
-              <div style={{fontSize:12,color:T.textMuted,marginTop:1}}>
-                {isCollapsed ? `${reports.length} report${reports.length!==1?"s":""} — click to expand` : `${reports.length} report${reports.length!==1?"s":""}`}
-              </div>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
-            {reports.length > 0 && (
-              <button
-                onClick={()=>exportDRs(reports,`Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_${rig.name.replace(/\s+/g,"_")}`)}
-                style={{background:`${color}18`,border:`1px solid ${color}44`,color,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-                ⬇ Export {rig.name}
-              </button>
-            )}
-            <Btn color={color} solid onClick={()=>setModal({mode:"add",doc:{project:selProj,rig:rig.name}})}>+ Add Report</Btn>
-          </div>
-        </div>
-
-        {/* Collapsible reports body */}
-        {!isCollapsed && (
-          <div style={{padding:"14px 16px",display:"grid",gap:8}}>
-            {reports.length===0
-              ? <div style={{textAlign:"center",padding:"24px 0",color:T.textMuted,fontSize:13}}>No reports for {rig.name} yet</div>
-              : reports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)
-            }
-          </div>
-        )}
-      </div>
-    );
-  })}
-</div>
+                        {/* Collapsible reports body */}
+                        {!isCollapsed && (
+                          <div style={{padding:"14px 16px",disp
                       {/* Reports */}
                       <div style={{padding:"14px 16px"}}>
                         {reports.length===0
