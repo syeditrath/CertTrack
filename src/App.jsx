@@ -3221,6 +3221,7 @@ export default function App() {
   const [loadingData, setLoadingData] = useState(true);
   const [supabaseError, setSupabaseError] = useState(false);
   const [page, setPage] = useState("dashboard");
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState(null);
   const [sideOpen, setSideOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [projMod, setProjMod] = useState(false);
