@@ -3757,7 +3757,7 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
         })}
       </nav>
       {/* Manage Projects */}
-      {isAdmin && (
+     
       <div style={{padding:"6px 10px 0"}}>
         <button onClick={onManageProjects} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"transparent",textAlign:"left",transition:"all .15s",marginBottom:4}}
           onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.1)";e.currentTarget.style.borderColor="#93c5fd";}}
@@ -3769,7 +3769,7 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,onManageProjects,da
           </div>
         </button>
       </div>
-      )}
+    
       <div style={{padding:"10px 10px 16px",borderTop:"1px solid rgba(255,255,255,0.06)",display:"flex",flexDirection:"column",gap:6}}>
         <button onClick={onToggleDark} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,0.08)",background:darkMode?"rgba(251,191,36,0.12)":"transparent",cursor:"pointer",transition:"all .15s"}}
           onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.08)"}
