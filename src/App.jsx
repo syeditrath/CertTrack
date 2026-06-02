@@ -9450,9 +9450,8 @@ function EquipmentPage({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkCons
           })}
         </div>
       }
-
-      {modal&&<EqModal mode={modal.mode} eq={modal.eq} projects={projects} rigs={rigs} onClose={()=>setModal(null)} onSave={saveEq}/>}
       </>}
+      {modal&&<EqModal mode={modal.mode} eq={modal.eq} projects={projects} rigs={rigs} onClose={()=>setModal(null)} onSave={saveEq}/>}
     </div>
   );
 }
