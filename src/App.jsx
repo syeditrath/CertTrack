@@ -3374,6 +3374,10 @@ export default function App() {
     const t = setTimeout(() => {
       saveAppData(data).catch(err => { console.error("Save failed:", err); });
     }, 400);
+    const handleDeepLink = (page, id) => {
+  setDeepLink({ page, id });
+  setPage(page);
+};
 
     return () => clearTimeout(t);
   }, [data, loadingData]);
