@@ -3241,6 +3241,9 @@ export default function App() {
   const [selectedInvoiceYear, setSelectedInvoiceYear] = useState("All");
   const { width: viewportWidth } = useViewport();
   const [deepLink, setDeepLink] = useState(null);
+  const handleDeepLink = (page, id) => {
+  setDeepLink({ page, id });
+  setPage(page);
 
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
@@ -3374,9 +3377,7 @@ export default function App() {
     const t = setTimeout(() => {
       saveAppData(data).catch(err => { console.error("Save failed:", err); });
     }, 400);
-    const handleDeepLink = (page, id) => {
-  setDeepLink({ page, id });
-  setPage(page);
+    
 };
 
     return () => clearTimeout(t);
