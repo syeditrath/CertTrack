@@ -3666,7 +3666,7 @@ export default function App() {
                   if (pw === ANALYSIS_PASSWORD) { setAnalysisAuthed(true); return true; }
                   return false;
                 }}/>
-          )}
+          
           {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink)}/></div>}
           {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage  data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="manpower" ?deepLink.id:null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
           {page==="rigs" && (
