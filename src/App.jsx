@@ -3240,6 +3240,7 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [selectedInvoiceYear, setSelectedInvoiceYear] = useState("All");
   const { width: viewportWidth } = useViewport();
+  const [deepLink, setDeepLink] = useState(null);
 
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
@@ -3448,21 +3449,25 @@ export default function App() {
 
   /* ── expiry alerts across everything ── */
   const allExpiries = [
-    ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Company Doc",days:daysUntil(d.expiryDate),page:"scorpion"})),
-    ...(data.projectDocs||[]).filter(d=>d.expiryDate).map(d=>({label:d.name,src:"Project Doc",days:daysUntil(d.expiryDate),page:"projects"})),
-    ...data.manpower.flatMap(p=>[
-      p.passportExpiry && {label:p.name,src:"Passport",    days:daysUntil(p.passportExpiry),page:"manpower"},
-      p.visaExpiry     && {label:p.name,src:"Visa",        days:daysUntil(p.visaExpiry),page:"manpower"},
-      p.iqamaExpiry    && {label:p.name,src:"Iqama",       days:daysUntil(p.iqamaExpiry),page:"manpower"},
-      p.muqeemExpiry   && {label:p.name,src:"Muqeem",      days:daysUntil(p.muqeemExpiry),page:"manpower"},
-      ...(p.certs||[]).map(c=>({label:`${p.name} — ${c.name}`,src:"Cert",days:daysUntil(c.expiryDate),page:"manpower"})),
-    ].filter(Boolean)),
-    ...data.equipment.flatMap(e=>[
-      ...(e.certifications||[]).map(c=>({label:`${e.name} — ${c.certNo||"Cert"}`,src:"Eq Cert",days:daysUntil(c.expiryDate),page:"equipment"})),
-      ...(e.insurance||[]).map(c=>({label:`${e.name} — Insurance`,src:"Insurance",days:daysUntil(c.expiryDate),page:"equipment"})),
-      ...(e.permits||[]).map(c=>({label:`${e.name} — ${c.type||"Permit"}`,src:"Permit",days:daysUntil(c.expiryDate),page:"equipment"})),
-    ]),
-  ].filter(x=>x.days!==null&&x.days<=90).sort((a,b)=>a.days-b.days);
+  ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>({
+    label:d.name, src:"Company Doc", days:daysUntil(d.expiryDate), page:"scorpion", id:d.id
+  })),
+  ...(data.projectDocs||[]).filter(d=>d.expiryDate).map(d=>({
+    label:d.name, src:"Project Doc", days:daysUntil(d.expiryDate), page:"projects", id:d.id
+  })),
+  ...data.manpower.flatMap(p=>[
+    p.passportExpiry && {label:p.name, src:"Passport",  days:daysUntil(p.passportExpiry), page:"manpower", id:p.id},
+    p.visaExpiry     && {label:p.name, src:"Visa",      days:daysUntil(p.visaExpiry),     page:"manpower", id:p.id},
+    p.iqamaExpiry    && {label:p.name, src:"Iqama",     days:daysUntil(p.iqamaExpiry),    page:"manpower", id:p.id},
+    p.muqeemExpiry   && {label:p.name, src:"Muqeem",    days:daysUntil(p.muqeemExpiry),   page:"manpower", id:p.id},
+    ...(p.certs||[]).map(c=>({label:`${p.name} — ${c.name}`, src:"Cert", days:daysUntil(c.expiryDate), page:"manpower", id:p.id})),
+  ].filter(Boolean)),
+  ...data.equipment.flatMap(e=>[
+    ...(e.certifications||[]).map(c=>({label:`${e.name} — ${c.certNo||"Cert"}`, src:"Eq Cert",  days:daysUntil(c.expiryDate), page:"equipment", id:e.id})),
+    ...(e.insurance||[]).map(c=>({label:`${e.name} — Insurance`,                src:"Insurance", days:daysUntil(c.expiryDate), page:"equipment", id:e.id})),
+    ...(e.permits||[]).map(c=>({label:`${e.name} — ${c.type||"Permit"}`,        src:"Permit",    days:daysUntil(c.expiryDate), page:"equipment", id:e.id})),
+  ]),
+].filter(x=>x.days!==null&&x.days<=90).sort((a,b)=>a.days-b.days);
   allExpiriesRef.current = allExpiries;
 
   // Global search results
@@ -3655,8 +3660,8 @@ export default function App() {
                   return false;
                 }}/>
           )}
-          {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
-          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="equipment"?deepLink.id:null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
+          {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage  data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="manpower" ?deepLink.id:null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
           {page==="rigs" && (
   <div className="fade-in">
     <RigsPage
@@ -3963,18 +3968,16 @@ function ProjectsModal({projects,onSave,onClose,isAdmin}) {
 /* ════════════════════════════════════════════════════════════════════════════
    DASHBOARD
 ════════════════════════════════════════════════════════════════════════════ */
-function Dashboard({ data, alerts, go }) {
+function Dashboard({ data, alerts, go, onDeepLink }) {
   /* ── computed stats ── */
   const scorpionExp = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=90; }).length;
   const scorpionExp30 = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=30; }).length;
-
   const mpPeople = data.manpower.length;
   const mpCats   = data.manpowerCats.length;
   const mpDocAlerts = data.manpower.reduce((n,p)=>{
     const ds=[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...(p.certs||[]).map(c=>c.expiryDate)];
     return n + ds.filter(d=>{ const x=daysUntil(d); return x!==null&&x<=90; }).length;
   },0);
-
   const eqTotal  = data.equipment.length;
   const eqActive = data.equipment.filter(e=>e.status==="Active").length;
   const eqMaint  = data.equipment.filter(e=>e.status==="Under Maintenance").length;
@@ -3982,12 +3985,9 @@ function Dashboard({ data, alerts, go }) {
     const ds=[...(e.certifications||[]).map(c=>c.expiryDate),...(e.insurance||[]).map(c=>c.expiryDate),...(e.permits||[]).map(c=>c.expiryDate)];
     return n + ds.filter(d=>{ const x=daysUntil(d); return x!==null&&x<=90; }).length;
   },0);
-
   const totalAlerts  = alerts.length;
   const overdueCount = alerts.filter(a=>a.days<0).length;
   const expiring30   = alerts.filter(a=>a.days>=0&&a.days<=30).length;
-
-  /* ── compliance pct (items with expiry tracked) ── */
   const allTracked = [
     ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>daysUntil(d.expiryDate)),
     ...data.manpower.flatMap(p=>[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...(p.certs||[]).map(c=>c.expiryDate)].filter(Boolean).map(daysUntil)),
@@ -3995,13 +3995,16 @@ function Dashboard({ data, alerts, go }) {
   ];
   const validCount = allTracked.filter(d=>d!==null&&d>0).length;
   const pct = allTracked.length ? Math.round(validCount/allTracked.length*100) : 100;
-
   const expired  = alerts.filter(a=>a.days<0).sort((a,b)=>a.days-b.days);
   const expiring = alerts.filter(a=>a.days>=0).sort((a,b)=>a.days-b.days);
-
   const invoiceDocs = (data.projectDocs || []).filter(d => d.subTab === "invoices");
+  const [alertModal, setAlertModal] = useState(null);
 
-  const [alertModal, setAlertModal] = useState(null); // "overdue" | "expiring30"
+  const handleAlertClick = (a) => {
+    setAlertModal(null);
+    if (onDeepLink) onDeepLink(a.page, a.id);
+    else go(a.page);
+  };
 
   return (
     <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
@@ -4018,18 +4021,18 @@ function Dashboard({ data, alerts, go }) {
                 </div>
                 <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>
                   {alertModal==="overdue"
-                    ? `${expired.length} item${expired.length!==1?"s":""} past expiry — click any to go to that section`
+                    ? `${expired.length} item${expired.length!==1?"s":""} past expiry — click any to open directly`
                     : `${alerts.filter(a=>a.days>=0&&a.days<=30).length} item${alerts.filter(a=>a.days>=0&&a.days<=30).length!==1?"s":""} expiring within 30 days`}
                 </div>
               </div>
-              <button onClick={()=>setAlertModal(null)} style={{background:"none",border:"none",color:T.textMuted,fontSize:20,cursor:"pointer"}}>✕</button>
+              <button onClick={()=>{ onDeeplink(a.page, a.id); setAlertModal(null)}} style={{background:"none",border:"none",color:T.textMuted,fontSize:20,cursor:"pointer"}}>✕</button>
             </div>
             <div style={{display:"grid",gap:8}}>
               {(alertModal==="overdue"
                 ? expired
                 : alerts.filter(a=>a.days>=0&&a.days<=30).sort((a,b)=>a.days-b.days)
               ).map((a,i)=>(
-                <button key={i} onClick={()=>{ go(a.page); setAlertModal(null); }}
+                <button key={i} onClick={()=>handleAlertClick(a)}
                   style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:12,textAlign:"left",cursor:"pointer",width:"100%",transition:"border-color .15s"}}
                   onMouseEnter={e=>e.currentTarget.style.borderColor=alertModal==="overdue"?T.red:T.gold}
                   onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
@@ -4056,12 +4059,12 @@ function Dashboard({ data, alerts, go }) {
       {/* ── Top KPI strip ── */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
         {[
-          {label:"Total Alerts",    v:totalAlerts,  color:totalAlerts>0?T.red:T.green,  icon:"▲", click:null},
+          {label:"Total Alerts",    v:totalAlerts,  color:totalAlerts>0?T.red:T.green,     icon:"▲", click:null},
           {label:"Overdue",         v:overdueCount, color:overdueCount>0?T.red:T.textMuted, icon:"✕", click:overdueCount>0?()=>setAlertModal("overdue"):null},
           {label:"Due in 30 Days",  v:expiring30,   color:expiring30>0?T.gold:T.textMuted,  icon:"⏱", click:expiring30>0?()=>setAlertModal("expiring30"):null},
           {label:"Compliance",      v:`${pct}%`,    color:pct>=80?T.green:pct>=60?T.gold:T.red, icon:"◎", click:null},
-          {label:"People",          v:mpPeople,     color:T.green,  icon:"◈", click:()=>go("manpower")},
-          {label:"Equipment Assets",v:eqTotal,      color:T.gold,   icon:"◎", click:()=>go("equipment")},
+          {label:"People",          v:mpPeople,     color:T.green, icon:"◈", click:()=>go("manpower")},
+          {label:"Equipment Assets",v:eqTotal,      color:T.gold,  icon:"◎", click:()=>go("equipment")},
         ].map((k,i)=>(
           <div key={k.label} className="fade-up"
             onClick={k.click||undefined}
@@ -4094,74 +4097,22 @@ function Dashboard({ data, alerts, go }) {
       {/* ── Section cards ── */}
       <div style={{display:"grid",gap:18,marginBottom:18}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
-          <DashboardMiniCard
-            title="SCORPION DOCUMENTS"
-            sub="CR, insurance, licenses, contracts"
-            icon="◉"
-            color={T.blue}
-            stats={[
-              {label:"Total Docs", value:data.scorpionDocs.length},
-              {label:"Expiring", value:scorpionExp},
-              {label:"Due in 30d", value:scorpionExp30},
-              {label:"Categories", value:(data.scorpionDocCats||[]).length},
-            ]}
-            actionLabel="Open Documents →"
-            onClick={() => go("scorpion")}
-          />
-
-          <DashboardMiniCard
-            title="PROJECT DOCS"
-            sub="Invoices, completion certs & work orders"
-            icon="◆"
-            color={T.teal}
-            stats={[
-              {label:"Total", value:(data.projectDocs || []).length},
-              {label:"Invoices", value:invoiceDocs.length},
-              {label:"Projects", value:(data.projects||[]).length},
-              {label:"Docs per project", value:(data.projects||[]).length > 0 ? Math.round((data.projectDocs||[]).length / (data.projects||[]).length) : 0},
-            ]}
-            actionLabel="Open Project Docs →"
-            onClick={() => go("projects")}
-          />
-
-          <DashboardMiniCard
-            title="MANPOWER"
-            sub="Staff, documents & certifications"
-            icon="◈"
-            color={T.green}
-            stats={[
-              {label:"People", value:mpPeople},
-              {label:"Categories", value:mpCats},
-              {label:"Doc Alerts", value:mpDocAlerts},
-              {label:"Certs", value:data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0)},
-            ]}
-            footer={(data.manpowerCats||[]).slice(0,4).map(c => `${c} (${data.manpower.filter(p=>p.category===c).length})`).join("   •   ")}
-            actionLabel="Open Manpower →"
-            onClick={() => go("manpower")}
-          />
-
-          <DashboardMiniCard
-            title="EQUIPMENT"
-            sub="Assets, certs, invoices & permits"
-            icon="◎"
-            color={T.gold}
-            stats={[
-              {label:"Total Assets", value:eqTotal},
-              {label:"Active", value:eqActive},
-              {label:"Maintenance", value:eqMaint},
-              {label:"Exp. Alerts", value:eqExp},
-            ]}
+          <DashboardMiniCard title="SCORPION DOCUMENTS" sub="CR, insurance, licenses, contracts" icon="◉" color={T.blue}
+            stats={[{label:"Total Docs",value:data.scorpionDocs.length},{label:"Expiring",value:scorpionExp},{label:"Due in 30d",value:scorpionExp30},{label:"Categories",value:(data.scorpionDocCats||[]).length}]}
+            actionLabel="Open Documents →" onClick={()=>go("scorpion")}/>
+          <DashboardMiniCard title="PROJECT DOCS" sub="Invoices, completion certs & work orders" icon="◆" color={T.teal}
+            stats={[{label:"Total",value:(data.projectDocs||[]).length},{label:"Invoices",value:invoiceDocs.length},{label:"Projects",value:(data.projects||[]).length},{label:"Docs per project",value:(data.projects||[]).length>0?Math.round((data.projectDocs||[]).length/(data.projects||[]).length):0}]}
+            actionLabel="Open Project Docs →" onClick={()=>go("projects")}/>
+          <DashboardMiniCard title="MANPOWER" sub="Staff, documents & certifications" icon="◈" color={T.green}
+            stats={[{label:"People",value:mpPeople},{label:"Categories",value:mpCats},{label:"Doc Alerts",value:mpDocAlerts},{label:"Certs",value:data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0)}]}
+            footer={(data.manpowerCats||[]).slice(0,4).map(c=>`${c} (${data.manpower.filter(p=>p.category===c).length})`).join("   •   ")}
+            actionLabel="Open Manpower →" onClick={()=>go("manpower")}/>
+          <DashboardMiniCard title="EQUIPMENT" sub="Assets, certs, invoices & permits" icon="◎" color={T.gold}
+            stats={[{label:"Total Assets",value:eqTotal},{label:"Active",value:eqActive},{label:"Maintenance",value:eqMaint},{label:"Exp. Alerts",value:eqExp}]}
             footer={`Certs: ${data.equipment.reduce((n,e)=>n+(e.certifications||[]).length,0)}   •   Invoices: ${data.equipment.reduce((n,e)=>n+(e.invoices||[]).length,0)}   •   Insurance: ${data.equipment.reduce((n,e)=>n+(e.insurance||[]).length,0)}   •   Permits: ${data.equipment.reduce((n,e)=>n+(e.permits||[]).length,0)}`}
-            actionLabel="Open Equipment →"
-            onClick={() => go("equipment")}
-          />
-
-          {/* Finance teaser card */}
-          <div
-            className="fade-up card-hover"
-            onClick={() => go("finance")}
-            style={{background:`linear-gradient(135deg,${T.card},${T.card2})`,border:`1px solid ${T.gold}44`,borderRadius:18,boxShadow:T.shadow,padding:"18px 18px 16px",minHeight:230,display:"flex",flexDirection:"column",cursor:"pointer",position:"relative",overflow:"hidden"}}
-          >
+            actionLabel="Open Equipment →" onClick={()=>go("equipment")}/>
+          <div className="fade-up card-hover" onClick={()=>go("finance")}
+            style={{background:`linear-gradient(135deg,${T.card},${T.card2})`,border:`1px solid ${T.gold}44`,borderRadius:18,boxShadow:T.shadow,padding:"18px 18px 16px",minHeight:230,display:"flex",flexDirection:"column",cursor:"pointer",position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at top right,${T.goldDim},transparent 60%)`,pointerEvents:"none"}}/>
             <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,position:"relative",zIndex:1}}>
               <div style={{width:42,height:42,borderRadius:12,background:T.goldDim,color:T.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:800}}>$</div>
@@ -4191,12 +4142,11 @@ function Dashboard({ data, alerts, go }) {
             {expired.length===0
               ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing overdue</div>
               :<div style={{display:"grid",gap:7}}>
-                {expired.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
+                {expired.slice(0,8).map((a,i)=><AlertRow key={i} a={a} onClick={()=>{ onDeepLink(a.page, a.id); }}/>)}
                 {expired.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expired.length-8} more — check Alerts page</div>}
               </div>
             }
           </div>
-
           <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 20px",animationDelay:".62s"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
               <div style={{width:3,height:18,borderRadius:2,background:T.gold}}/>
@@ -4206,7 +4156,7 @@ function Dashboard({ data, alerts, go }) {
             {expiring.length===0
               ?<div style={{textAlign:"center",padding:"20px",color:T.textMuted,fontSize:13}}>✓ Nothing expiring soon</div>
               :<div style={{display:"grid",gap:7}}>
-                {expiring.slice(0,8).map((a,i)=><AlertRow key={i} a={a}/>)}
+                {expiring.slice(0,8).map((a,i)=><AlertRow key={i} a={a} onClick={()=>{ onDeepLink(a.page, a.id); }}/>)}
                 {expiring.length>8&&<div style={{fontSize:12,color:T.textSub,textAlign:"center",paddingTop:4}}>+{expiring.length-8} more</div>}
               </div>
             }
@@ -6348,12 +6298,17 @@ function InvoiceYearDetailsModal({ view, invoices, yearLabel, onClose }) {
   );
 }
 
-function AlertRow({a}) {
-  const s=getStatus(a.days);
-  const SRC_COLOR={"Company Doc":T.blue,"Passport":T.purple,"Visa":T.teal,"Iqama":T.green,"Muqeem":T.orange,"Cert":T.green,"Eq Cert":T.blue,"Insurance":T.purple,"Permit":T.gold};
-  const sc=SRC_COLOR[a.src]||T.blue;
+function AlertRow({a, onClick}) {
+  const s = getStatus(a.days);
+  const SRC_COLOR = {"Company Doc":T.blue,"Passport":T.purple,"Visa":T.teal,"Iqama":T.green,"Muqeem":T.orange,"Cert":T.green,"Eq Cert":T.blue,"Insurance":T.purple,"Permit":T.gold};
+  const sc = SRC_COLOR[a.src]||T.blue;
   return (
-    <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:T.bg,borderRadius:9,border:`1px solid ${T.border}`}}>
+    <div
+      onClick={onClick}
+      style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:T.bg,borderRadius:9,border:`1px solid ${T.border}`,cursor:onClick?"pointer":"default",transition:"border-color .15s"}}
+      onMouseEnter={e=>{ if(onClick) e.currentTarget.style.borderColor=s.color; }}
+      onMouseLeave={e=>{ if(onClick) e.currentTarget.style.borderColor=T.border; }}
+    >
       <div style={{width:3,height:32,borderRadius:2,background:s.color,flexShrink:0}}/>
       <div style={{flex:1,minWidth:0}}>
         <div style={{fontSize:12,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label}</div>
@@ -9288,13 +9243,26 @@ function CertModal({mode,cert,onClose,onSave}) {
 /* ════════════════════════════════════════════════════════════════════════════
    EQUIPMENT PAGE
 ════════════════════════════════════════════════════════════════════════════ */
-function EquipmentPage({data,setData,showToast,isAdmin}) {
+function EquipmentPage({data,setData,showToast,isAdmin,dee[LinkID,onDeepLinkConsumed}) {
   const rigs = data.rigs || [];
   const [modal,   setModal]   = useState(null);
   const [selEq,   setSelEq]   = useState(null); // selected equipment
   const [fProj,   setFProj]   = useState("");
   const [fStatus, setFStatus] = useState("");
   const eqBulkRef = useRef(); // must be here — hooks cannot be after early return
+  useEffect(() => {
+  if (deepLinkId) {
+    const eq = (data.equipment || []).find(
+      e => String(e.id) === String(deepLinkId)
+    );
+
+    if (eq) {
+      setSelEq(eq);
+    }
+
+    onDeepLinkConsumed?.();
+  }
+}, [deepLinkId, data.equipment, onDeepLinkConsumed]);
 
   const equipment = data.equipment || [];
   const projects  = data.projects  || [];
