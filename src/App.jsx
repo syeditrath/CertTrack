@@ -3662,7 +3662,7 @@ export default function App() {
                   go(page);
                 }} 
                 /> </div> )}
-          {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+          {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="scorpion" ? deepLink.id : null} onDeepLinkConsumed={() => setDeepLink(null)} /></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
           {page==="analysis"  && (
             analysisAuthed
@@ -4038,7 +4038,7 @@ function Dashboard({ data, alerts, go, onDeepLink }) {
                     : `${alerts.filter(a=>a.days>=0&&a.days<=30).length} item${alerts.filter(a=>a.days>=0&&a.days<=30).length!==1?"s":""} expiring within 30 days`}
                 </div>
               </div>
-              <button onClick={()=>{ onDeeplink(a.page, a.id); setAlertModal(null)}} style={{background:"none",border:"none",color:T.textMuted,fontSize:20,cursor:"pointer"}}>✕</button>
+              <button onClick={()=>{ onDeepLink(a.page, a.id); setAlertModal(null)}} style={{background:"none",border:"none",color:T.textMuted,fontSize:20,cursor:"pointer"}}>✕</button>
             </div>
             <div style={{display:"grid",gap:8}}>
               {(alertModal==="overdue"
@@ -8587,11 +8587,25 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClo
 /* ════════════════════════════════════════════════════════════════════════════
    SCORPION DOCUMENTS
 ════════════════════════════════════════════════════════════════════════════ */
-function ScorpionDocs({data,setData,showToast,isAdmin}) {
+function ScorpionDocs({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkConsumed}) {
   const [modal,    setModal]    = useState(null);
   const [catModal, setCatModal] = useState(false);
   const [selCat,   setSelCat]   = useState("All");
   const [sortBy,   setSortBy]   = useState("name"); // "name" | "expiry" | "category"
+  useEffect(() => {
+  if (deepLinkId) {
+    const doc = (data.scorpionDocs || []).find(
+      d => String(d.id) === String(deepLinkId)
+    );
+
+    if (doc) {
+      setSelCat(doc.category || "All"); // optional but useful
+      // optionally you can also auto-scroll later if needed
+    }
+
+    onDeepLinkConsumed?.();
+  }
+}, [deepLinkId, data.scorpionDocs, onDeepLinkConsumed]);
 
   const docs = data.scorpionDocs || [];
   const cats = data.scorpionDocCats || DEFAULT_SCORPION_CATS;
