@@ -4013,7 +4013,7 @@ function Dashboard({ data, alerts, go, onDeepLink }) {
   const [alertModal, setAlertModal] = useState(null);
 
   const handleAlertClick = (a) => {
-    console.log("ALERT CLICKED:",A);
+    console.log("ALERT CLICKED:",a);
     setAlertModal(null);
     if (onDeepLink) onDeepLink(a.page, a.id);
     else go(a.page);
