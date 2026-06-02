@@ -3656,7 +3656,6 @@ export default function App() {
                 alerts={allExpiries}
                 go={setPage}
                 onDeepLink={handleDeepLink}
-                }
                 /> </div> )}
           {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink} /></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
