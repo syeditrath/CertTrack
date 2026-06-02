@@ -3649,57 +3649,59 @@ export default function App() {
         </header>
 
         <main style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"clamp(10px,2vw,28px) clamp(10px,2.5vw,32px)"}}>
-          {page==="dashboard" && (
-            <div className="fade-in" key="dashboard">
-              <Dashboard
-                data={data}
-                alerts={allExpiries}
-                go={setPage}
-                onDeepLink={handleDeepLink}
-                /> </div> )}
-          {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink} /></div>}
-          {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
-          {page==="analysis"  && (
-            analysisAuthed
-              ? <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
-              : <FinanceLoginPage title="PROJECT ANALYSIS ACCESS" subtitle="This section is restricted. Enter the analysis password to continue." passwordLabel="ANALYSIS PASSWORD" placeholder="Enter analysis password…" onLogin={(pw) => {
-                  if (pw === ANALYSIS_PASSWORD) { setAnalysisAuthed(true); return true; )}
-                  return false;
-                }}/>
-          
-          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink)}/></div>}
-          {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage  data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="manpower" ?deepLink.id:null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
-          {page==="rigs" && (
-  <div className="fade-in">
-    <RigsPage
-      data={data}
-      setData={setData}
-      showToast={showToast}
-      isAdmin={isAdmin}
-    />
-  </div>
-)}
-          {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
-          {page==="costs" && (
-            costAuthed
-              ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
-              : <FinanceLoginPage title="COST CONTROL ACCESS" subtitle="This section contains sensitive financial data.\nEnter the cost control password to continue." passwordLabel="COST CONTROL PASSWORD" placeholder="Enter password…" onLogin={(pw) => {
-                  if (pw === COST_PASSWORD) { setCostAuthed(true); return true; }
-                  return false;
-                }}/>
-          )}
-          {page==="finance" && (
-            financeAuthed
-              ? <div className="fade-in" key="finance"><FinancePage data={data} setData={setData} showToast={showToast} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear} isAdmin={isAdmin}/></div>
-              : <FinanceLoginPage onLogin={(pw) => {
-                  if (pw === FINANCE_PASSWORD) {
-                    setFinanceAuthed(true);
-                    return true;
-                  }
-                  return false;
-                }}/>
-          )}
-        </main>
+  {page==="dashboard" && (
+    <div className="fade-in" key="dashboard">
+      <Dashboard
+        data={data}
+        alerts={allExpiries}
+        go={setPage}
+        onDeepLink={handleDeepLink}
+      />
+    </div>
+  )}
+  {page==="scorpion" && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink} /></div>}
+  {page==="projects" && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
+  {page==="analysis" && (
+    analysisAuthed
+      ? <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
+      : <FinanceLoginPage title="PROJECT ANALYSIS ACCESS" subtitle="This section is restricted. Enter the analysis password to continue." passwordLabel="ANALYSIS PASSWORD" placeholder="Enter analysis password…" onLogin={(pw) => {
+          if (pw === ANALYSIS_PASSWORD) { setAnalysisAuthed(true); return true; }
+          return false;
+        }}/>
+  )}
+  {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink}/></div>}
+  {page==="manpower" && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="manpower" ? deepLink.id : null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
+  {page==="rigs" && (
+    <div className="fade-in">
+      <RigsPage
+        data={data}
+        setData={setData}
+        showToast={showToast}
+        isAdmin={isAdmin}
+      />
+    </div>
+  )}
+  {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+  {page==="costs" && (
+    costAuthed
+      ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
+      : <FinanceLoginPage title="COST CONTROL ACCESS" subtitle="This section contains sensitive financial data.\nEnter the cost control password to continue." passwordLabel="COST CONTROL PASSWORD" placeholder="Enter password…" onLogin={(pw) => {
+          if (pw === COST_PASSWORD) { setCostAuthed(true); return true; }
+          return false;
+        }}/>
+  )}
+  {page==="finance" && (
+    financeAuthed
+      ? <div className="fade-in" key="finance"><FinancePage data={data} setData={setData} showToast={showToast} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear} isAdmin={isAdmin}/></div>
+      : <FinanceLoginPage onLogin={(pw) => {
+          if (pw === FINANCE_PASSWORD) {
+            setFinanceAuthed(true);
+            return true;
+          }
+          return false;
+        }}/>
+  )}
+</main>
       </div>
 
       {projMod && <ProjectsModal projects={data.projects||[]} onSave={saveProjects} onClose={()=>setProjMod(false)} isAdmin={isAdmin}/>}
