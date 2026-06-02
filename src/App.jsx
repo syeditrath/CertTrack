@@ -3649,7 +3649,11 @@ export default function App() {
         </header>
 
         <main style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"clamp(10px,2vw,28px) clamp(10px,2.5vw,32px)"}}>
-          {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go}/></div>}
+          {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go} onDeepLink={(page, id) => {
+    console.log("Deep link triggered:", page, id);
+
+    setDeepLink({ page, id });
+    go(page);/></div>}
           {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
           {page==="analysis"  && (
@@ -9251,13 +9255,21 @@ function EquipmentPage({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkCons
   const [fStatus, setFStatus] = useState("");
   const eqBulkRef = useRef(); // must be here — hooks cannot be after early return
   useEffect(() => {
+  console.log("EquipmentPage deepLinkId:", deepLinkId);
+
   if (deepLinkId) {
     const eq = (data.equipment || []).find(
       e => String(e.id) === String(deepLinkId)
     );
 
+    console.log("Matched equipment:", eq);
+    console.log("Equipment list count:", (data.equipment || []).length);
+
     if (eq) {
+      console.log("Opening equipment:", eq.name);
       setSelEq(eq);
+    } else {
+      console.error("No equipment found for ID:", deepLinkId);
     }
 
     onDeepLinkConsumed?.();
