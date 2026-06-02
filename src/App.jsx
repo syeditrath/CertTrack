@@ -8592,6 +8592,7 @@ function ScorpionDocs({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkConsu
   const [catModal, setCatModal] = useState(false);
   const [selCat,   setSelCat]   = useState("All");
   const [sortBy,   setSortBy]   = useState("name"); // "name" | "expiry" | "category"
+  const [selDoc, setSelDoc] = useState(null);
   useEffect(() => {
   if (deepLinkId) {
     const doc = (data.scorpionDocs || []).find(
