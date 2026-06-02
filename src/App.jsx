@@ -3654,15 +3654,11 @@ export default function App() {
               <Dashboard
                 data={data}
                 alerts={allExpiries}
-                go={go}
-                onDeepLink={(page, id) => {
-                  console.log("Deep link triggered:", page, id);
-
-                  setDeepLink({ page, id });
-                  go(page);
-                }} 
+                go={setPage}
+                onDeepLink={handleDeepLink}
+                }
                 /> </div> )}
-          {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="scorpion" ? deepLink.id : null} onDeepLinkConsumed={() => setDeepLink(null)} /></div>}
+          {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink} /></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
           {page==="analysis"  && (
             analysisAuthed
@@ -3672,7 +3668,7 @@ export default function App() {
                   return false;
                 }}/>
           )}
-          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="equipment"?deepLink.id:null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
+          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink)}/></div>}
           {page==="manpower"  && <div className="fade-in" key="manpower"><ManpowerPage  data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="manpower" ?deepLink.id:null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
           {page==="rigs" && (
   <div className="fade-in">
