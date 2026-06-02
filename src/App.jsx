@@ -3649,11 +3649,19 @@ export default function App() {
         </header>
 
         <main style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"clamp(10px,2vw,28px) clamp(10px,2.5vw,32px)"}}>
-          {page==="dashboard" && <div className="fade-in" key="dashboard"><Dashboard data={data} alerts={allExpiries} go={go} onDeepLink={(page, id) => {
-    console.log("Deep link triggered:", page, id);
+          {page==="dashboard" && (
+            <div className="fade-in" key="dashboard">
+              <Dashboard
+                data={data}
+                alerts={allExpiries}
+                go={go}
+                onDeepLink={(page, id) => {
+                  console.log("Deep link triggered:", page, id);
 
-    setDeepLink({ page, id });
-    go(page);/></div>}
+                  setDeepLink({ page, id });
+                  go(page);
+                }} 
+                /> </div> )}
           {page==="scorpion"  && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
           {page==="projects"  && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
           {page==="analysis"  && (
@@ -4005,6 +4013,7 @@ function Dashboard({ data, alerts, go, onDeepLink }) {
   const [alertModal, setAlertModal] = useState(null);
 
   const handleAlertClick = (a) => {
+    console.log("ALERT CLICKED:",A);
     setAlertModal(null);
     if (onDeepLink) onDeepLink(a.page, a.id);
     else go(a.page);
