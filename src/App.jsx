@@ -9243,7 +9243,7 @@ function CertModal({mode,cert,onClose,onSave}) {
 /* ════════════════════════════════════════════════════════════════════════════
    EQUIPMENT PAGE
 ════════════════════════════════════════════════════════════════════════════ */
-function EquipmentPage({data,setData,showToast,isAdmin,dee[LinkID,onDeepLinkConsumed}) {
+function EquipmentPage({data,setData,showToast,isAdmin,deepLinkID,onDeepLinkConsumed}) {
   const rigs = data.rigs || [];
   const [modal,   setModal]   = useState(null);
   const [selEq,   setSelEq]   = useState(null); // selected equipment
