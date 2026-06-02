@@ -3663,7 +3663,7 @@ export default function App() {
             analysisAuthed
               ? <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
               : <FinanceLoginPage title="PROJECT ANALYSIS ACCESS" subtitle="This section is restricted. Enter the analysis password to continue." passwordLabel="ANALYSIS PASSWORD" placeholder="Enter analysis password…" onLogin={(pw) => {
-                  if (pw === ANALYSIS_PASSWORD) { setAnalysisAuthed(true); return true; }
+                  if (pw === ANALYSIS_PASSWORD) { setAnalysisAuthed(true); return true; )}
                   return false;
                 }}/>
           
