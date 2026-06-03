@@ -313,7 +313,7 @@ function printPage(title, htmlContent) {
       h1 { font-size: 22px; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px; }
       h2 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; border-bottom: 2px solid #111; padding-bottom: 4px; }
       .meta { font-size: 11px; color: #555; margin-bottom: 18px; }
-      .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 10px; margin-bottom: 20px; }
+      .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
       .kpi { border: 1.5px solid #ddd; border-radius: 8px; padding: 10px 14px; }
       .kpi-val { font-size: 20px; font-weight: 800; }
       .kpi-lbl { font-size: 10px; color: #666; margin-top: 2px; font-weight: 600; text-transform: uppercase; }
@@ -5910,7 +5910,8 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
           printPage("Finance Report", `
             <h1>💰 FINANCE REPORT</h1>
             <div class="meta">Generated ${new Date().toLocaleDateString()} · ${selectedInvoiceYear === "All" ? "All Years" : selectedInvoiceYear + (effectiveMonth !== "All" ? " · " + MONTH_NAMES[Number(effectiveMonth)] : "")}</div>
-            <div class="kpi"><div class="kpi-val">${formatSarCompact(totalInvoiceValue)}</div><div class="kpi-lbl">Total Invoiced</div></div>
+            <div class="kpi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">
+              <div class="kpi"><div class="kpi-val">${formatSarCompact(totalInvoiceValue)}</div><div class="kpi-lbl">Total Invoiced</div></div>
               <div class="kpi"><div class="kpi-val" style="color:#16a34a">${formatSarCompact(totalReceived)}</div><div class="kpi-lbl">Total Received</div></div>
               <div class="kpi"><div class="kpi-val" style="color:#dc2626">${formatSarCompact(totalDue)}</div><div class="kpi-lbl">Total Due</div></div>
               <div class="kpi"><div class="kpi-val">${collectionRate}%</div><div class="kpi-lbl">Collection Rate</div></div>
