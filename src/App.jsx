@@ -3241,9 +3241,12 @@ export default function App() {
   const [selectedInvoiceYear, setSelectedInvoiceYear] = useState("All");
   const { width: viewportWidth } = useViewport();
   const [deepLink, setDeepLink] = useState(null);
+
+  // ✅ FIX 1: handleDeepLink was missing its closing }
   const handleDeepLink = (page, id) => {
-  setDeepLink({ page, id });
-  setPage(page);
+    setDeepLink({ page, id });
+    setPage(page);
+  };
 
   useEffect(() => {
     if (!document.getElementById("ct-g")) {
@@ -3268,7 +3271,7 @@ export default function App() {
           const rows = await res.json();
           if (rows.length && rows[0].data) {
             setData({ ...EMPTY_DATA, ...rows[0].data });
-            setLoadingData(false); // only mark loaded if we got real data back
+            setLoadingData(false);
           } else {
             console.warn("Supabase returned no data rows — staying in loading state to protect data");
             setSupabaseError(true);
@@ -3289,7 +3292,6 @@ export default function App() {
   const [notifySending, setNotifySending] = useState(false);
   const [notifyTestResult, setNotifyTestResult] = useState(null);
 
-  // ── Google Drive backup ──────────────────────────────────────────────────
   const BACKUP_KEY = "cta_last_backup";
   const [backupStatus, setBackupStatus] = useState(() => {
     try { return localStorage.getItem(BACKUP_KEY) || null; } catch { return null; }
@@ -3306,14 +3308,11 @@ export default function App() {
       const pad = n => String(n).padStart(2,"0");
       const filename = `ScorpionPortal_Backup_${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}.json`;
 
-      // Upload to Google Drive via multipart upload
       const metadata = JSON.stringify({ name: filename, parents: [] });
       const form = new FormData();
       form.append("metadata", new Blob([metadata], { type: "application/json" }));
       form.append("file", blob);
 
-      // Get OAuth token via Google Drive MCP
-      // Fall back to direct download if Drive not available
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -3331,7 +3330,6 @@ export default function App() {
     setBackingUp(false);
   };
 
-  // Auto-backup every 24 hours
   useEffect(() => {
     if (loadingData) return;
     const isEmpty = !data.manpower?.length && !data.equipment?.length && !data.projects?.length
@@ -3345,7 +3343,6 @@ export default function App() {
     }
   }, [loadingData]);
 
-  // Load EmailJS SDK once
   useEffect(() => {
     if (window.emailjs) return;
     const script = document.createElement("script");
@@ -3360,9 +3357,9 @@ export default function App() {
     try { localStorage.setItem("cta_dark", darkMode); } catch {}
   }, [darkMode]);
 
+  // ✅ FIX 2: saveAppData useEffect had a misplaced }; that broke the effect body
   useEffect(() => {
     if (loadingData) return;
-    // Strict guard: only save if there is real user-entered data beyond just the project list
     const hasRealData = (data.manpower?.length > 0)
       || (data.equipment?.length > 0)
       || (data.scorpionDocs?.length > 0)
@@ -3377,13 +3374,10 @@ export default function App() {
     const t = setTimeout(() => {
       saveAppData(data).catch(err => { console.error("Save failed:", err); });
     }, 400);
-    
-};
 
     return () => clearTimeout(t);
   }, [data, loadingData]);
 
-  // ── Daily email notification check (must be before any early returns) ──
   const allExpiriesRef = useRef([]);
   useEffect(() => {
     if (!notifySettings.enabled) return;
@@ -3396,7 +3390,6 @@ export default function App() {
     const threshold = Number(notifySettings.thresholdDays) || 90;
     const alertsToSend = allExpiriesRef.current.filter(a => a.days <= threshold);
     if (alertsToSend.length === 0) return;
-    // Send to each recipient
     Promise.all(
       recipients.map(email =>
         window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, buildEmailPayload(alertsToSend, email, false))
@@ -3444,38 +3437,34 @@ export default function App() {
     setCostAuthed(false);
   };
 
-  // ...rest of your App code continues here
-
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(() => setToast(null), 3200); };
 
   const go = p => { setPage(p); setSideOpen(false); if (p !== "finance") setFinanceAuthed(false); if (p !== "analysis") setAnalysisAuthed(false); if (p !== "costs") setCostAuthed(false); };
 
   const saveProjects = projects => setData(prev=>({...prev,projects}));
 
-  /* ── expiry alerts across everything ── */
   const allExpiries = [
-  ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>({
-    label:d.name, src:"Company Doc", days:daysUntil(d.expiryDate), page:"scorpion", id:d.id
-  })),
-  ...(data.projectDocs||[]).filter(d=>d.expiryDate).map(d=>({
-    label:d.name, src:"Project Doc", days:daysUntil(d.expiryDate), page:"projects", id:d.id
-  })),
-  ...data.manpower.flatMap(p=>[
-    p.passportExpiry && {label:p.name, src:"Passport",  days:daysUntil(p.passportExpiry), page:"manpower", id:p.id},
-    p.visaExpiry     && {label:p.name, src:"Visa",      days:daysUntil(p.visaExpiry),     page:"manpower", id:p.id},
-    p.iqamaExpiry    && {label:p.name, src:"Iqama",     days:daysUntil(p.iqamaExpiry),    page:"manpower", id:p.id},
-    p.muqeemExpiry   && {label:p.name, src:"Muqeem",    days:daysUntil(p.muqeemExpiry),   page:"manpower", id:p.id},
-    ...(p.certs||[]).map(c=>({label:`${p.name} — ${c.name}`, src:"Cert", days:daysUntil(c.expiryDate), page:"manpower", id:p.id})),
-  ].filter(Boolean)),
-  ...data.equipment.flatMap(e=>[
-    ...(e.certifications||[]).map(c=>({label:`${e.name} — ${c.certNo||"Cert"}`, src:"Eq Cert",  days:daysUntil(c.expiryDate), page:"equipment", id:e.id})),
-    ...(e.insurance||[]).map(c=>({label:`${e.name} — Insurance`,                src:"Insurance", days:daysUntil(c.expiryDate), page:"equipment", id:e.id})),
-    ...(e.permits||[]).map(c=>({label:`${e.name} — ${c.type||"Permit"}`,        src:"Permit",    days:daysUntil(c.expiryDate), page:"equipment", id:e.id})),
-  ]),
-].filter(x=>x.days!==null&&x.days<=90).sort((a,b)=>a.days-b.days);
+    ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>({
+      label:d.name, src:"Company Doc", days:daysUntil(d.expiryDate), page:"scorpion", id:d.id
+    })),
+    ...(data.projectDocs||[]).filter(d=>d.expiryDate).map(d=>({
+      label:d.name, src:"Project Doc", days:daysUntil(d.expiryDate), page:"projects", id:d.id
+    })),
+    ...data.manpower.flatMap(p=>[
+      p.passportExpiry && {label:p.name, src:"Passport",  days:daysUntil(p.passportExpiry), page:"manpower", id:p.id},
+      p.visaExpiry     && {label:p.name, src:"Visa",      days:daysUntil(p.visaExpiry),     page:"manpower", id:p.id},
+      p.iqamaExpiry    && {label:p.name, src:"Iqama",     days:daysUntil(p.iqamaExpiry),    page:"manpower", id:p.id},
+      p.muqeemExpiry   && {label:p.name, src:"Muqeem",    days:daysUntil(p.muqeemExpiry),   page:"manpower", id:p.id},
+      ...(p.certs||[]).map(c=>({label:`${p.name} — ${c.name}`, src:"Cert", days:daysUntil(c.expiryDate), page:"manpower", id:p.id})),
+    ].filter(Boolean)),
+    ...data.equipment.flatMap(e=>[
+      ...(e.certifications||[]).map(c=>({label:`${e.name} — ${c.certNo||"Cert"}`, src:"Eq Cert",  days:daysUntil(c.expiryDate), page:"equipment", id:e.id})),
+      ...(e.insurance||[]).map(c=>({label:`${e.name} — Insurance`,                src:"Insurance", days:daysUntil(c.expiryDate), page:"equipment", id:e.id})),
+      ...(e.permits||[]).map(c=>({label:`${e.name} — ${c.type||"Permit"}`,        src:"Permit",    days:daysUntil(c.expiryDate), page:"equipment", id:e.id})),
+    ]),
+  ].filter(x=>x.days!==null&&x.days<=90).sort((a,b)=>a.days-b.days);
   allExpiriesRef.current = allExpiries;
 
-  // Global search results
   const searchResults = globalSearch.length > 1 ? (() => {
     const q = globalSearch.toLowerCase();
     const results = [];
@@ -3529,31 +3518,15 @@ export default function App() {
       <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} isAdmin={isAdmin} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout} financeAuthed={financeAuthed} analysisAuthed={analysisAuthed} costAuthed={costAuthed}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
-        {/* ── Top bar ── */}
         <header style={{background:T.sidebar,borderBottom:"2px solid transparent",backgroundImage:`linear-gradient(${T.sidebar},${T.sidebar}), linear-gradient(90deg,#fbbf24,#38bdf8,#34d399,#fbbf24)`,backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",padding:`0 ${viewportWidth < 600 ? "10px" : "20px"}`,flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
           <div style={{display:"flex",alignItems:"center",height:viewportWidth < 600 ? 50 : 56,position:"relative",gap:viewportWidth < 480 ? 6 : 0}}>
             {viewportWidth < 1200 && (
-  <button
-    onClick={() => setSideOpen(true)}
-    style={{
-      background:"rgba(255,255,255,0.08)",
-      border:"1px solid rgba(255,255,255,0.15)",
-      color:"#ffffff",
-      borderRadius:8,
-      width:36,
-      height:36,
-      display:"flex",
-      alignItems:"center",
-      justifyContent:"center",
-      fontSize:18,
-      flexShrink:0,
-      zIndex:1
-    }}
-  >
-    ☰
-  </button>
-)}
-            {/* Title — absolute on desktop for centering, inline on mobile to avoid overlap */}
+              <button
+                onClick={() => setSideOpen(true)}
+                style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"#ffffff",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,zIndex:1}}>
+                ☰
+              </button>
+            )}
             {viewportWidth >= 500 ? (
               <div style={{position:"absolute",left:0,right:0,textAlign:"center",pointerEvents:"none"}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,letterSpacing:"2px",color:"#f59e0b",textTransform:"uppercase"}}>SCORPION ARABIA</div>
@@ -3565,7 +3538,6 @@ export default function App() {
               </div>
             )}
             <div style={{marginLeft:"auto",display:"flex",gap:viewportWidth < 480 ? 4 : 8,alignItems:"center",zIndex:1,flexShrink:0}}>
-              {/* Global search */}
               <div style={{position:"relative"}}>
                 {showSearch
                   ? <input autoFocus value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)}
@@ -3596,7 +3568,6 @@ export default function App() {
                   ▲ <span style={{background:"#dc2626",color:"#fff",borderRadius:999,padding:"1px 6px",fontSize:11,fontWeight:700}}>{allExpiries.length}</span>
                 </div>
               )}
-              {/* Admin toggle — hide label on very small screens */}
               <button
                 onClick={()=>{
                   if (isAdmin) { try{sessionStorage.removeItem(ADMIN_KEY);}catch{} setIsAdmin(false); showToast("Admin mode off"); }
@@ -3608,7 +3579,6 @@ export default function App() {
                 onMouseLeave={e=>e.currentTarget.style.borderColor=isAdmin?"#ef4444":T.border}>
                 {isAdmin ? (viewportWidth < 480 ? "🔓" : "🔓 Admin") : "🔒"}
               </button>
-              {/* Restore from backup — hide on very small phones */}
               {viewportWidth >= 400 && <>
               <input id="restore-input" type="file" accept=".json" style={{display:"none"}} onChange={e=>{
                 const file = e.target.files[0];
@@ -3633,7 +3603,6 @@ export default function App() {
                 onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
                 📂
               </button>
-              {/* Backup button */}
               <button onClick={() => backupToDrive(false)} disabled={backingUp || loadingData} title={backupStatus ? `Last backup: ${backupStatus}` : "No backup yet"}
                 style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:14,color:T.textMuted,display:"flex",alignItems:"center",gap:4,transition:"all .15s",opacity:backingUp?0.5:1,flexShrink:0}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=T.green}
@@ -3644,7 +3613,6 @@ export default function App() {
                 </span>}
               </button>
               </>}
-              {/* Notification bell */}
               <button onClick={() => setNotifyModal(true)} title="Email Notification Settings"
                 style={{background:notifySettings.enabled?"rgba(251,191,36,0.15)":"transparent",border:`1px solid ${notifySettings.enabled?T.gold:T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:15,color:notifySettings.enabled?T.gold:T.textMuted,display:"flex",alignItems:"center",gap:4,transition:"all .15s",flexShrink:0}}>
                 🔔{notifySettings.enabled && viewportWidth >= 480 && <span style={{fontSize:10,fontWeight:700,color:T.gold}}>ON</span>}
@@ -3654,59 +3622,59 @@ export default function App() {
         </header>
 
         <main style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"clamp(10px,2vw,28px) clamp(10px,2.5vw,32px)"}}>
-  {page==="dashboard" && (
-    <div className="fade-in" key="dashboard">
-      <Dashboard
-        data={data}
-        alerts={allExpiries}
-        go={setPage}
-        onDeepLink={handleDeepLink}
-      />
-    </div>
-  )}
-  {page==="scorpion" && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink} /></div>}
-  {page==="projects" && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
-  {page==="analysis" && (
-    analysisAuthed
-      ? <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
-      : <FinanceLoginPage title="PROJECT ANALYSIS ACCESS" subtitle="This section is restricted. Enter the analysis password to continue." passwordLabel="ANALYSIS PASSWORD" placeholder="Enter analysis password…" onLogin={(pw) => {
-          if (pw === ANALYSIS_PASSWORD) { setAnalysisAuthed(true); return true; }
-          return false;
-        }}/>
-  )}
-  {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink}/></div>}
-  {page==="manpower" && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="manpower" ? deepLink.id : null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
-  {page==="rigs" && (
-    <div className="fade-in">
-      <RigsPage
-        data={data}
-        setData={setData}
-        showToast={showToast}
-        isAdmin={isAdmin}
-      />
-    </div>
-  )}
-  {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
-  {page==="costs" && (
-    costAuthed
-      ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
-      : <FinanceLoginPage title="COST CONTROL ACCESS" subtitle="This section contains sensitive financial data.\nEnter the cost control password to continue." passwordLabel="COST CONTROL PASSWORD" placeholder="Enter password…" onLogin={(pw) => {
-          if (pw === COST_PASSWORD) { setCostAuthed(true); return true; }
-          return false;
-        }}/>
-  )}
-  {page==="finance" && (
-    financeAuthed
-      ? <div className="fade-in" key="finance"><FinancePage data={data} setData={setData} showToast={showToast} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear} isAdmin={isAdmin}/></div>
-      : <FinanceLoginPage onLogin={(pw) => {
-          if (pw === FINANCE_PASSWORD) {
-            setFinanceAuthed(true);
-            return true;
-          }
-          return false;
-        }}/>
-  )}
-</main>
+          {page==="dashboard" && (
+            <div className="fade-in" key="dashboard">
+              <Dashboard
+                data={data}
+                alerts={allExpiries}
+                go={setPage}
+                onDeepLink={handleDeepLink}
+              />
+            </div>
+          )}
+          {page==="scorpion" && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink} /></div>}
+          {page==="projects" && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
+          {page==="analysis" && (
+            analysisAuthed
+              ? <div className="fade-in" key="analysis"><ProjectAnalysisPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
+              : <FinanceLoginPage title="PROJECT ANALYSIS ACCESS" subtitle="This section is restricted. Enter the analysis password to continue." passwordLabel="ANALYSIS PASSWORD" placeholder="Enter analysis password…" onLogin={(pw) => {
+                  if (pw === ANALYSIS_PASSWORD) { setAnalysisAuthed(true); return true; }
+                  return false;
+                }}/>
+          )}
+          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink}/></div>}
+          {page==="manpower" && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="manpower" ? deepLink.id : null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
+          {page==="rigs" && (
+            <div className="fade-in">
+              <RigsPage
+                data={data}
+                setData={setData}
+                showToast={showToast}
+                isAdmin={isAdmin}
+              />
+            </div>
+          )}
+          {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+          {page==="costs" && (
+            costAuthed
+              ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
+              : <FinanceLoginPage title="COST CONTROL ACCESS" subtitle="This section contains sensitive financial data.\nEnter the cost control password to continue." passwordLabel="COST CONTROL PASSWORD" placeholder="Enter password…" onLogin={(pw) => {
+                  if (pw === COST_PASSWORD) { setCostAuthed(true); return true; }
+                  return false;
+                }}/>
+          )}
+          {page==="finance" && (
+            financeAuthed
+              ? <div className="fade-in" key="finance"><FinancePage data={data} setData={setData} showToast={showToast} selectedInvoiceYear={selectedInvoiceYear} setSelectedInvoiceYear={setSelectedInvoiceYear} isAdmin={isAdmin}/></div>
+              : <FinanceLoginPage onLogin={(pw) => {
+                  if (pw === FINANCE_PASSWORD) {
+                    setFinanceAuthed(true);
+                    return true;
+                  }
+                  return false;
+                }}/>
+          )}
+        </main>
       </div>
 
       {projMod && <ProjectsModal projects={data.projects||[]} onSave={saveProjects} onClose={()=>setProjMod(false)} isAdmin={isAdmin}/>}
