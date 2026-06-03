@@ -3632,7 +3632,7 @@ export default function App() {
               />
             </div>
           )}
-          {page==="scorpion" && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink} /></div>}
+          {page==="scorpion" && <div className="fade-in" key="scorpion"><ScorpionDocs data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="scorpion" ? deepLink.id : null} onDeepLinkConsumed={()=>setDeepLink(null)} /></div>}
           {page==="projects" && <div className="fade-in" key="projects"><ProjectDocs data={data} setData={setData} showToast={showToast} onManageProjects={()=>setProjMod(true)} isAdmin={isAdmin}/></div>}
           {page==="analysis" && (
             analysisAuthed
@@ -3642,7 +3642,7 @@ export default function App() {
                   return false;
                 }}/>
           )}
-          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onDeepLink={handleDeepLink}/></div>}
+          {page==="equipment" && <div className="fade-in" key="equipment"><EquipmentPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="equipment" ? deepLink.id : null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
           {page==="manpower" && <div className="fade-in" key="manpower"><ManpowerPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} deepLinkId={deepLink?.page==="manpower" ? deepLink.id : null} onDeepLinkConsumed={()=>setDeepLink(null)}/></div>}
           {page==="rigs" && (
             <div className="fade-in">
@@ -3983,7 +3983,6 @@ function Dashboard({ data, alerts, go, onDeepLink }) {
   const [alertModal, setAlertModal] = useState(null);
 
   const handleAlertClick = (a) => {
-    console.log("ALERT CLICKED:",a);
     setAlertModal(null);
     if (onDeepLink) onDeepLink(a.page, a.id);
     else go(a.page);
@@ -9249,18 +9248,14 @@ function EquipmentPage({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkCons
   const [fStatus, setFStatus] = useState("");
   const eqBulkRef = useRef(); // must be here — hooks cannot be after early return
   useEffect(() => {
-  console.log("EquipmentPage deepLinkId:", deepLinkId);
 
   if (deepLinkId) {
     const eq = (data.equipment || []).find(
       e => String(e.id) === String(deepLinkId)
     );
 
-    console.log("Matched equipment:", eq);
-    console.log("Equipment list count:", (data.equipment || []).length);
 
     if (eq) {
-      console.log("Opening equipment:", eq.name);
       setSelEq(eq);
     } else {
       console.error("No equipment found for ID:", deepLinkId);
