@@ -5772,6 +5772,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
   const [multiPdfInvModal, setMultiPdfInvModal] = useState(null); // {project?:string}
   const [fProj, setFProj] = useState("");
   const [selProj, setSelProj] = useState(null);
+  const [selectedInvoiceMonth, setSelectedInvoiceMonth] = useState("All");
 
   const projects  = data.projects    || [];
   const allDocs   = data.projectDocs || [];
@@ -5813,13 +5814,30 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
     }).filter(Boolean)
   )).sort((a,b) => Number(b) - Number(a));
 
-  const filteredInvoiceDocs = selectedInvoiceYear === "All"
-    ? invoiceDocs
-    : invoiceDocs.filter(doc => {
-        if (!doc.dueDate) return false;
-        const dt = new Date(doc.dueDate);
-        return !Number.isNaN(dt.getTime()) && String(dt.getFullYear()) === selectedInvoiceYear;
-      });
+  const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  // Available months depend on selected year
+  const availableInvoiceMonths = selectedInvoiceYear === "All" ? [] : Array.from(new Set(
+    invoiceDocs.map(doc => {
+      if (!doc.dueDate) return null;
+      const dt = new Date(doc.dueDate);
+      if (Number.isNaN(dt.getTime())) return null;
+      if (String(dt.getFullYear()) !== selectedInvoiceYear) return null;
+      return dt.getMonth(); // 0-11
+    }).filter(v => v !== null)
+  )).sort((a,b) => a - b);
+
+  // Reset month when year changes (handled inline via derived value)
+  const effectiveMonth = selectedInvoiceYear === "All" ? "All" : selectedInvoiceMonth;
+
+  const filteredInvoiceDocs = invoiceDocs.filter(doc => {
+    if (!doc.dueDate) return selectedInvoiceYear === "All";
+    const dt = new Date(doc.dueDate);
+    if (Number.isNaN(dt.getTime())) return selectedInvoiceYear === "All";
+    if (selectedInvoiceYear !== "All" && String(dt.getFullYear()) !== selectedInvoiceYear) return false;
+    if (effectiveMonth !== "All" && dt.getMonth() !== Number(effectiveMonth)) return false;
+    return true;
+  });
 
   const totalInvoiceValue = filteredInvoiceDocs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
   const totalReceived     = filteredInvoiceDocs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
@@ -5846,7 +5864,18 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
   // ── Filtered work orders ──
   const filteredWoDocs = fProj ? woDocs.filter(d => d.project === fProj) : woDocs;
   // ── Filtered invoices (for the Invoices tab) ──
-  const projInvs = selProj ? invoiceDocs.filter(d => d.project === selProj) : [];
+  const [projInvMonth, setProjInvMonth] = useState("All");
+  const projInvsAll  = selProj ? invoiceDocs.filter(d => d.project === selProj) : [];
+  const projInvs = projInvMonth === "All" ? projInvsAll : projInvsAll.filter(d => {
+    if (!d.dueDate) return false;
+    const dt = new Date(d.dueDate);
+    return !Number.isNaN(dt.getTime()) && dt.getMonth() === Number(projInvMonth);
+  });
+  const projInvsMonths = Array.from(new Set(projInvsAll.map(d => {
+    if (!d.dueDate) return null;
+    const dt = new Date(d.dueDate);
+    return Number.isNaN(dt.getTime()) ? null : dt.getMonth();
+  }).filter(v => v !== null))).sort((a,b) => a - b);
   const projInvTotal = projInvs.reduce((s,d) => s + (parseFloat(d.amount)||0), 0);
 
   return (
@@ -5880,9 +5909,8 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
           </tr>`).join("");
           printPage("Finance Report", `
             <h1>💰 FINANCE REPORT</h1>
-            <div class="meta">Generated ${new Date().toLocaleDateString()} · Year: ${selectedInvoiceYear}</div>
-            <div class="kpi-grid">
-              <div class="kpi"><div class="kpi-val">${formatSarCompact(totalInvoiceValue)}</div><div class="kpi-lbl">Total Invoiced</div></div>
+            <div class="meta">Generated ${new Date().toLocaleDateString()} · ${selectedInvoiceYear === "All" ? "All Years" : selectedInvoiceYear + (effectiveMonth !== "All" ? " · " + MONTH_NAMES[Number(effectiveMonth)] : "")}</div>
+            <div class="kpi"><div class="kpi-val">${formatSarCompact(totalInvoiceValue)}</div><div class="kpi-lbl">Total Invoiced</div></div>
               <div class="kpi"><div class="kpi-val" style="color:#16a34a">${formatSarCompact(totalReceived)}</div><div class="kpi-lbl">Total Received</div></div>
               <div class="kpi"><div class="kpi-val" style="color:#dc2626">${formatSarCompact(totalDue)}</div><div class="kpi-lbl">Total Due</div></div>
               <div class="kpi"><div class="kpi-val">${collectionRate}%</div><div class="kpi-lbl">Collection Rate</div></div>
@@ -5927,11 +5955,21 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
         <div>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20,flexWrap:"wrap",justifyContent:"flex-end"}}>
             <label style={{fontSize:12,fontWeight:700,color:T.textMuted}}>YEAR</label>
-            <select value={selectedInvoiceYear} onChange={e => setSelectedInvoiceYear(e.target.value)}
+            <select value={selectedInvoiceYear} onChange={e => { setSelectedInvoiceYear(e.target.value); setSelectedInvoiceMonth("All"); }}
               style={{background:T.inputBg,color:T.text,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,outline:"none",colorScheme:"light"}}>
               <option value="All">All Years</option>
               {availableInvoiceYears.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
+            {selectedInvoiceYear !== "All" && availableInvoiceMonths.length > 0 && (
+              <>
+                <label style={{fontSize:12,fontWeight:700,color:T.textMuted}}>MONTH</label>
+                <select value={selectedInvoiceMonth} onChange={e => setSelectedInvoiceMonth(e.target.value)}
+                  style={{background:T.inputBg,color:T.text,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,outline:"none",colorScheme:"light"}}>
+                  <option value="All">All Months</option>
+                  {availableInvoiceMonths.map(m => <option key={m} value={m}>{MONTH_NAMES[m]}</option>)}
+                </select>
+              </>
+            )}
           </div>
 
           {/* KPI strip */}
@@ -5970,15 +6008,15 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
           {/* Invoice metric cards */}
           <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",marginBottom:20}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,marginBottom:4}}>
-              INVOICE VALUE {selectedInvoiceYear !== "All" ? `— ${selectedInvoiceYear}` : "— ALL YEARS"}
+              INVOICE VALUE {selectedInvoiceYear !== "All" ? `— ${selectedInvoiceYear}${effectiveMonth !== "All" ? ` · ${MONTH_NAMES[Number(effectiveMonth)]}` : ""}` : "— ALL YEARS"}
             </div>
             <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>
-              {selectedInvoiceYear === "All" ? `Across all ${filteredInvoiceDocs.length} invoices` : `For ${selectedInvoiceYear} · ${filteredInvoiceDocs.length} invoices`}
+              {selectedInvoiceYear === "All" ? `Across all ${filteredInvoiceDocs.length} invoices` : effectiveMonth !== "All" ? `${MONTH_NAMES[Number(effectiveMonth)]} ${selectedInvoiceYear} · ${filteredInvoiceDocs.length} invoices` : `For ${selectedInvoiceYear} · ${filteredInvoiceDocs.length} invoices`}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
-              <InvoiceMetricCard title="TOTAL INVOICE VALUE" amount={formatSarCompact(totalInvoiceValue)} sub={`${filteredInvoiceDocs.length} invoices · ${selectedInvoiceYear === "All" ? "all years" : selectedInvoiceYear}`} color={T.green} onClick={() => setInvoiceDetailView({mode:"all",stream:"all"})} miniCards={[{title:"INCOME INVOICED",amount:formatSarCompact(incomeInvoiced),color:T.green,onClick:()=>setInvoiceDetailView({mode:"all",stream:"income"})},{title:"ADVANCE INVOICED",amount:formatSarCompact(advanceInvoiced),color:T.gold,onClick:()=>setInvoiceDetailView({mode:"all",stream:"advance"})}]}/>
-              <InvoiceMetricCard title="AMOUNT RECEIVED" amount={formatSarCompact(totalReceived)} sub={selectedInvoiceYear === "All" ? "Collected across all invoices" : `Collected for ${selectedInvoiceYear}`} color={T.blue} onClick={() => setInvoiceDetailView({mode:"received",stream:"all"})} miniCards={[{title:"RECEIVED FROM INCOME",amount:formatSarCompact(receivedFromIncome),color:T.blue,onClick:()=>setInvoiceDetailView({mode:"received",stream:"income"})},{title:"RECEIVED FROM ADVANCE",amount:formatSarCompact(receivedFromAdvance),color:T.teal,onClick:()=>setInvoiceDetailView({mode:"received",stream:"advance"})}]}/>
-              <InvoiceMetricCard title="AMOUNT DUE" amount={formatSarCompact(totalDue)} sub={selectedInvoiceYear === "All" ? "Pending and partial balances" : `Outstanding for ${selectedInvoiceYear}`} color={T.red} onClick={() => setInvoiceDetailView({mode:"due",stream:"all"})} miniCards={[{title:"DUE FROM INCOME",amount:formatSarCompact(dueFromIncome),color:T.red,onClick:()=>setInvoiceDetailView({mode:"due",stream:"income"})},{title:"DUE FROM ADVANCE",amount:formatSarCompact(dueFromAdvance),color:T.orange,onClick:()=>setInvoiceDetailView({mode:"due",stream:"advance"})}]}/>
+              <InvoiceMetricCard title="TOTAL INVOICE VALUE" amount={formatSarCompact(totalInvoiceValue)} sub={`${filteredInvoiceDocs.length} invoices · ${selectedInvoiceYear === "All" ? "all years" : effectiveMonth !== "All" ? `${MONTH_NAMES[Number(effectiveMonth)]} ${selectedInvoiceYear}` : selectedInvoiceYear}`} color={T.green} onClick={() => setInvoiceDetailView({mode:"all",stream:"all"})} miniCards={[{title:"INCOME INVOICED",amount:formatSarCompact(incomeInvoiced),color:T.green,onClick:()=>setInvoiceDetailView({mode:"all",stream:"income"})},{title:"ADVANCE INVOICED",amount:formatSarCompact(advanceInvoiced),color:T.gold,onClick:()=>setInvoiceDetailView({mode:"all",stream:"advance"})}]}/>
+              <InvoiceMetricCard title="AMOUNT RECEIVED" amount={formatSarCompact(totalReceived)} sub={selectedInvoiceYear === "All" ? "Collected across all invoices" : effectiveMonth !== "All" ? `Collected for ${MONTH_NAMES[Number(effectiveMonth)]} ${selectedInvoiceYear}` : `Collected for ${selectedInvoiceYear}`} color={T.blue} onClick={() => setInvoiceDetailView({mode:"received",stream:"all"})} miniCards={[{title:"RECEIVED FROM INCOME",amount:formatSarCompact(receivedFromIncome),color:T.blue,onClick:()=>setInvoiceDetailView({mode:"received",stream:"income"})},{title:"RECEIVED FROM ADVANCE",amount:formatSarCompact(receivedFromAdvance),color:T.teal,onClick:()=>setInvoiceDetailView({mode:"received",stream:"advance"})}]}/>
+              <InvoiceMetricCard title="AMOUNT DUE" amount={formatSarCompact(totalDue)} sub={selectedInvoiceYear === "All" ? "Pending and partial balances" : effectiveMonth !== "All" ? `Outstanding for ${MONTH_NAMES[Number(effectiveMonth)]} ${selectedInvoiceYear}` : `Outstanding for ${selectedInvoiceYear}`} color={T.red} onClick={() => setInvoiceDetailView({mode:"due",stream:"all"})} miniCards={[{title:"DUE FROM INCOME",amount:formatSarCompact(dueFromIncome),color:T.red,onClick:()=>setInvoiceDetailView({mode:"due",stream:"income"})},{title:"DUE FROM ADVANCE",amount:formatSarCompact(dueFromAdvance),color:T.orange,onClick:()=>setInvoiceDetailView({mode:"due",stream:"advance"})}]}/>
             </div>
           </div>
 
@@ -5986,7 +6024,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
           {projectBreakdown.length > 0 && (
             <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",marginBottom:20}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,marginBottom:4}}>PER-PROJECT BREAKDOWN</div>
-              <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>Invoice collection status by project {selectedInvoiceYear !== "All" ? `for ${selectedInvoiceYear}` : ""}</div>
+              <div style={{fontSize:13,color:T.textMuted,marginBottom:20}}>Invoice collection status by project {selectedInvoiceYear !== "All" ? `for ${effectiveMonth !== "All" ? `${MONTH_NAMES[Number(effectiveMonth)]} ` : ""}${selectedInvoiceYear}` : ""}</div>
               <div style={{display:"grid",gap:12}}>
                 {projectBreakdown.map((p,i) => (
                   <div key={p.proj} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 16px",animationDelay:`${i*.04}s`,display:"flex",alignItems:"center",gap:14}}>
@@ -6014,13 +6052,13 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
             </div>
           )}
 
-          {invoiceDetailView && <InvoiceYearDetailsModal view={invoiceDetailView} invoices={filteredInvoiceDocs} yearLabel={selectedInvoiceYear} onClose={() => setInvoiceDetailView(null)}/>}
+          {invoiceDetailView && <InvoiceYearDetailsModal view={invoiceDetailView} invoices={filteredInvoiceDocs} yearLabel={selectedInvoiceYear === "All" ? "All" : effectiveMonth !== "All" ? `${MONTH_NAMES[Number(effectiveMonth)]} ${selectedInvoiceYear}` : selectedInvoiceYear} onClose={() => setInvoiceDetailView(null)}/>}
 
           {filteredInvoiceDocs.length === 0 && (
             <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"48px 20px",textAlign:"center",boxShadow:T.shadow}}>
               <div style={{fontSize:44,marginBottom:12}}>📋</div>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.textSub,marginBottom:8}}>NO INVOICES</div>
-              <div style={{fontSize:13,color:T.textMuted}}>{selectedInvoiceYear === "All" ? "No invoices found. Add invoices via the Invoices tab above." : `No invoices found for ${selectedInvoiceYear}. Try selecting a different year.`}</div>
+              <div style={{fontSize:13,color:T.textMuted}}>{selectedInvoiceYear === "All" ? "No invoices found. Add invoices via the Invoices tab above." : effectiveMonth !== "All" ? `No invoices found for ${MONTH_NAMES[Number(effectiveMonth)]} ${selectedInvoiceYear}. Try a different month or year.` : `No invoices found for ${selectedInvoiceYear}. Try selecting a different year.`}</div>
             </div>
           )}
         </div>
@@ -6030,12 +6068,19 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
       {finTab === "invoices" && (
         selProj ? (
           <div>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-              <button onClick={() => setSelProj(null)} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>← Back</button>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20,flexWrap:"wrap"}}>
+              <button onClick={() => { setSelProj(null); setProjInvMonth("All"); }} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>← Back</button>
               <div style={{flex:1}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text}}>{selProj}</div>
-                <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>{projInvs.length} invoice{projInvs.length!==1?"s":""} · Total: <span style={{color:T.green,fontWeight:700}}>SAR {projInvTotal.toLocaleString()}</span></div>
+                <div style={{fontSize:14,color:T.textMuted,marginTop:3}}>{projInvs.length}{projInvMonth !== "All" ? ` of ${projInvsAll.length}` : ""} invoice{projInvs.length!==1?"s":""} · Total: <span style={{color:T.green,fontWeight:700}}>SAR {projInvTotal.toLocaleString()}</span></div>
               </div>
+              {projInvsMonths.length > 1 && (
+                <select value={projInvMonth} onChange={e => setProjInvMonth(e.target.value)}
+                  style={{background:T.inputBg,color:T.text,border:`1px solid ${projInvMonth !== "All" ? T.gold : T.border}`,borderRadius:10,padding:"8px 12px",fontSize:13,fontWeight:600,outline:"none",colorScheme:"light"}}>
+                  <option value="All">All Months</option>
+                  {projInvsMonths.map(m => <option key={m} value={m}>{MONTH_NAMES[m]}</option>)}
+                </select>
+              )}
               <Btn color={T.teal} onClick={() => setMultiPdfInvModal({project:selProj})}>📄 Bulk PDF Upload</Btn>
               <Btn color={T.green} solid onClick={() => setModal({mode:"add",doc:{project:selProj}})}>+ Add Invoice</Btn>
             </div>
@@ -6217,7 +6262,7 @@ function InvoiceYearDetailsModal({ view, invoices, yearLabel, onClose }) {
         <div style={{padding:"18px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexShrink:0}}>
           <div>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>{title}</div>
-            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>{yearLabel === "All" ? "All years" : `Year ${yearLabel}`} • {rows.length} invoice{rows.length !== 1 ? "s" : ""}</div>
+            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>{yearLabel === "All" ? "All years" : yearLabel} • {rows.length} invoice{rows.length !== 1 ? "s" : ""}</div>
           </div>
           <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.text,borderRadius:10,width:38,height:38,fontSize:20,cursor:"pointer"}}>×</button>
         </div>
