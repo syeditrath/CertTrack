@@ -6535,18 +6535,20 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           : <>
               {/* ── Status filter pills ── */}
               {(()=>{
+                const analysis = data.projectAnalysis || [];
+                const getStatus = proj => (analysis.find(a=>a.project===proj)?.status) || null;
                 const statuses = ["All","In Progress","Completed","Not Started","On Hold","Cancelled"];
-                const counts = Object.fromEntries(statuses.slice(1).map(s=>[s, projects.filter(p=>typeof p==="object"&&p.status===s).length]));
                 const stColor = {"In Progress":T.blue,"Completed":T.green,"Not Started":T.textMuted,"On Hold":T.gold,"Cancelled":T.red};
+                const statusCounts = Object.fromEntries(statuses.slice(1).map(s=>[s, projects.filter(p=>getStatus(pName(p))===s).length]));
                 return (
                   <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
-                    {statuses.filter(s=>s==="All"||(counts[s]||0)>0).map(s=>{
+                    {statuses.filter(s=>s==="All"||(statusCounts[s]||0)>0).map(s=>{
                       const active = projStatusFilter===s;
                       const col = stColor[s]||T.blue;
                       return (
                         <button key={s} onClick={()=>setProjStatusFilter(s)}
                           style={{padding:"6px 16px",borderRadius:999,border:`1px solid ${active?(s==="All"?T.blue:col):T.border}`,background:active?`${s==="All"?T.blue:col}18`:"transparent",color:active?(s==="All"?T.blue:col):T.textSub,fontSize:12,fontWeight:active?700:500,cursor:"pointer",transition:"all .15s"}}>
-                          {s==="All"?`All (${projects.length})`:`${s} (${counts[s]})`}
+                          {s==="All"?`All (${projects.length})`:`${s} (${statusCounts[s]})`}
                         </button>
                       );
                     })}
@@ -6554,7 +6556,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                 );
               })()}
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
-              {projects.filter(p=>projStatusFilter==="All"||(typeof p==="object"&&p.status===projStatusFilter)).map((project,i)=>{ const projObj=typeof project==="object"?project:null; const projStatus=projObj?.status||null; project=pName(project);
+              {projects.filter(p=>{ if(projStatusFilter==="All") return true; const st=(data.projectAnalysis||[]).find(a=>a.project===pName(p))?.status||null; return st===projStatusFilter; }).map((project,i)=>{ const projStatus=(data.projectAnalysis||[]).find(a=>a.project===pName(project))?.status||null; project=pName(project);
                 const projectDocs = docs.filter(d=>d.project===project);
                 const projectCerts = projectDocs.filter(d=>d.subTab==="certificates");
                 const projectDailyReports = projectDocs.filter(d=>d.subTab==="dailyreports");
