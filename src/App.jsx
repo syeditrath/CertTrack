@@ -273,7 +273,7 @@ function getMetricTypeTheme(type) {
   return { accent, dim, glow };
 }
 /* ─── Active theme (module-level, updated by App) ───────────────────────── */
-let T = LIGHT; // default to light, App.setTheme() updates this
+let T = DARK; // default to light, App.setTheme() updates this
 function setTheme(dark) { T = dark ? DARK : LIGHT; }
 
 function useViewport() {
