@@ -6495,7 +6495,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   };
 
   // ── Rig management ──────────────────────────────────────────────────
-  const rigs = data.rigs || [];
+  const rigs = [...new Map((data.rigs || []).map(r => [r.name, r])).values()];
   const projRigs = selectedProject ? rigs.filter(r=>r.project===selectedProject) : [];
 
   const addRig = () => {
