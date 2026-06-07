@@ -273,7 +273,7 @@ function getMetricTypeTheme(type) {
   return { accent, dim, glow };
 }
 /* ─── Active theme (module-level, updated by App) ───────────────────────── */
-let T = DARK; // default to light, App.setTheme() updates this
+let T = LIGHT; // default to light, App.setTheme() updates this
 function setTheme(dark) { T = dark ? DARK : LIGHT; }
 
 function useViewport() {
@@ -835,46 +835,76 @@ const COST_PASSWORD     = "cost2025"; // Change this to your desired cost contro
 const ADMIN_PASSWORD    = "admin2025";  // Only admin can delete — change this
 const ADMIN_KEY         = "cta_admin";
 
-/* ─── Cloudflare Worker config ───────────────────────────────────────────── */
+/* ─── Supabase config — paste your values here after setup ──────────────── */
+const SUPABASE_URL    = "https://mmvuqyupaxhlcqabvvad.supabase.co";
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdnVxeXVwYXhobGNxYWJ2dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMzUxNzYsImV4cCI6MjA5MzYxMTE3Nn0.PFhW-KtWx_BqF0SzVNu7mpHUrKX7sYcx2nmhkUVka6c";
+const STORAGE_BUCKET  = "portal-files";
+async function fetchAppData() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
+    headers: {
+      apikey: SUPABASE_ANON,
+      Authorization: `Bearer ${SUPABASE_ANON}`,
+    },
+  });
+
+  if (!res.ok) throw new Error("Failed to load app data");
+
+  const rows = await res.json();
+  if (!rows.length || !rows[0].data) return EMPTY_DATA;
+
+  return { ...EMPTY_DATA, ...rows[0].data };
+}
+/* ── Cloudflare R2 upload via Worker ─────────────────────────────────────
+   Set R2_WORKER_URL to your deployed Worker URL, e.g.:
+   "https://scorpion-upload.YOUR-SUBDOMAIN.workers.dev"
+──────────────────────────────────────────────────────────────────────── */
 const R2_WORKER_URL = "https://bucket.syed-itrath.workers.dev";
 
-async function fetchAppData() {
-  const res = await fetch(`${R2_WORKER_URL}/appdata`, {
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!res.ok) throw new Error("Failed to load app data");
-  const json = await res.json();
-  return { ...EMPTY_DATA, ...(json.data || json) };
-}
-
 async function uploadToSupabase(file, folder) {
+  if (R2_WORKER_URL === "YOUR_WORKER_URL") {
+    throw new Error("R2 Worker URL not configured. Set R2_WORKER_URL in App.jsx.");
+  }
   const safeFolder = folder.replace(/[^a-zA-Z0-9._\-/]/g, "_");
   const safeFile   = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const key        = `${safeFolder}/${Date.now()}_${safeFile}`;
+
   const res = await fetch(`${R2_WORKER_URL}/upload/${key}`, {
     method:  "PUT",
     headers: { "Content-Type": file.type || "application/octet-stream" },
     body:    file,
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || "R2 upload failed");
   }
+
   const { url } = await res.json();
   return url;
 }
-
 async function saveAppData(data) {
-  const res = await fetch(`${R2_WORKER_URL}/appdata`, {
-    method:  "PUT",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ data, updated_at: new Date().toISOString() }),
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main`, {
+    method: "PATCH",
+    headers: {
+      apikey: SUPABASE_ANON,
+      Authorization: `Bearer ${SUPABASE_ANON}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({
+      data,
+      updated_at: new Date().toISOString(),
+    }),
   });
+
   if (!res.ok) throw new Error("Failed to save app data");
 }
-
-function isSupabaseConfigured() { return true; }
-function isR2Configured() { return true; }
+function isSupabaseConfigured() {
+  return SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON !== "YOUR_SUPABASE_ANON_KEY";
+}
+function isR2Configured() {
+  return R2_WORKER_URL !== "YOUR_WORKER_URL";
+}
 
 function getPreviewUrl(url) {
   if (!url) return null;
@@ -3230,15 +3260,28 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const loaded = await fetchAppData();
-        // Deduplicate rigs by name (in case duplicates crept in before guard was added)
-        if (loaded.rigs?.length) {
-          loaded.rigs = [...new Map(loaded.rigs.map(r => [r.name, r])).values()];
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
+          headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (res.ok) {
+          const rows = await res.json();
+          if (rows.length && rows[0].data) {
+            setData({ ...EMPTY_DATA, ...rows[0].data });
+            setLoadingData(false);
+          } else {
+            console.warn("Supabase returned no data rows — staying in loading state to protect data");
+            setSupabaseError(true);
+          }
+        } else {
+          console.warn("Supabase fetch failed — staying in loading state to protect data");
+          setSupabaseError(true);
         }
-        setData(loaded);
-        setLoadingData(false);
       } catch (err) {
-        console.error("Cloudflare load failed:", err);
+        console.error("Supabase load failed:", err);
         setSupabaseError(true);
       }
     })();
@@ -3364,9 +3407,9 @@ export default function App() {
         {supabaseError ? (
           <>
             <div style={{fontSize:48}}>⚠️</div>
-            <div style={{fontSize:28,fontWeight:800,color:"#ef4444"}}>CONNECTION ERROR</div>
+            <div style={{fontSize:28,fontWeight:800,color:"#ef4444"}}>DATABASE CONNECTION ERROR</div>
             <div style={{fontSize:15,color:T.textMuted,textAlign:"center",maxWidth:480,lineHeight:1.6}}>
-              Unable to connect to Cloudflare. Your data is safe — this is a connection issue.<br/>
+              Unable to connect to the database. Your data is safe — this is a connection issue.<br/>
               Please check your internet connection and try again.
             </div>
             <button onClick={()=>window.location.reload()} style={{background:"#ef4444",border:"none",color:"#fff",borderRadius:10,padding:"12px 28px",fontSize:16,fontWeight:800,cursor:"pointer",marginTop:8}}>
@@ -3547,7 +3590,7 @@ export default function App() {
                     if (!parsed || typeof parsed !== "object") throw new Error("Invalid file");
                     const restored = { ...EMPTY_DATA, ...parsed };
                     setData(restored);
-                    saveAppData(restored).then(()=>showToast("✅ Data restored successfully")).catch(()=>showToast("Restored locally but Cloudflare save failed","error"));
+                    saveAppData(restored).then(()=>showToast("✅ Data restored successfully")).catch(()=>showToast("Restored locally but Supabase save failed","error"));
                   } catch(err) { showToast("Failed to restore: invalid backup file","error"); }
                 };
                 reader.readAsText(file);
@@ -4692,7 +4735,7 @@ function RigsPage({ data, setData, showToast, isAdmin }) {
   const [selectedRig, setSelectedRig] = useState(null);
   const [hoveredRig, setHoveredRig] = useState(null);
 
-  const rigs      = [...new Map((data.rigs || []).map(r => [r.name, r])).values()];
+  const rigs      = data.rigs      || [];
   const equipment = data.equipment || [];
 
   const getRigEquipment   = rigName => equipment.filter(eq => eq.rig === rigName);
@@ -6351,7 +6394,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   const [bulkModal, setBulkModal] = useState(false);
   const [multiPdfModal, setMultiPdfModal] = useState(null);
   const [rigInput, setRigInput] = useState("");
-  const [projStatusFilter, setProjStatusFilter] = useState("All");
   const docs     = data.projectDocs || [];
   const projects = data.projects    || [];
   const cur      = PD_TABS.find(t=>t.id===subTab);
@@ -6453,7 +6495,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   };
 
   // ── Rig management ──────────────────────────────────────────────────
-  const rigs = [...new Map((data.rigs || []).map(r => [r.name, r])).values()];
+  const rigs = data.rigs || [];
   const projRigs = selectedProject ? rigs.filter(r=>r.project===selectedProject) : [];
 
   const addRig = () => {
@@ -6489,31 +6531,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
         {projects.length===0
           ? <Empty icon="◆" label="No projects yet" sub="Add projects from Manage Projects in the sidebar" color={T.blue} onAdd={() => onManageProjects && onManageProjects()}/>
-          : <>
-              {/* ── Status filter pills ── */}
-              {(()=>{
-                const analysis = data.projectAnalysis || [];
-                const getStatus = proj => (analysis.find(a=>a.project===proj)?.status) || null;
-                const statuses = ["All","In Progress","Completed","Not Started","On Hold","Cancelled"];
-                const stColor = {"In Progress":T.blue,"Completed":T.green,"Not Started":T.textMuted,"On Hold":T.gold,"Cancelled":T.red};
-                const statusCounts = Object.fromEntries(statuses.slice(1).map(s=>[s, projects.filter(p=>getStatus(pName(p))===s).length]));
-                return (
-                  <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
-                    {statuses.filter(s=>s==="All"||(statusCounts[s]||0)>0).map(s=>{
-                      const active = projStatusFilter===s;
-                      const col = stColor[s]||T.blue;
-                      return (
-                        <button key={s} onClick={()=>setProjStatusFilter(s)}
-                          style={{padding:"6px 16px",borderRadius:999,border:`1px solid ${active?(s==="All"?T.blue:col):T.border}`,background:active?`${s==="All"?T.blue:col}18`:"transparent",color:active?(s==="All"?T.blue:col):T.textSub,fontSize:12,fontWeight:active?700:500,cursor:"pointer",transition:"all .15s"}}>
-                          {s==="All"?`All (${projects.length})`:`${s} (${statusCounts[s]})`}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
-              {projects.filter(p=>{ if(projStatusFilter==="All") return true; const st=(data.projectAnalysis||[]).find(a=>a.project===pName(p))?.status||null; return st===projStatusFilter; }).map((project,i)=>{ const projStatus=(data.projectAnalysis||[]).find(a=>a.project===pName(project))?.status||null; project=pName(project);
+          : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
+              {projects.map((project,i)=>{ project=pName(project);
                 const projectDocs = docs.filter(d=>d.project===project);
                 const projectCerts = projectDocs.filter(d=>d.subTab==="certificates");
                 const projectDailyReports = projectDocs.filter(d=>d.subTab==="dailyreports");
@@ -6542,7 +6561,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                       </div>
                       <div style={{width:42,height:42,borderRadius:12,background:T.blueDim,display:"flex",alignItems:"center",justifyContent:"center",color:T.blue,fontSize:18,fontWeight:800,flexShrink:0}}>◆</div>
                     </div>
-                    {projStatus&&(()=>{const sc={"In Progress":T.blue,"Completed":T.green,"Not Started":T.textMuted,"On Hold":T.gold,"Cancelled":T.red}[projStatus]||T.textMuted;return(<div style={{marginBottom:12}}><span style={{background:`${sc}18`,border:`1px solid ${sc}44`,color:sc,borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700}}>{projStatus}</span></div>);})()} 
 
                     <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
                       <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:12,padding:"12px"}}>
@@ -6561,7 +6579,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                 );
               })}
             </div>
-            </>
         }
       </div>
     );
