@@ -835,46 +835,76 @@ const COST_PASSWORD     = "cost2025"; // Change this to your desired cost contro
 const ADMIN_PASSWORD    = "admin2025";  // Only admin can delete — change this
 const ADMIN_KEY         = "cta_admin";
 
-/* ─── Cloudflare Worker config ───────────────────────────────────────────── */
-const R2_WORKER_URL = "https://scorpion-portal.syed-itrath.workers.dev";
-
+/* ─── Supabase config — paste your values here after setup ──────────────── */
+const SUPABASE_URL    = "https://mmvuqyupaxhlcqabvvad.supabase.co";
+const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdnVxeXVwYXhobGNxYWJ2dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMzUxNzYsImV4cCI6MjA5MzYxMTE3Nn0.PFhW-KtWx_BqF0SzVNu7mpHUrKX7sYcx2nmhkUVka6c";
+const STORAGE_BUCKET  = "portal-files";
 async function fetchAppData() {
-  const res = await fetch(`${R2_WORKER_URL}/appdata`, {
-    headers: { "Content-Type": "application/json" },
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
+    headers: {
+      apikey: SUPABASE_ANON,
+      Authorization: `Bearer ${SUPABASE_ANON}`,
+    },
   });
+
   if (!res.ok) throw new Error("Failed to load app data");
-  const json = await res.json();
-  return { ...EMPTY_DATA, ...(json.data || json) };
+
+  const rows = await res.json();
+  if (!rows.length || !rows[0].data) return EMPTY_DATA;
+
+  return { ...EMPTY_DATA, ...rows[0].data };
 }
+/* ── Cloudflare R2 upload via Worker ─────────────────────────────────────
+   Set R2_WORKER_URL to your deployed Worker URL, e.g.:
+   "https://scorpion-upload.YOUR-SUBDOMAIN.workers.dev"
+──────────────────────────────────────────────────────────────────────── */
+const R2_WORKER_URL = "https://bucket.syed-itrath.workers.dev";
 
 async function uploadToSupabase(file, folder) {
+  if (R2_WORKER_URL === "YOUR_WORKER_URL") {
+    throw new Error("R2 Worker URL not configured. Set R2_WORKER_URL in App.jsx.");
+  }
   const safeFolder = folder.replace(/[^a-zA-Z0-9._\-/]/g, "_");
   const safeFile   = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const key        = `${safeFolder}/${Date.now()}_${safeFile}`;
+
   const res = await fetch(`${R2_WORKER_URL}/upload/${key}`, {
     method:  "PUT",
     headers: { "Content-Type": file.type || "application/octet-stream" },
     body:    file,
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || "R2 upload failed");
   }
+
   const { url } = await res.json();
   return url;
 }
-
 async function saveAppData(data) {
-  const res = await fetch(`${R2_WORKER_URL}/appdata`, {
-    method:  "PUT",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify({ data, updated_at: new Date().toISOString() }),
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main`, {
+    method: "PATCH",
+    headers: {
+      apikey: SUPABASE_ANON,
+      Authorization: `Bearer ${SUPABASE_ANON}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify({
+      data,
+      updated_at: new Date().toISOString(),
+    }),
   });
+
   if (!res.ok) throw new Error("Failed to save app data");
 }
-
-function isSupabaseConfigured() { return true; }
-function isR2Configured() { return true; }
+function isSupabaseConfigured() {
+  return SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON !== "YOUR_SUPABASE_ANON_KEY";
+}
+function isR2Configured() {
+  return R2_WORKER_URL !== "YOUR_WORKER_URL";
+}
 
 function getPreviewUrl(url) {
   if (!url) return null;
@@ -3230,15 +3260,28 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const loaded = await fetchAppData();
-        // Deduplicate rigs by name (in case duplicates crept in before guard was added)
-        if (loaded.rigs?.length) {
-          loaded.rigs = [...new Map(loaded.rigs.map(r => [r.name, r])).values()];
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
+          headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (res.ok) {
+          const rows = await res.json();
+          if (rows.length && rows[0].data) {
+            setData({ ...EMPTY_DATA, ...rows[0].data });
+            setLoadingData(false);
+          } else {
+            console.warn("Supabase returned no data rows — staying in loading state to protect data");
+            setSupabaseError(true);
+          }
+        } else {
+          console.warn("Supabase fetch failed — staying in loading state to protect data");
+          setSupabaseError(true);
         }
-        setData(loaded);
-        setLoadingData(false);
       } catch (err) {
-        console.error("Cloudflare load failed:", err);
+        console.error("Supabase load failed:", err);
         setSupabaseError(true);
       }
     })();
@@ -3364,9 +3407,9 @@ export default function App() {
         {supabaseError ? (
           <>
             <div style={{fontSize:48}}>⚠️</div>
-            <div style={{fontSize:28,fontWeight:800,color:"#ef4444"}}>CONNECTION ERROR</div>
+            <div style={{fontSize:28,fontWeight:800,color:"#ef4444"}}>DATABASE CONNECTION ERROR</div>
             <div style={{fontSize:15,color:T.textMuted,textAlign:"center",maxWidth:480,lineHeight:1.6}}>
-              Unable to connect to Cloudflare. Your data is safe — this is a connection issue.<br/>
+              Unable to connect to the database. Your data is safe — this is a connection issue.<br/>
               Please check your internet connection and try again.
             </div>
             <button onClick={()=>window.location.reload()} style={{background:"#ef4444",border:"none",color:"#fff",borderRadius:10,padding:"12px 28px",fontSize:16,fontWeight:800,cursor:"pointer",marginTop:8}}>
@@ -3547,7 +3590,7 @@ export default function App() {
                     if (!parsed || typeof parsed !== "object") throw new Error("Invalid file");
                     const restored = { ...EMPTY_DATA, ...parsed };
                     setData(restored);
-                    saveAppData(restored).then(()=>showToast("✅ Data restored successfully")).catch(()=>showToast("Restored locally but Cloudflare save failed","error"));
+                    saveAppData(restored).then(()=>showToast("✅ Data restored successfully")).catch(()=>showToast("Restored locally but Supabase save failed","error"));
                   } catch(err) { showToast("Failed to restore: invalid backup file","error"); }
                 };
                 reader.readAsText(file);
@@ -4692,7 +4735,7 @@ function RigsPage({ data, setData, showToast, isAdmin }) {
   const [selectedRig, setSelectedRig] = useState(null);
   const [hoveredRig, setHoveredRig] = useState(null);
 
-  const rigs      = [...new Map((data.rigs || []).map(r => [r.name, r])).values()];
+  const rigs      = data.rigs      || [];
   const equipment = data.equipment || [];
 
   const getRigEquipment   = rigName => equipment.filter(eq => eq.rig === rigName);
