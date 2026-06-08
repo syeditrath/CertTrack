@@ -273,7 +273,7 @@ function getMetricTypeTheme(type) {
   return { accent, dim, glow };
 }
 /* ─── Active theme (module-level, updated by App) ───────────────────────── */
-let T = DARK; // default to light, App.setTheme() updates this
+let T = LIGHT; // default to light, App.setTheme() updates this
 function setTheme(dark) { T = dark ? DARK : LIGHT; }
 
 function useViewport() {
@@ -835,24 +835,24 @@ const COST_PASSWORD     = "cost2025"; // Change this to your desired cost contro
 const ADMIN_PASSWORD    = "admin2025";  // Only admin can delete — change this
 const ADMIN_KEY         = "cta_admin";
 
-/* ─── Supabase config — paste your values here after setup ──────────────── */
-const SUPABASE_URL    = "https://mmvuqyupaxhlcqabvvad.supabase.co";
-const SUPABASE_ANON   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tdnVxeXVwYXhobGNxYWJ2dmFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwMzUxNzYsImV4cCI6MjA5MzYxMTE3Nn0.PFhW-KtWx_BqF0SzVNu7mpHUrKX7sYcx2nmhkUVka6c";
-const STORAGE_BUCKET  = "portal-files";
+/* ─── Cloudflare Worker config ──────────────────────────────────────────── */
+/* ── Cloudflare Worker URLs ───────────────────────────────────────────────
+   CF_WORKER_URL  → your KV data Worker  (load/save app state)
+   R2_WORKER_URL  → your R2 upload Worker (file uploads)
+   Both point to the same Worker if you combined them.
+──────────────────────────────────────────────────────────────────────── */
+const CF_WORKER_URL = "https://bucket.syed-itrath.workers.dev";
+
 async function fetchAppData() {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
-    headers: {
-      apikey: SUPABASE_ANON,
-      Authorization: `Bearer ${SUPABASE_ANON}`,
-    },
+  const res = await fetch(`${CF_WORKER_URL}/data`, {
+    headers: { "Content-Type": "application/json" },
   });
-
   if (!res.ok) throw new Error("Failed to load app data");
-
-  const rows = await res.json();
-  if (!rows.length || !rows[0].data) return EMPTY_DATA;
-
-  return { ...EMPTY_DATA, ...rows[0].data };
+  const json = await res.json();
+  // Worker returns { data: {...} } or the data object directly
+  const payload = json.data ?? json;
+  if (!payload || typeof payload !== "object") return EMPTY_DATA;
+  return { ...EMPTY_DATA, ...payload };
 }
 /* ── Cloudflare R2 upload via Worker ─────────────────────────────────────
    Set R2_WORKER_URL to your deployed Worker URL, e.g.:
@@ -860,7 +860,7 @@ async function fetchAppData() {
 ──────────────────────────────────────────────────────────────────────── */
 const R2_WORKER_URL = "https://bucket.syed-itrath.workers.dev";
 
-async function uploadToSupabase(file, folder) {
+async function uploadFile(file, folder) {
   if (R2_WORKER_URL === "YOUR_WORKER_URL") {
     throw new Error("R2 Worker URL not configured. Set R2_WORKER_URL in App.jsx.");
   }
@@ -883,27 +883,18 @@ async function uploadToSupabase(file, folder) {
   return url;
 }
 async function saveAppData(data) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main`, {
-    method: "PATCH",
-    headers: {
-      apikey: SUPABASE_ANON,
-      Authorization: `Bearer ${SUPABASE_ANON}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify({
-      data,
-      updated_at: new Date().toISOString(),
-    }),
+  const res = await fetch(`${CF_WORKER_URL}/data`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data, updated_at: new Date().toISOString() }),
   });
-
   if (!res.ok) throw new Error("Failed to save app data");
 }
-function isSupabaseConfigured() {
-  return SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON !== "YOUR_SUPABASE_ANON_KEY";
+function isCloudflareConfigured() {
+  return CF_WORKER_URL !== "YOUR_WORKER_URL";
 }
 function isR2Configured() {
-  return R2_WORKER_URL !== "YOUR_WORKER_URL";
+  return CF_WORKER_URL !== "YOUR_WORKER_URL";
 }
 
 function getPreviewUrl(url) {
@@ -922,8 +913,7 @@ function getPreviewUrl(url) {
     const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
     if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
   }
-  // Supabase public URL (PDF/image — direct embed)
-  if (url.includes("supabase.co/storage")) return url;
+  // Cloudflare R2 public URL — direct embed
   // Cloudflare R2 public URL — direct embed
   if (url.includes(".r2.dev") || url.includes("workers.dev")) return url;
   return url;
@@ -1181,9 +1171,12 @@ function deriveProjectStats(projectName, projectDocs) {
 
 /* ── Daily Report Modal ── */
 /* ── Bulk Daily Report Import (multiple rows from one Excel) ── */
-function BulkDailyReportImport({ projectName, onImport }) {
-  const [status, setStatus] = useState(null); // null | "parsing" | {count,skipped}  | "error"
+function BulkDailyReportImport({ projectName, onImport, rigs = [] }) {
+  const [status,      setStatus]      = useState(null);
+  const [selectedRig, setSelectedRig] = useState("");
   const fileRef = useRef();
+
+  const projectRigs = rigs.filter(r => r.project === projectName);
 
   const handleFile = (file) => {
     if (!file) return;
@@ -1193,8 +1186,10 @@ function BulkDailyReportImport({ projectName, onImport }) {
       try {
         const rows = parseDailyReportExcel(e.target.result);
         if (!rows.length) { setStatus("error"); return; }
-        onImport(rows);
-        setStatus({ count: rows.length });
+        // Stamp the selected rig onto every row — overrides whatever the parser found in the file
+        const stamped = rows.map(r => ({ ...r, rig: selectedRig || r.rig || "" }));
+        onImport(stamped);
+        setStatus({ count: stamped.length });
         setTimeout(() => setStatus(null), 3000);
       } catch(err) {
         console.error(err);
@@ -1206,7 +1201,14 @@ function BulkDailyReportImport({ projectName, onImport }) {
   };
 
   return (
-    <div style={{display:"flex",alignItems:"center",gap:8}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      {projectRigs.length > 0 && (
+        <select value={selectedRig} onChange={e => setSelectedRig(e.target.value)}
+          style={{background:T.inputBg,border:`1px solid ${selectedRig?T.gold:T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:selectedRig?T.gold:T.textMuted,outline:"none",fontWeight:selectedRig?700:400,colorScheme:"dark"}}>
+          <option value="">Select rig (optional)</option>
+          {projectRigs.map(r => <option key={r.id||r.name} value={r.name}>{r.name}</option>)}
+        </select>
+      )}
       <button onClick={()=>fileRef.current.click()} disabled={status==="parsing"}
         style={{background:T.goldDim,border:`1px solid ${T.gold}44`,color:T.gold,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:status==="parsing"?"wait":"pointer",display:"flex",alignItems:"center",gap:6}}>
         {status==="parsing"?"⏳ Importing…":"📊 Bulk Import Excel"}
@@ -1214,7 +1216,7 @@ function BulkDailyReportImport({ projectName, onImport }) {
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}}
         onChange={e=>{if(e.target.files[0]){handleFile(e.target.files[0]);e.target.value="";}}}/>
       {status&&status!=="parsing"&&status!=="error"&&(
-        <span style={{fontSize:12,color:T.green,fontWeight:700}}>✓ {status.count} row{status.count!==1?"s":""} imported</span>
+        <span style={{fontSize:12,color:T.green,fontWeight:700}}>✓ {status.count} row{status.count!==1?"s":""} imported{selectedRig?" → "+selectedRig:""}</span>
       )}
       {status==="error"&&<span style={{fontSize:12,color:T.red,fontWeight:700}}>✕ Parse failed</span>}
     </div>
@@ -1420,17 +1422,17 @@ function DailyReportModal({ report, projectName, rigs, onSave, onClose }) {
   const IS = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
   const LS = { display:"block", fontSize:11, fontWeight:700, color:"#fff", marginBottom:5, letterSpacing:.5 };
 
-  /* Upload daily report file (PDF/image/doc) to Supabase */
+  /* Upload daily report file (PDF/image/doc) to Cloudflare R2 */
   const handleFileUpload = async (file) => {
     if (!file) return;
     setUploading(true); setUploadErr("");
     try {
       const folder = `daily-reports/${(projectName||"general").replace(/[^a-zA-Z0-9]/g,"_")}`;
-      const url = await uploadToSupabase(file, folder);
+      const url = await uploadFile(file, folder);
       upd("fileLink", url);
       upd("fileName", file.name);
     } catch(err) {
-      setUploadErr("Upload failed: " + (err.message || "check Supabase config"));
+      setUploadErr("Upload failed: " + (err.message || "check Cloudflare Worker config"));
     } finally {
       setUploading(false);
     }
@@ -2342,8 +2344,8 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
           setCsUploading(true);
           try {
             let fileUrl = "";
-            if (isSupabaseConfigured()) {
-              fileUrl = await uploadToSupabase(file, "costsheets");
+            if (isCloudflareConfigured()) {
+              fileUrl = await uploadFile(file, "costsheets");
             } else {
               fileUrl = URL.createObjectURL(file);
             }
@@ -2456,8 +2458,8 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
           setQuoteUploading(p=>({...p, _main:true}));
           try {
             let fileUrl = "";
-            if (isSupabaseConfigured()) {
-              fileUrl = await uploadToSupabase(file, "quotations");
+            if (isCloudflareConfigured()) {
+              fileUrl = await uploadFile(file, "quotations");
             } else {
               fileUrl = URL.createObjectURL(file);
             }
@@ -2760,10 +2762,11 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
               </button>
             )}
             {/* Bulk import multiple rows from Excel */}
-            <BulkDailyReportImport projectName={proj.project} onImport={(rows)=>{
+            <BulkDailyReportImport projectName={proj.project} rigs={data.rigs||[]} onImport={(rows)=>{
               const updated = [...(proj.dailyReports||[])];
               rows.forEach(r=>{
-                const dup = updated.find(x=>x.date===r.date);
+                // Deduplicate by date + rig combination (not just date)
+                const dup = updated.find(x => x.date===r.date && (x.rig||"")===(r.rig||""));
                 if(!dup) updated.push(r);
               });
               onUpdate({...proj,dailyReports:updated});
@@ -3219,7 +3222,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
 export default function App() {
   const [data, setData] = useState(EMPTY_DATA);
   const [loadingData, setLoadingData] = useState(true);
-  const [supabaseError, setSupabaseError] = useState(false);
+  const [dbError, setDbError] = useState(false);
   const [page, setPage] = useState("dashboard");
   const [selectedEquipmentId, setSelectedEquipmentId] = useState(null);
   const [sideOpen, setSideOpen] = useState(false);
@@ -3262,27 +3265,28 @@ export default function App() {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/app_state?id=eq.main&select=data`, {
-          headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+        const res = await fetch(`${CF_WORKER_URL}/data`, {
+          headers: { "Content-Type": "application/json" },
           signal: controller.signal,
         });
         clearTimeout(timeout);
         if (res.ok) {
-          const rows = await res.json();
-          if (rows.length && rows[0].data) {
-            setData({ ...EMPTY_DATA, ...rows[0].data });
+          const json = await res.json();
+          const payload = json.data ?? json;
+          if (payload && typeof payload === "object" && Object.keys(payload).length) {
+            setData({ ...EMPTY_DATA, ...payload });
             setLoadingData(false);
           } else {
-            console.warn("Supabase returned no data rows — staying in loading state to protect data");
-            setSupabaseError(true);
+            console.warn("Cloudflare Worker returned no data — staying in loading state to protect data");
+            setDbError(true);
           }
         } else {
-          console.warn("Supabase fetch failed — staying in loading state to protect data");
-          setSupabaseError(true);
+          console.warn("Cloudflare Worker fetch failed — staying in loading state to protect data");
+          setDbError(true);
         }
       } catch (err) {
-        console.error("Supabase load failed:", err);
-        setSupabaseError(true);
+        console.error("Cloudflare Worker load failed:", err);
+        setDbError(true);
       }
     })();
   }, []);
@@ -3404,7 +3408,7 @@ export default function App() {
   if (loadingData) {
     return (
       <div style={{height:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:T.bg,color:T.text,fontFamily:"'Barlow Condensed',sans-serif",gap:16,padding:24}}>
-        {supabaseError ? (
+        {dbError ? (
           <>
             <div style={{fontSize:48}}>⚠️</div>
             <div style={{fontSize:28,fontWeight:800,color:"#ef4444"}}>DATABASE CONNECTION ERROR</div>
@@ -3590,7 +3594,7 @@ export default function App() {
                     if (!parsed || typeof parsed !== "object") throw new Error("Invalid file");
                     const restored = { ...EMPTY_DATA, ...parsed };
                     setData(restored);
-                    saveAppData(restored).then(()=>showToast("✅ Data restored successfully")).catch(()=>showToast("Restored locally but Supabase save failed","error"));
+                    saveAppData(restored).then(()=>showToast("✅ Data restored successfully")).catch(()=>showToast("Restored locally — Worker sync failed","error"));
                   } catch(err) { showToast("Failed to restore: invalid backup file","error"); }
                 };
                 reader.readAsText(file);
@@ -6265,7 +6269,46 @@ function InvoiceYearDetailsModal({ view, invoices, yearLabel, onClose }) {
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>{title}</div>
             <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>{yearLabel === "All" ? "All years" : yearLabel} • {rows.length} invoice{rows.length !== 1 ? "s" : ""}</div>
           </div>
-          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.text,borderRadius:10,width:38,height:38,fontSize:20,cursor:"pointer"}}>×</button>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <button onClick={() => {
+              const periodLabel = yearLabel === "All" ? "All Years" : yearLabel;
+              const tableRows = rows.map(doc => {
+                const total    = parseFloat(doc.amount) || 0;
+                const received = getInvoiceCollectedAmount(doc);
+                const due      = getInvoiceRemainingAmount(doc);
+                const stream   = getInvoiceStream(doc);
+                const status   = doc.paymentStatus || doc.status || "Pending";
+                return `<tr>
+                  <td>${doc.name || "—"}</td>
+                  <td>${doc.refNo || "—"}</td>
+                  <td>${doc.project || "—"}</td>
+                  <td><span style="background:${stream==="advance"?"#fef3c7":"#d1fae5"};color:${stream==="advance"?"#92400e":"#065f46"};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">${stream === "advance" ? "Advance" : "Income"}</span></td>
+                  <td>${doc.dueDate ? new Date(doc.dueDate).toLocaleDateString() : "—"}</td>
+                  <td style="text-align:right">${formatSarCompact(total)}</td>
+                  <td style="text-align:right;color:#16a34a">${formatSarCompact(received)}</td>
+                  <td style="text-align:right;color:${due > 0 ? "#dc2626" : "#16a34a"}">${formatSarCompact(due)}</td>
+                  <td>${status}</td>
+                </tr>`;
+              }).join("");
+              printPage(title, `
+                <h1>${title}</h1>
+                <div class="meta">${periodLabel} · ${rows.length} invoice${rows.length !== 1 ? "s" : ""}</div>
+                <div class="kpi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">
+                  <div class="kpi"><div class="kpi-val">${formatSarCompact(totalAmount)}</div><div class="kpi-lbl">Total Value</div></div>
+                  <div class="kpi"><div class="kpi-val" style="color:#16a34a">${formatSarCompact(totalReceived)}</div><div class="kpi-lbl">Received</div></div>
+                  <div class="kpi"><div class="kpi-val" style="color:#dc2626">${formatSarCompact(totalDue)}</div><div class="kpi-lbl">Due</div></div>
+                </div>
+                <h2>Invoice List</h2>
+                <table>
+                  <thead><tr><th>Invoice</th><th>Ref No</th><th>Project</th><th>Type</th><th>Due Date</th><th>Amount</th><th>Received</th><th>Due</th><th>Status</th></tr></thead>
+                  <tbody>${tableRows}</tbody>
+                </table>
+              `);
+            }} style={{background:T.card,border:`1px solid ${T.border}`,color:T.text,borderRadius:10,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+              🖨 Print
+            </button>
+            <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.text,borderRadius:10,width:38,height:38,fontSize:20,cursor:"pointer"}}>×</button>
+          </div>
         </div>
 
         <div style={{padding:"16px 22px",borderBottom:`1px solid ${T.border}`,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,flexShrink:0}}>
@@ -6394,7 +6437,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   const [bulkModal, setBulkModal] = useState(false);
   const [multiPdfModal, setMultiPdfModal] = useState(null);
   const [rigInput, setRigInput] = useState("");
-  const [projStatusFilter, setProjStatusFilter] = useState("All");
   const docs     = data.projectDocs || [];
   const projects = data.projects    || [];
   const cur      = PD_TABS.find(t=>t.id===subTab);
@@ -6496,7 +6538,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   };
 
   // ── Rig management ──────────────────────────────────────────────────
-  const rigs = [...new Map((data.rigs || []).map(r => [r.name, r])).values()];
+  const rigs = data.rigs || [];
   const projRigs = selectedProject ? rigs.filter(r=>r.project===selectedProject) : [];
 
   const addRig = () => {
@@ -6532,31 +6574,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
         {projects.length===0
           ? <Empty icon="◆" label="No projects yet" sub="Add projects from Manage Projects in the sidebar" color={T.blue} onAdd={() => onManageProjects && onManageProjects()}/>
-          : <>
-              {/* ── Status filter pills ── */}
-              {(()=>{
-                const analysis = data.projectAnalysis || [];
-                const getStatus = proj => (analysis.find(a=>a.project===proj)?.status) || null;
-                const statuses = ["All","In Progress","Completed","Not Started","On Hold","Cancelled"];
-                const stColor = {"In Progress":T.blue,"Completed":T.green,"Not Started":T.textMuted,"On Hold":T.gold,"Cancelled":T.red};
-                const statusCounts = Object.fromEntries(statuses.slice(1).map(s=>[s, projects.filter(p=>getStatus(pName(p))===s).length]));
-                return (
-                  <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
-                    {statuses.filter(s=>s==="All"||(statusCounts[s]||0)>0).map(s=>{
-                      const active = projStatusFilter===s;
-                      const col = stColor[s]||T.blue;
-                      return (
-                        <button key={s} onClick={()=>setProjStatusFilter(s)}
-                          style={{padding:"6px 16px",borderRadius:999,border:`1px solid ${active?(s==="All"?T.blue:col):T.border}`,background:active?`${s==="All"?T.blue:col}18`:"transparent",color:active?(s==="All"?T.blue:col):T.textSub,fontSize:12,fontWeight:active?700:500,cursor:"pointer",transition:"all .15s"}}>
-                          {s==="All"?`All (${projects.length})`:`${s} (${statusCounts[s]})`}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
-              {projects.filter(p=>{ if(projStatusFilter==="All") return true; const st=(data.projectAnalysis||[]).find(a=>a.project===pName(p))?.status||null; return st===projStatusFilter; }).map((project,i)=>{ const projStatus=(data.projectAnalysis||[]).find(a=>a.project===pName(project))?.status||null; project=pName(project);
+          : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
+              {projects.map((project,i)=>{ project=pName(project);
                 const projectDocs = docs.filter(d=>d.project===project);
                 const projectCerts = projectDocs.filter(d=>d.subTab==="certificates");
                 const projectDailyReports = projectDocs.filter(d=>d.subTab==="dailyreports");
@@ -6585,7 +6604,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                       </div>
                       <div style={{width:42,height:42,borderRadius:12,background:T.blueDim,display:"flex",alignItems:"center",justifyContent:"center",color:T.blue,fontSize:18,fontWeight:800,flexShrink:0}}>◆</div>
                     </div>
-                    {projStatus&&(()=>{const sc={"In Progress":T.blue,"Completed":T.green,"Not Started":T.textMuted,"On Hold":T.gold,"Cancelled":T.red}[projStatus]||T.textMuted;return(<div style={{marginBottom:12}}><span style={{background:`${sc}18`,border:`1px solid ${sc}44`,color:sc,borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700}}>{projStatus}</span></div>);})()} 
 
                     <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
                       <div style={{background:T.blueDim,border:`1px solid ${T.blue}33`,borderRadius:12,padding:"12px"}}>
@@ -6604,7 +6622,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                 );
               })}
             </div>
-            </>
         }
       </div>
     );
@@ -7132,7 +7149,7 @@ function DocUploadModal({ title, categories, projects, selectedProject, onClose,
     let fileLink = form.fileLink, fileName = form.fileName;
     if (file) {
       try {
-        fileLink = await uploadToSupabase(file, `docs/${form.project.replace(/\s+/g,"_")}`);
+        fileLink = await uploadFile(file, `docs/${form.project.replace(/\s+/g,"_")}`);
         fileName = file.name;
       } catch(e) {
         setMsg("⚠ File upload failed: " + e.message);
@@ -7654,7 +7671,7 @@ function MultiPdfInvoiceUpload({ project, projects, onClose, onImport }) {
     for (const entry of files) {
       setProgress(prev => ({...prev, [entry.id]: "uploading"}));
       try {
-        const url = await uploadToSupabase(entry.file, `invoices/${selProj.replace(/\s+/g,"_")}`);
+        const url = await uploadFile(entry.file, `invoices/${selProj.replace(/\s+/g,"_")}`);
         setProgress(prev => ({...prev, [entry.id]: "done"}));
         results.push({
           project:        selProj,
@@ -7676,7 +7693,7 @@ function MultiPdfInvoiceUpload({ project, projects, onClose, onImport }) {
     }
     setUploading(false);
     if (results.length) onImport(results);
-    else alert("All uploads failed. Check your Supabase configuration.");
+    else alert("All uploads failed. Check your Cloudflare Worker configuration.");
   };
 
   const doneCount    = Object.values(progress).filter(s => s === "done").length;
@@ -7895,7 +7912,7 @@ function MultiPdfInvoiceUpload({ project, projects, onClose, onImport }) {
                       <div style={{marginTop:6, fontSize:11, color:T.green, display:"flex", alignItems:"center", gap:6}}>✓ Uploaded successfully</div>
                     )}
                     {st === "error" && (
-                      <div style={{marginTop:6, fontSize:11, color:T.red}}>✕ Upload failed — check Supabase config or file size</div>
+                      <div style={{marginTop:6, fontSize:11, color:T.red}}>✕ Upload failed — check Cloudflare Worker config or file size</div>
                     )}
                   </div>
                 );
@@ -8313,7 +8330,7 @@ function BulkWorkOrderUpload({ projects, onClose, onImport }) {
       if (updated[i].status === "done") continue;
       setRows(r => r.map((x,idx) => idx===i ? {...x, status:"uploading"} : x));
       try {
-        const url = await uploadToSupabase(updated[i].file, "work-orders");
+        const url = await uploadFile(updated[i].file, "work-orders");
         updated[i] = {...updated[i], url, status:"done", error:""};
       } catch(e) {
         updated[i] = {...updated[i], status:"error", error: e.message||"Upload failed"};
@@ -8488,7 +8505,7 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClo
 
       let fileUrl = "";
       try {
-        fileUrl = await uploadToSupabase(
+        fileUrl = await uploadFile(
           file,
           `daily-reports/${(f.project || defaultProject || "general").replace(/[^a-zA-Z0-9]/g, "_")}`
         );
@@ -9516,10 +9533,10 @@ function MaintenancePage({data,setData,showToast,isAdmin}) {
     setClosingUpload(true); setClosingUpErr("");
     try {
       const folder = "maintenance/completions";
-      const url = await uploadToSupabase(file, folder);
+      const url = await uploadFile(file, folder);
       setCloseFile({link:url, name:file.name});
     } catch(err) {
-      setClosingUpErr("Upload failed: " + (err.message||"check Supabase config"));
+      setClosingUpErr("Upload failed: " + (err.message||"check Cloudflare Worker config"));
     } finally {
       setClosingUpload(false);
     }
@@ -9911,10 +9928,10 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
     setUploading(true); setUploadErr("");
     try {
       const folder = `maintenance/${(f.project||"general").replace(/[^a-zA-Z0-9]/g,"_")}`;
-      const url = await uploadToSupabase(file, folder);
+      const url = await uploadFile(file, folder);
       setF(p=>({...p, fileLink:url, fileName:file.name}));
     } catch(err) {
-      setUploadErr("Upload failed: " + (err.message||"check Supabase config"));
+      setUploadErr("Upload failed: " + (err.message||"check Cloudflare Worker config"));
     } finally {
       setUploading(false);
     }
@@ -10579,7 +10596,7 @@ function FLink({value,onChange,folder}) {
   const [uploading,setUploading] = useState(false);
   const [uploadErr,setUploadErr] = useState("");
   const fileRef = useRef();
-  const configured = isSupabaseConfigured();
+  const configured = isCloudflareConfigured();
 
   const handleUpload = async e => {
     const file = e.target.files[0];
@@ -10587,7 +10604,7 @@ function FLink({value,onChange,folder}) {
     if(file.size > 50*1024*1024) { setUploadErr("File too large (max 50MB)"); return; }
     setUploading(true); setUploadErr("");
     try {
-      const url = await uploadToSupabase(file, folder||"general");
+      const url = await uploadFile(file, folder||"general");
       onChange(url);
       setUploadErr("");
     } catch(err) {
@@ -10622,7 +10639,7 @@ function FLink({value,onChange,folder}) {
       )}
       {!configured && (
         <div style={{fontSize:11,color:T.textMuted,padding:"5px 8px",background:T.goldDim,borderRadius:6,border:`1px solid ${T.gold}33`}}>
-          💡 Add your Supabase keys to enable direct file upload
+          💡 Set CF_WORKER_URL to enable direct file upload
         </div>
       )}
       {uploadErr && <div style={{fontSize:11,color:T.red}}>{uploadErr}</div>}
@@ -10641,7 +10658,7 @@ function FilePreviewModal({url,onClose}) {
   const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/.test(clean);
   const isPdf   = /\.pdf$/.test(clean);
   const isOffice= /\.(doc|docx|xls|xlsx|ppt|pptx)$/.test(clean);
-  const isSupabase   = url.includes("supabase.co/storage");
+  // Cloudflare R2 — direct URL, no special handling needed
   const isGDrive     = url.includes("drive.google.com");
   const isOneDrive   = url.includes("1drv.ms") || url.includes("onedrive.live.com");
   const isSharePoint = url.includes("sharepoint.com");
@@ -10649,8 +10666,8 @@ function FilePreviewModal({url,onClose}) {
   // Build the best embed URL for each case
   const embedUrl = (() => {
     if (isImage) return url;
-    // PDFs from Supabase — use Google PDF viewer as proxy (avoids X-Frame-Options)
-    if (isPdf || isSupabase) return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+    // PDFs / R2 files — use Google PDF viewer as proxy (avoids X-Frame-Options)
+    if (isPdf) return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
     // Office files — Microsoft Office Online viewer
     if (isOffice) return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
     // Google Drive — convert to preview embed
@@ -10674,7 +10691,7 @@ function FilePreviewModal({url,onClose}) {
 
         {/* ── Header ── */}
         <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          <span style={{fontSize:18}}>{isImage?"🖼️":isPdf||isSupabase?"📄":isOffice?"📊":"📎"}</span>
+          <span style={{fontSize:18}}>{isImage?"🖼️":isPdf?"📄":isOffice?"📊":"📎"}</span>
           <div style={{flex:1,fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{decodeURIComponent(filename)}</div>
           <a href={url} download target="_blank" rel="noreferrer"
             style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
@@ -10709,7 +10726,7 @@ function FilePreviewModal({url,onClose}) {
         </div>
 
         {/* ── Footer tip for Google Viewer ── */}
-        {(isPdf||isSupabase)&&!isImage&&(
+        {(isPdf)&&!isImage&&(
           <div style={{padding:"8px 16px",background:T.goldDim,borderTop:`1px solid ${T.gold}33`,fontSize:11,color:T.gold,display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
             💡 If preview doesn't load, click <strong>↗ New Tab</strong> to open directly — or <strong>⬇ Download</strong> to save the file.
           </div>
@@ -11386,7 +11403,7 @@ function MultiPdfCertUpload({ project, projects, onClose, onImport }) {
     for (const entry of files) {
       setProgress(prev => ({...prev, [entry.id]: "uploading"}));
       try {
-        const url = await uploadToSupabase(entry.file, `certificates/${selProj.replace(/\s+/g,"_")}`);
+        const url = await uploadFile(entry.file, `certificates/${selProj.replace(/\s+/g,"_")}`);
         setProgress(prev => ({...prev, [entry.id]: "done"}));
         results.push({
           project:        selProj,
@@ -11411,7 +11428,7 @@ function MultiPdfCertUpload({ project, projects, onClose, onImport }) {
     if (results.length) {
       onImport(results);
     } else {
-      alert("All uploads failed. Check your Supabase configuration.");
+      alert("All uploads failed. Check your Cloudflare Worker configuration.");
     }
   };
 
@@ -11672,7 +11689,7 @@ function MultiPdfCertUpload({ project, projects, onClose, onImport }) {
                     )}
                     {st === "error" && (
                       <div style={{marginTop:6, fontSize:11, color:T.red}}>
-                        ✕ Upload failed — check Supabase config or file size
+                        ✕ Upload failed — check Cloudflare Worker config or file size
                       </div>
                     )}
                   </div>
