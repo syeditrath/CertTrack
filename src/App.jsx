@@ -3248,35 +3248,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(`${CF_WORKER_URL}/data`, {
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (res.ok) {
-          const json = await res.json();
-          const payload = json.data ?? json;
-          if (payload && typeof payload === "object" && Object.keys(payload).length) {
-            setData({ ...EMPTY_DATA, ...payload });
-            setLoadingData(false);
-          } else {
-            console.warn("Cloudflare Worker returned no data — staying in loading state to protect data");
-            setDbError(true);
-          }
-        } else {
-          console.warn("Cloudflare Worker fetch failed — staying in loading state to protect data");
-          setDbError(true);
-        }
-      } catch (err) {
-        console.error("Cloudflare Worker load failed:", err);
-        setDbError(true);
-      }
-    })();
-  }, []);
+  (async () => {
+    try {
+      const appData = await fetchAppData();
+      setData(appData);
+      setLoadingData(false);
+    } catch (err) {
+      console.error("Cloudflare Worker load failed:", err);
+      setDbError(true);
+    }
+  })();
+}, []);
 
   const [notifySettings, setNotifySettings] = useState(() => loadNotifySettings());
   const [notifyModal, setNotifyModal] = useState(false);
