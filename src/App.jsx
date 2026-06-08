@@ -4517,21 +4517,38 @@ function RigDetailsPage({ rig, equipment, onBack }) {
         </button>
 
         <div>
-          <div
-            style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontSize: 30,
-              fontWeight: 800,
-              color: T.text,
-              lineHeight: 1
-            }}
-          >
-            {rig.name}
-          </div>
-          <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>
-            Rig details, equipment & maintenance
-          </div>
-        </div>
+  <div
+    style={{
+      fontFamily: "'Barlow Condensed', sans-serif",
+      fontSize: 30,
+      fontWeight: 800,
+      color: T.text,
+      lineHeight: 1
+    }}
+  >
+    {rig.name}
+  </div>
+  {rig.project && (
+    <div style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 6,
+      marginTop: 6,
+      background: T.blueDim,
+      border: `1px solid ${T.blue}44`,
+      borderRadius: 20,
+      padding: "4px 12px",
+      fontSize: 12,
+      fontWeight: 700,
+      color: T.blue,
+    }}>
+      ◆ {rig.project}
+    </div>
+  )}
+  <div style={{ fontSize: 13, color: T.textMuted, marginTop: 6 }}>
+    Rig details, equipment & maintenance
+  </div>
+</div>
 
         {rig.status && (
           <div
