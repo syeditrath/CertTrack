@@ -6539,13 +6539,14 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   if (!selectedProject) {
     return (
       <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
-        
-        {/* existing header div */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",...}}>
-          ...
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:28,color:T.text}}>PROJECTS</div>
+            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Select a project to view certificates and daily reports</div>
+          </div>
         </div>
 
-        {/* ADD STATUS FILTER HERE */}
+        {/* Status filter */}
         <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
           {STATUS_OPTS.map(s => (
             <button key={s} onClick={() => setFilterStatus(s)}
@@ -6571,11 +6572,13 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           ? <Empty icon="◆" label="No projects yet" sub="Add projects from Manage Projects in the sidebar" color={T.blue} onAdd={() => onManageProjects && onManageProjects()}/>
           : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
               {projects
-  .filter(p => filterStatus === "All" || analysisMap[pName(p)] === filterStatus)
-  .map((project, i) =>{ project=pName(project);
+                .filter(p => filterStatus === "All" || analysisMap[pName(p)] === filterStatus)
+                .map((project,i)=>{ project=pName(project);
                 const projectDocs = docs.filter(d=>d.project===project);
                 const projectCerts = projectDocs.filter(d=>d.subTab==="certificates");
                 const projectDailyReports = projectDocs.filter(d=>d.subTab==="dailyreports");
+                const projectStatus = analysisMap[project];
+                const stColor = {"Not Started":T.textMuted,"In Progress":T.blue,"On Hold":T.gold,"Completed":T.green,"Cancelled":T.red}[projectStatus]||T.textMuted;
 
                 return (
                   <button
@@ -6599,7 +6602,14 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{project}</div>
                         <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>{projectDocs.length} total document{projectDocs.length!==1?"s":""}</div>
                       </div>
-                      <div style={{width:42,height:42,borderRadius:12,background:T.blueDim,display:"flex",alignItems:"center",justifyContent:"center",color:T.blue,fontSize:18,fontWeight:800,flexShrink:0}}>◆</div>
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,flexShrink:0}}>
+                        <div style={{width:42,height:42,borderRadius:12,background:T.blueDim,display:"flex",alignItems:"center",justifyContent:"center",color:T.blue,fontSize:18,fontWeight:800}}>◆</div>
+                        {projectStatus && (
+                          <span style={{background:`${stColor}18`,border:`1px solid ${stColor}44`,color:stColor,borderRadius:20,padding:"3px 10px",fontSize:11,fontWeight:700}}>
+                            {projectStatus}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10}}>
