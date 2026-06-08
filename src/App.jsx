@@ -841,7 +841,7 @@ const ADMIN_KEY         = "cta_admin";
    R2_WORKER_URL  → your R2 upload Worker (file uploads)
    Both point to the same Worker if you combined them.
 ──────────────────────────────────────────────────────────────────────── */
-const CF_WORKER_URL = "https://scorpion-portal.syed-itrath.workers.dev";
+const CF_WORKER_URL = "https://bucket.syed-itrath.workers.dev";
 
 async function fetchAppData() {
   const res = await fetch(`${CF_WORKER_URL}/data`, {
@@ -1171,12 +1171,9 @@ function deriveProjectStats(projectName, projectDocs) {
 
 /* ── Daily Report Modal ── */
 /* ── Bulk Daily Report Import (multiple rows from one Excel) ── */
-function BulkDailyReportImport({ projectName, onImport, rigs = [] }) {
-  const [status,      setStatus]      = useState(null);
-  const [selectedRig, setSelectedRig] = useState("");
+function BulkDailyReportImport({ projectName, onImport }) {
+  const [status, setStatus] = useState(null); // null | "parsing" | {count,skipped}  | "error"
   const fileRef = useRef();
-
-  const projectRigs = rigs.filter(r => r.project === projectName);
 
   const handleFile = (file) => {
     if (!file) return;
@@ -1186,10 +1183,8 @@ function BulkDailyReportImport({ projectName, onImport, rigs = [] }) {
       try {
         const rows = parseDailyReportExcel(e.target.result);
         if (!rows.length) { setStatus("error"); return; }
-        // Stamp the selected rig onto every row — overrides whatever the parser found in the file
-        const stamped = rows.map(r => ({ ...r, rig: selectedRig || r.rig || "" }));
-        onImport(stamped);
-        setStatus({ count: stamped.length });
+        onImport(rows);
+        setStatus({ count: rows.length });
         setTimeout(() => setStatus(null), 3000);
       } catch(err) {
         console.error(err);
@@ -1201,14 +1196,7 @@ function BulkDailyReportImport({ projectName, onImport, rigs = [] }) {
   };
 
   return (
-    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-      {projectRigs.length > 0 && (
-        <select value={selectedRig} onChange={e => setSelectedRig(e.target.value)}
-          style={{background:T.inputBg,border:`1px solid ${selectedRig?T.gold:T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:selectedRig?T.gold:T.textMuted,outline:"none",fontWeight:selectedRig?700:400,colorScheme:"dark"}}>
-          <option value="">Select rig (optional)</option>
-          {projectRigs.map(r => <option key={r.id||r.name} value={r.name}>{r.name}</option>)}
-        </select>
-      )}
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
       <button onClick={()=>fileRef.current.click()} disabled={status==="parsing"}
         style={{background:T.goldDim,border:`1px solid ${T.gold}44`,color:T.gold,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:status==="parsing"?"wait":"pointer",display:"flex",alignItems:"center",gap:6}}>
         {status==="parsing"?"⏳ Importing…":"📊 Bulk Import Excel"}
@@ -1216,7 +1204,7 @@ function BulkDailyReportImport({ projectName, onImport, rigs = [] }) {
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}}
         onChange={e=>{if(e.target.files[0]){handleFile(e.target.files[0]);e.target.value="";}}}/>
       {status&&status!=="parsing"&&status!=="error"&&(
-        <span style={{fontSize:12,color:T.green,fontWeight:700}}>✓ {status.count} row{status.count!==1?"s":""} imported{selectedRig?" → "+selectedRig:""}</span>
+        <span style={{fontSize:12,color:T.green,fontWeight:700}}>✓ {status.count} row{status.count!==1?"s":""} imported</span>
       )}
       {status==="error"&&<span style={{fontSize:12,color:T.red,fontWeight:700}}>✕ Parse failed</span>}
     </div>
@@ -2762,11 +2750,10 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
               </button>
             )}
             {/* Bulk import multiple rows from Excel */}
-            <BulkDailyReportImport projectName={proj.project} rigs={data.rigs||[]} onImport={(rows)=>{
+            <BulkDailyReportImport projectName={proj.project} onImport={(rows)=>{
               const updated = [...(proj.dailyReports||[])];
               rows.forEach(r=>{
-                // Deduplicate by date + rig combination (not just date)
-                const dup = updated.find(x => x.date===r.date && (x.rig||"")===(r.rig||""));
+                const dup = updated.find(x=>x.date===r.date);
                 if(!dup) updated.push(r);
               });
               onUpdate({...proj,dailyReports:updated});
