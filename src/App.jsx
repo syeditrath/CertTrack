@@ -6396,6 +6396,7 @@ const PD_TABS = [
 function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   // ALL hooks must be at the top — never after a conditional return
   const [selectedProject, setSelectedProject] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("All");
   const [selectedRig, setSelectedRig] = useState(null);
   const [collapsedRigs, setCollapsedRigs] = useState({});
   const toggleRig = id => setCollapsedRigs(p => ({...p, [id]: !p[id]}));
@@ -6508,6 +6509,10 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
   // ── Rig management ──────────────────────────────────────────────────
   const rigs = data.rigs || [];
+  const analysisMap = Object.fromEntries(
+  (data.projectAnalysis || []).map(p => [p.project, p.status || "Active"])
+);
+  const STATUS_OPTS = ["All", "In Progress", "Not Started", "On Hold", "Completed", "Cancelled"];
   const projRigs = selectedProject ? rigs.filter(r=>r.project===selectedProject) : [];
 
   const addRig = () => {
@@ -6534,17 +6539,40 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   if (!selectedProject) {
     return (
       <div style={{maxWidth:"min(1400px,95vw)",margin:"0 auto",width:"100%"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12,marginBottom:18}}>
-          <div>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:28,color:T.text}}>PROJECTS</div>
-            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>Select a project to view certificates and daily reports</div>
-          </div>
+        
+        {/* existing header div */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",...}}>
+          ...
+        </div>
+
+        {/* ADD STATUS FILTER HERE */}
+        <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
+          {STATUS_OPTS.map(s => (
+            <button key={s} onClick={() => setFilterStatus(s)}
+              style={{
+                padding:"6px 14px", borderRadius:999,
+                border:`1px solid ${filterStatus===s ? T.blue : T.border}`,
+                background: filterStatus===s ? T.blueDim : "transparent",
+                color: filterStatus===s ? T.blue : T.textSub,
+                fontSize:12, fontWeight: filterStatus===s ? 700 : 500,
+                cursor:"pointer", transition:"all .15s"
+              }}>
+              {s}
+              {s !== "All" && (
+                <span style={{opacity:.6, marginLeft:4}}>
+                  ({projects.filter(p => analysisMap[pName(p)] === s).length})
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {projects.length===0
           ? <Empty icon="◆" label="No projects yet" sub="Add projects from Manage Projects in the sidebar" color={T.blue} onAdd={() => onManageProjects && onManageProjects()}/>
           : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:16}}>
-              {projects.map((project,i)=>{ project=pName(project);
+              {projects
+  .filter(p => filterStatus === "All" || analysisMap[pName(p)] === filterStatus)
+  .map((project, i) =>{ project=pName(project);
                 const projectDocs = docs.filter(d=>d.project===project);
                 const projectCerts = projectDocs.filter(d=>d.subTab==="certificates");
                 const projectDailyReports = projectDocs.filter(d=>d.subTab==="dailyreports");
