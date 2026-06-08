@@ -841,7 +841,7 @@ const ADMIN_KEY         = "cta_admin";
    R2_WORKER_URL  → your R2 upload Worker (file uploads)
    Both point to the same Worker if you combined them.
 ──────────────────────────────────────────────────────────────────────── */
-const CF_WORKER_URL = "https://bucket.syed-itrath.workers.dev";
+const CF_WORKER_URL = "https://scorpion-portal.syed-itrath.workers.dev";
 
 async function fetchAppData() {
   const res = await fetch(`${CF_WORKER_URL}/data`, {
