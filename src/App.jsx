@@ -610,6 +610,34 @@ const MP_CERT_MAP = {
   "ISSUE DATE":"issueDate","ISSUED DATE":"issueDate","DATE ISSUED":"issueDate","START DATE":"issueDate",
   "EXPIRY DATE":"expiryDate","EXPIRY":"expiryDate","EXPIRE DATE":"expiryDate","EXPIRATION DATE":"expiryDate",
   "REMARKS":"remarks","NOTES":"remarks",
+
+  // ── New fields ────────────────────────────────────────────────────────────
+  // Position / Job Title
+  "POSITION":"position","JOB TITLE":"position","TITLE":"position","DESIGNATION":"position","ROLE":"position",
+
+  // Nationality
+  "NATIONALITY":"nationality","NATION":"nationality","COUNTRY":"nationality","CITIZENSHIP":"nationality",
+
+  // Iqama ID
+  "IQAMA":"iqamaId","IQAMA ID":"iqamaId","IQAMA NO":"iqamaId","IQAMA NO.":"iqamaId","IQAMA NUMBER":"iqamaId",
+  "RESIDENCE ID":"iqamaId","RESIDENCE NO":"iqamaId","IQAMA/RESIDENCE":"iqamaId",
+
+  // Iqama Expiry
+  "IQAMA EXPIRY":"iqamaExpiry","IQAMA EXPIRY DATE":"iqamaExpiry","IQAMA EXP":"iqamaExpiry",
+  "IQAMA EXP DATE":"iqamaExpiry","RESIDENCE EXPIRY":"iqamaExpiry","RESIDENCE EXP":"iqamaExpiry",
+
+  // Passport Number
+  "PASSPORT":"passportNo","PASSPORT NO":"passportNo","PASSPORT NO.":"passportNo",
+  "PASSPORT NUMBER":"passportNo","PP NO":"passportNo","PP NUMBER":"passportNo",
+
+  // Passport Expiry
+  "PASSPORT EXPIRY":"passportExpiry","PASSPORT EXPIRY DATE":"passportExpiry","PASSPORT EXP":"passportExpiry",
+  "PASSPORT EXP DATE":"passportExpiry","PP EXPIRY":"passportExpiry","PP EXP":"passportExpiry",
+
+  // Sponsor
+  "SPONSOR":"sponsor","SPONSER":"sponsor","SPONSOR NAME":"sponsor","SPONSORSHIP":"sponsor",
+  "KAFEEL":"sponsor","EMPLOYER":"sponsor",
+};
 };
 // Manpower file has headers on row 4 — handled by skipToHeaderRow below
 const MP_HEADER_ROW = 1;
