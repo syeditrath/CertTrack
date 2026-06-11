@@ -638,7 +638,7 @@ const MP_CERT_MAP = {
   "SPONSOR":"sponsor","SPONSER":"sponsor","SPONSOR NAME":"sponsor","SPONSORSHIP":"sponsor",
   "KAFEEL":"sponsor","EMPLOYER":"sponsor",
 };
-};
+
 // Manpower file has headers on row 4 — handled by skipToHeaderRow below
 const MP_HEADER_ROW = 1;
 
