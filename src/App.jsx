@@ -601,45 +601,41 @@ const DEFAULT_MANPOWER_CATS = [
 // Expected columns: NAME, EMPLOYEE ID, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
 // (flexible - tries multiple common header names)
 const MP_CERT_MAP = {
-  // Exact headers from TUV_Manpower_Tracker.xlsx (headers on row 4)
+  // ── Identity ──────────────────────────────────────────────────────────────
+  "ID":"idNo","EMPLOYEE ID":"idNo","EMP ID":"idNo","STAFF ID":"idNo",
   "NAME":"name","EMPLOYEE NAME":"name","EMPLOYEE":"name",
-  "ID":"idNo","EMPLOYEE ID":"idNo","EMPLOYEE NO":"idNo","EMP ID":"idNo","EMP NO":"idNo","ID NO":"idNo","ID NUMBER":"idNo","STAFF ID":"idNo",
-  "CERTIFICATE":"certName","CERTIFICATE TYPE":"certName","CERT TYPE":"certName","CERTIFICATION":"certName",
+
+  // ── Personal info ─────────────────────────────────────────────────────────
+  "POSITION":"position","JOB TITLE":"position","DESIGNATION":"position",
+  "NATIONALITY":"nationality","CITIZENSHIP":"nationality",
+
+  // ── Iqama / Residence ID ──────────────────────────────────────────────────
+  "NATIONAL / IQAMA ID":"iqamaNo","IQAMA ID":"iqamaNo","IQAMA NO":"iqamaNo",
+  "NATIONAL ID":"iqamaNo","ID NO":"iqamaNo","RESIDENCE ID":"iqamaNo",
+
+  // ── Iqama Expiry ──────────────────────────────────────────────────────────
+  "ID EXP. DATE":"iqamaExpiry","IQAMA EXPIRY":"iqamaExpiry","ID EXPIRY":"iqamaExpiry",
+  "IQAMA EXP DATE":"iqamaExpiry","RESIDENCE EXPIRY":"iqamaExpiry",
+
+  // ── Passport ──────────────────────────────────────────────────────────────
+  "PASSPORT NO.":"passportNo","PASSPORT NO":"passportNo","PASSPORT NUMBER":"passportNo",
+  "PP NO":"passportNo",
+
+  // ── Passport Expiry ───────────────────────────────────────────────────────
+  "PASSPORT EXP. DATE":"passportExpiry","PASSPORT EXPIRY DATE":"passportExpiry",
+  "PASSPORT EXPIRY":"passportExpiry","PASSPORT EXP DATE":"passportExpiry",
+
+  // ── Sponsor ───────────────────────────────────────────────────────────────
+  "SPONSOR NAME":"sponsor","SPONSOR":"sponsor","SPONSER":"sponsor","KAFEEL":"sponsor",
+
+  // ── Certification ─────────────────────────────────────────────────────────
+  "CERTIFICATE":"certName","CERTIFICATION":"certName","CERT TYPE":"certName",
   "ISSUED BY":"issuedBy","ISSUING BODY":"issuedBy","ISSUING AUTHORITY":"issuedBy",
-  "CERT NO":"certNo","CERTIFICATE NO":"certNo","CERT NO.":"certNo","CERTIFICATE NO.":"certNo","CERTIFICATE NUMBER":"certNo",
-  "ISSUE DATE":"issueDate","ISSUED DATE":"issueDate","DATE ISSUED":"issueDate","START DATE":"issueDate",
-  "EXPIRY DATE":"expiryDate","EXPIRY":"expiryDate","EXPIRE DATE":"expiryDate","EXPIRATION DATE":"expiryDate",
-  "REMARKS":"remarks","NOTES":"remarks",
-
-  // ── New fields ────────────────────────────────────────────────────────────
-  // Position / Job Title
-  "POSITION":"position","JOB TITLE":"position","TITLE":"position","DESIGNATION":"position","ROLE":"position",
-
-  // Nationality
-  "NATIONALITY":"nationality","NATION":"nationality","COUNTRY":"nationality","CITIZENSHIP":"nationality",
-
-  // Iqama ID
-  "IQAMA":"iqamaId","IQAMA ID":"iqamaId","IQAMA NO":"iqamaId","IQAMA NO.":"iqamaId","IQAMA NUMBER":"iqamaId",
-  "RESIDENCE ID":"iqamaId","RESIDENCE NO":"iqamaId","IQAMA/RESIDENCE":"iqamaId",
-
-  // Iqama Expiry
-  "IQAMA EXPIRY":"iqamaExpiry","IQAMA EXPIRY DATE":"iqamaExpiry","IQAMA EXP":"iqamaExpiry",
-  "IQAMA EXP DATE":"iqamaExpiry","RESIDENCE EXPIRY":"iqamaExpiry","RESIDENCE EXP":"iqamaExpiry",
-
-  // Passport Number
-  "PASSPORT":"passportNo","PASSPORT NO":"passportNo","PASSPORT NO.":"passportNo",
-  "PASSPORT NUMBER":"passportNo","PP NO":"passportNo","PP NUMBER":"passportNo",
-
-  // Passport Expiry
-  "PASSPORT EXPIRY":"passportExpiry","PASSPORT EXPIRY DATE":"passportExpiry","PASSPORT EXP":"passportExpiry",
-  "PASSPORT EXP DATE":"passportExpiry","PP EXPIRY":"passportExpiry","PP EXP":"passportExpiry",
-
-  // Sponsor
-  "SPONSOR":"sponsor","SPONSER":"sponsor","SPONSOR NAME":"sponsor","SPONSORSHIP":"sponsor",
-  "KAFEEL":"sponsor","EMPLOYER":"sponsor",
+  "CERT ISSUE DATE":"issueDate","ISSUE DATE":"issueDate","DATE ISSUED":"issueDate",
+  "CERT EXPIRY DATE":"expiryDate","EXPIRY DATE":"expiryDate","EXPIRY":"expiryDate",
 };
 
-// Manpower file has headers on row 4 — handled by skipToHeaderRow below
+// Your Excel has headers on ROW 1 (not row 4)
 const MP_HEADER_ROW = 1;
 
 // Equipment certifications Excel map
@@ -9017,45 +9013,104 @@ function ManpowerPage({data,setData,showToast,isAdmin}) {
   // Each row: NAME, EMPLOYEE ID, CERTIFICATE, CERT NO, ISSUE DATE, EXPIRY DATE
   // Finds matching person by name and appends certs; creates person if not found
   const importMpCerts = (file, defaultCat) => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        // Headers are on row 4 in TUV_Manpower_Tracker.xlsx
-        const parsed=parseExcelWithHeaderRow(e.target.result, MP_CERT_MAP, MP_HEADER_ROW);
-        if(!parsed.length){showToast("No valid rows found","del");return;}
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = parseExcelWithHeaderRow(e.target.result, MP_CERT_MAP, MP_HEADER_ROW);
+      if (!parsed.length) { showToast("No valid rows found", "del"); return; }
 
-        setData(prev=>{
-          const manpower=[...prev.manpower];
-          let added=0, updated=0;
-          parsed.forEach(row=>{
-            const personName=(row.name||"").trim();
-            if(!personName) return;
-            const certName=row.certName||"Certification";
-            const cert={id:uid(),name:certName,certNo:row.certNo||"",issueDate:row.issueDate||"",expiryDate:row.expiryDate||"",issuedBy:row.issuedBy||"",fileLink:""};
-            const idx=manpower.findIndex(p=>p.name.toLowerCase()===personName.toLowerCase());
-            if(idx>=0){
-              if(row.idNo&&!manpower[idx].idNo) manpower[idx]={...manpower[idx],idNo:row.idNo};
-              // Skip duplicate: same cert name + same expiry date already exists
-              const alreadyExists=(manpower[idx].certs||[]).some(c=>
-                c.name.toLowerCase()===certName.toLowerCase()&&c.expiryDate===cert.expiryDate
+      setData(prev => {
+        const manpower = [...prev.manpower];
+        let added = 0, updated = 0;
+
+        parsed.forEach(row => {
+          const personName = (row.name || "").trim();
+          if (!personName) return;
+
+          // ── Personal info fields (only set if non-empty) ─────────────────
+          const personalFields = {
+            ...(row.idNo          && { idNo:          String(row.idNo) }),
+            ...(row.position      && { designation:   row.position }),
+            ...(row.nationality   && { nationality:   row.nationality }),
+            ...(row.iqamaNo       && { iqamaNo:       String(row.iqamaNo) }),
+            ...(row.iqamaExpiry   && { iqamaExpiry:   row.iqamaExpiry }),
+            ...(row.passportNo    && { passportNo:    String(row.passportNo) }),
+            ...(row.passportExpiry&& { passportExpiry:row.passportExpiry }),
+            ...(row.sponsor       && { sponsor:       row.sponsor }),
+          };
+
+          // ── Cert object — only if a cert name exists on this row ─────────
+          const hasCert = !!(row.certName || "").trim();
+          const cert = hasCert ? {
+            id:         uid(),
+            name:       (row.certName || "").trim(),
+            certNo:     row.certNo    || "",
+            issueDate:  row.issueDate  || "",
+            expiryDate: row.expiryDate || "",
+            issuedBy:   row.issuedBy   || "",
+            fileLink:   "",
+          } : null;
+
+          const idx = manpower.findIndex(
+            p => p.name.toLowerCase() === personName.toLowerCase()
+          );
+
+          if (idx >= 0) {
+            // Person EXISTS — fill any blank personal fields, optionally append cert
+            const existing = manpower[idx];
+            const updates = {};
+            Object.entries(personalFields).forEach(([k, v]) => {
+              if (!existing[k]) updates[k] = v; // never overwrite existing data
+            });
+
+            let newCerts = existing.certs || [];
+            if (cert) {
+              const duplicate = newCerts.some(
+                c => c.name.toLowerCase() === cert.name.toLowerCase()
+                  && c.expiryDate === cert.expiryDate
               );
-              if(!alreadyExists){
-                manpower[idx]={...manpower[idx],certs:[...(manpower[idx].certs||[]),cert]};
+              if (!duplicate) {
+                newCerts = [...newCerts, cert];
                 updated++;
               }
-            } else {
-              manpower.push({id:uid(),name:personName,idNo:row.idNo||"",category:defaultCat||"",certs:[cert],docs:[]});
-              added++;
             }
-          });
-          showToast(`✓ ${parsed.length} certs imported (${added} new people, ${updated} updated)`);
-          return{...prev,manpower};
+
+            manpower[idx] = { ...existing, ...updates, certs: newCerts };
+
+          } else {
+            // Person does NOT EXIST — create full record
+            manpower.push({
+              id:             uid(),
+              name:           personName,
+              category:       defaultCat || "",
+              certs:          cert ? [cert] : [],   // empty array if no cert
+              docs:           [],
+              idNo:           personalFields.idNo           || "",
+              designation:    personalFields.designation    || "",
+              nationality:    personalFields.nationality    || "",
+              iqamaNo:        personalFields.iqamaNo        || "",
+              iqamaExpiry:    personalFields.iqamaExpiry    || "",
+              passportNo:     personalFields.passportNo     || "",
+              passportExpiry: personalFields.passportExpiry || "",
+              sponsor:        personalFields.sponsor        || "",
+            });
+            added++;
+          }
         });
-        setImpModal(false);
-      } catch(err){ showToast("Failed to read Excel file","del"); }
-    };
-    reader.readAsArrayBuffer(file);
+
+        const certCount = parsed.filter(r => (r.certName || "").trim()).length;
+        showToast(`✓ Imported ${added + updated} people (${added} new · ${updated} updated · ${certCount} certs)`);
+        return { ...prev, manpower };
+      });
+
+      setImpModal(false);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to read Excel file", "del");
+    }
   };
+  reader.readAsArrayBuffer(file);
+};
 
   const personFresh = person ? (data.manpower.find(p=>p.id===person.id)||person) : null;
 
@@ -9084,8 +9139,9 @@ function ManpowerPage({data,setData,showToast,isAdmin}) {
       <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
         <div>
           <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Manpower Certifications from Excel</div>
-          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>Columns: <strong style={{color:T.textSub}}>NAME, ID, CERTIFICATE, ISSUED BY, ISSUE DATE, EXPIRY DATE</strong> (headers auto-detected from row 4) — matches people by name, creates new if not found</div>
-        </div>
+          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>
+  Columns: <strong style={{color:T.textSub}}>ID, NAME, POSITION, NATIONALITY, NATIONAL/IQAMA ID, ID EXP. DATE, PASSPORT NO., PASSPORT EXP. DATE, SPONSOR</strong> — cert columns optional: <strong style={{color:T.textSub}}>CERTIFICATE, ISSUED BY, CERT ISSUE DATE, CERT EXPIRY DATE</strong>
+</div>
         <input ref={mpFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){setImpModal({file:e.target.files[0]});e.target.value="";}}}/>
         <button onClick={()=>mpFileRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
       </div>
