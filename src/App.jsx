@@ -9397,7 +9397,7 @@ const delDoc = (id) => {
     </div>
   );
 }
-{activeTab==="docs"&&(
+      {activeTab==="docs"&&(
   <div>
     <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
       <Btn color={T.green} solid onClick={()=>setDocModal(true)}>+ Upload Document</Btn>
