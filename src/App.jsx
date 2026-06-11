@@ -9279,19 +9279,20 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast,isA
     onUpdate({...person,certs});
     showToast("Cert deleted","del");
   };
-  const saveDoc = (doc) => {
-  setDocModal(false);
-  const docs = [...(person.docs||[]), {...doc, id:uid(), uploadedAt: new Date().toISOString().split("T")[0]}];
-  onUpdate({...person, docs});
-  showToast("Document uploaded");
-};
 
-const delDoc = (id) => {
-  const docs = (person.docs||[]).filter(d=>d.id!==id);
-  onUpdate({...person, docs});
-  showToast("Document removed","del");
-};
-  
+  const saveDoc=(doc)=>{
+    setDocModal(false);
+    const docs=[...(person.docs||[]),{...doc,id:uid(),uploadedAt:new Date().toISOString().split("T")[0]}];
+    onUpdate({...person,docs});
+    showToast("Document uploaded");
+  };
+
+  const delDoc=(id)=>{
+    const docs=(person.docs||[]).filter(d=>d.id!==id);
+    onUpdate({...person,docs});
+    showToast("Document removed","del");
+  };
+
   const PROFILE_ROWS=[
     ["Full Name",person.name],["ID No.",person.idNo],["Nationality",person.nationality],
     ["Designation",person.designation],["Category",person.category],
@@ -9310,11 +9311,11 @@ const delDoc = (id) => {
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>{person.name}</div>
           <div style={{fontSize:12,color:T.textMuted,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <span>{person.designation} · {person.category}</span>
-            {person.project && <span style={{background:T.blueDim,color:T.blue,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>◆ {person.project}</span>}
+            {person.project&&<span style={{background:T.blueDim,color:T.blue,borderRadius:6,padding:"2px 8px",fontSize:11,fontWeight:700}}>◆ {person.project}</span>}
           </div>
         </div>
-        <Btn color={T.blue}  onClick={onEdit}>✎ Edit</Btn>
-        {isAdmin && <Btn color={T.red}   onClick={()=>{ if(window.confirm("Delete this person?")) onDelete(); }}>✕ Delete</Btn>}
+        <Btn color={T.blue} onClick={onEdit}>✎ Edit</Btn>
+        {isAdmin&&<Btn color={T.red} onClick={()=>{if(window.confirm("Delete this person?"))onDelete();}}>✕ Delete</Btn>}
       </div>
 
       {/* Status cards row */}
@@ -9345,6 +9346,7 @@ const delDoc = (id) => {
         ))}
       </div>
 
+      {/* Profile Tab */}
       {activeTab==="profile"&&(
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,boxShadow:"0 2px 10px rgba(26,10,0,0.07),0 0 0 1px rgba(232,213,183,0.5)",padding:"18px 22px"}}>
           {PROFILE_ROWS.map(([k,v])=>(
@@ -9356,6 +9358,7 @@ const delDoc = (id) => {
         </div>
       )}
 
+      {/* Certs Tab */}
       {activeTab==="certs"&&(
         <div>
           <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
@@ -9383,7 +9386,7 @@ const delDoc = (id) => {
                     </div>
                     <div style={{display:"flex",gap:6,flexShrink:0}}>
                       <ABtn color={T.blue} onClick={()=>setCertModal({mode:"edit",cert:c})}>✎</ABtn>
-                      {isAdmin && <ABtn color={T.red}  onClick={()=>delCert(c.id)}>✕</ABtn>}
+                      {isAdmin&&<ABtn color={T.red} onClick={()=>delCert(c.id)}>✕</ABtn>}
                     </div>
                   </div>
                 );
@@ -9393,179 +9396,46 @@ const delDoc = (id) => {
         </div>
       )}
 
-      {certModal&&<CertModal mode={certModal.mode} cert={certModal.cert} onClose={()=>setCertModal(null)} onSave={saveCert}/>}
-    </div>
-  );
-}
+      {/* Docs Tab */}
       {activeTab==="docs"&&(
-  <div>
-    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
-      <Btn color={T.green} solid onClick={()=>setDocModal(true)}>+ Upload Document</Btn>
+        <div>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
+            <Btn color={T.green} solid onClick={()=>setDocModal(true)}>+ Upload Document</Btn>
+          </div>
+          {(person.docs||[]).length===0
+            ?<Empty icon="📄" label="No documents uploaded" sub="Upload Iqama, Muqeem, Passport copies, etc." color={T.green} onAdd={()=>setDocModal(true)}/>
+            :<div style={{display:"grid",gap:10}}>
+              {(person.docs||[]).map((d,i)=>(
+                <div key={d.id} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,animationDelay:`${i*.04}s`}}>
+                  <div style={{fontSize:28,flexShrink:0}}>
+                    {d.fileType?.includes("pdf")?"📄":d.fileType?.includes("image")?"🖼️":"📎"}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:5}}>
+                      {d.docType&&<Chip>{d.docType}</Chip>}
+                      {d.uploadedAt&&<Chip>Uploaded: {fmtDate(d.uploadedAt)}</Chip>}
+                      {d.expiryDate&&<Chip color={getStatus(daysUntil(d.expiryDate)).color}>Exp: {fmtDate(d.expiryDate)}</Chip>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:6,flexShrink:0}}>
+                    <a href={d.url} target="_blank" rel="noreferrer"
+                      style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
+                      View
+                    </a>
+                    {isAdmin&&<ABtn color={T.red} onClick={()=>delDoc(d.id)}>✕</ABtn>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          }
+        </div>
+      )}
+
+      {/* Modals */}
+      {certModal&&<CertModal mode={certModal.mode} cert={certModal.cert} onClose={()=>setCertModal(null)} onSave={saveCert}/>}
+      {docModal&&<MpDocUploadModal person={person} onClose={()=>setDocModal(false)} onSave={saveDoc} showToast={showToast}/>}
     </div>
-    {(person.docs||[]).length===0
-      ?<Empty icon="📄" label="No documents uploaded" sub="Upload Iqama, Muqeem, Passport copies, etc." color={T.green} onAdd={()=>setDocModal(true)}/>
-      :<div style={{display:"grid",gap:10}}>
-        {(person.docs||[]).map((d,i)=>(
-          <div key={d.id} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,animationDelay:`${i*.04}s`}}>
-            <div style={{fontSize:28,flexShrink:0}}>
-              {d.fileType?.includes("pdf")?"📄":d.fileType?.includes("image")?"🖼️":"📎"}
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:600,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:5}}>
-                {d.docType&&<Chip>{d.docType}</Chip>}
-                {d.uploadedAt&&<Chip>Uploaded: {fmtDate(d.uploadedAt)}</Chip>}
-                {d.expiryDate&&<Chip color={getStatus(daysUntil(d.expiryDate)).color}>Exp: {fmtDate(d.expiryDate)}</Chip>}
-              </div>
-            </div>
-            <div style={{display:"flex",gap:6,flexShrink:0}}>
-              <a href={d.url} target="_blank" rel="noreferrer"
-                style={{background:T.blueDim,border:`1px solid ${T.blue}33`,color:T.blue,borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
-                View
-              </a>
-              {isAdmin&&<ABtn color={T.red} onClick={()=>delDoc(d.id)}>✕</ABtn>}
-            </div>
-          </div>
-        ))}
-      </div>
-    }
-    {docModal&&<MpDocUploadModal person={person} onClose={()=>setDocModal(false)} onSave={saveDoc} showToast={showToast}/>}
-  </div>
-)}
-
-function PersonModal({mode,person,cats,projects,onClose,onSave}) {
-  const [f,setF]=useState(person||{});
-  const set=k=>v=>setF(p=>({...p,[k]:v}));
-  return (
-    <FormModal title={`${mode==="add"?"ADD":"EDIT"} PERSON`} color={T.green} onClose={onClose}
-      onSave={()=>{if(!f.name){alert("Name required");return;}onSave(f,mode);}}>
-      <FieldRow label="Full Name *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
-      <FieldRow label="Category">
-        <FSelect value={f.category||""} onChange={set("category")} color={T.green}>
-          <option value="">Select…</option>
-          {cats.map(c=><option key={c} value={c}>{c}</option>)}
-        </FSelect>
-      </FieldRow>
-      <FieldRow label="Assigned Project">
-        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
-          <option value="">No project assigned</option>
-          {renderProjectOptions(projects)}
-        </FSelect>
-      </FieldRow>
-      <FieldRow label="ID No."><FInput value={f.idNo||""} onChange={set("idNo")} color={T.green}/></FieldRow>
-      <FieldRow label="Nationality"><FInput value={f.nationality||""} onChange={set("nationality")} color={T.green}/></FieldRow>
-      <FieldRow label="Designation"><FInput value={f.designation||""} onChange={set("designation")} color={T.green}/></FieldRow>
-      <SectionDivider label="PASSPORT"/>
-      <FieldRow label="Passport No."><FInput value={f.passportNo||""} onChange={set("passportNo")} color={T.green}/></FieldRow>
-      <FieldRow label="Passport Expiry"><FInput type="date" value={f.passportExpiry||""} onChange={set("passportExpiry")} color={T.green}/></FieldRow>
-      <SectionDivider label="VISA"/>
-      <FieldRow label="Visa No."><FInput value={f.visaNo||""} onChange={set("visaNo")} color={T.green}/></FieldRow>
-      <FieldRow label="Visa Expiry"><FInput type="date" value={f.visaExpiry||""} onChange={set("visaExpiry")} color={T.green}/></FieldRow>
-      <SectionDivider label="IQAMA"/>
-      <FieldRow label="Iqama No."><FInput value={f.iqamaNo||""} onChange={set("iqamaNo")} color={T.green}/></FieldRow>
-      <FieldRow label="Iqama Expiry"><FInput type="date" value={f.iqamaExpiry||""} onChange={set("iqamaExpiry")} color={T.green}/></FieldRow>
-      <SectionDivider label="MUQEEM"/>
-      <FieldRow label="Muqeem No."><FInput value={f.muqeemNo||""} onChange={set("muqeemNo")} color={T.green}/></FieldRow>
-      <FieldRow label="Muqeem Expiry"><FInput type="date" value={f.muqeemExpiry||""} onChange={set("muqeemExpiry")} color={T.green}/></FieldRow>
-    </FormModal>
-  );
-}
-
-function CertModal({mode,cert,onClose,onSave}) {
-  const [f,setF]=useState(cert||{});
-  const set=k=>v=>setF(p=>({...p,[k]:v}));
-  return (
-    <FormModal title={`${mode==="add"?"ADD":"EDIT"} CERTIFICATION`} color={T.green} onClose={onClose}
-      onSave={()=>{if(!f.name){alert("Cert name required");return;}onSave(f,mode);}}>
-      <FieldRow label="Certification Name *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
-      <FieldRow label="Certificate No."><FInput value={f.certNo||""} onChange={set("certNo")} color={T.green}/></FieldRow>
-      <FieldRow label="Issued By"><FInput value={f.issuedBy||""} onChange={set("issuedBy")} color={T.green}/></FieldRow>
-      <FieldRow label="Issue Date"><FInput type="date" value={f.issueDate||""} onChange={set("issueDate")} color={T.green}/></FieldRow>
-      <FieldRow label="Expiry Date"><FInput type="date" value={f.expiryDate||""} onChange={set("expiryDate")} color={T.green}/></FieldRow>
-      <FieldRow label="File Link"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
-    </FormModal>
-  );
-}
-function MpDocUploadModal({person, onClose, onSave, showToast}) {
-  const [f, setF] = useState({docType:"", expiryDate:"", name:""});
-  const [file, setFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef();
-  const set = k => v => setF(p=>({...p,[k]:v}));
-
-  const DOC_TYPES = ["Iqama","Muqeem","Passport","Visa","Medical Certificate","Training Certificate","Employment Contract","Other"];
-
-  const handleUpload = async () => {
-    if (!file) { alert("Please select a file"); return; }
-    if (!f.docType) { alert("Please select a document type"); return; }
-    setUploading(true);
-    try {
-      const folder = `manpower/${person.id}/docs`;
-      const url = await uploadFile(file, folder);
-      onSave({
-        name:       f.name || file.name,
-        docType:    f.docType,
-        expiryDate: f.expiryDate || "",
-        fileType:   file.type,
-        url,
-      });
-    } catch(err) {
-      showToast("Upload failed: " + err.message, "del");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  return (
-    <Overlay onClose={onClose}>
-      <div className="slide-up" style={{background:T.sidebar,border:`1px solid ${T.border}`,borderRadius:18,width:"100%",maxWidth:440,padding:"24px"}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,marginBottom:20}}>UPLOAD DOCUMENT</div>
-
-        <div style={{marginBottom:14}}>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:".5px"}}>DOCUMENT TYPE *</label>
-          <select value={f.docType} onChange={e=>set("docType")(e.target.value)}
-            style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:f.docType?T.text:T.textMuted,outline:"none"}}>
-            <option value="">Select type…</option>
-            {DOC_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-
-        <div style={{marginBottom:14}}>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:".5px"}}>DISPLAY NAME</label>
-          <input value={f.name} onChange={e=>set("name")(e.target.value)} placeholder={file?.name||"Leave blank to use filename"}
-            style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box"}}/>
-        </div>
-
-        <div style={{marginBottom:14}}>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:".5px"}}>EXPIRY DATE (optional)</label>
-          <input type="date" value={f.expiryDate} onChange={e=>set("expiryDate")(e.target.value)}
-            style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:T.text,outline:"none",boxSizing:"border-box"}}/>
-        </div>
-
-        <div style={{marginBottom:20}}>
-          <label style={{display:"block",fontSize:11,fontWeight:700,color:T.textMuted,marginBottom:6,letterSpacing:".5px"}}>FILE *</label>
-          <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style={{display:"none"}}
-            onChange={e=>{ if(e.target.files[0]){ setFile(e.target.files[0]); if(!f.name) set("name")(e.target.files[0].name); }}}/>
-          <div onClick={()=>fileRef.current.click()}
-            style={{background:T.inputBg,border:`2px dashed ${file?T.green:T.border}`,borderRadius:10,padding:"18px",textAlign:"center",cursor:"pointer",transition:"border-color .2s"}}>
-            {file
-              ? <><div style={{fontSize:13,fontWeight:600,color:T.green}}>{file.name}</div>
-                  <div style={{fontSize:11,color:T.textMuted,marginTop:3}}>{(file.size/1024).toFixed(1)} KB · click to change</div></>
-              : <><div style={{fontSize:13,color:T.textMuted}}>Click to select file</div>
-                  <div style={{fontSize:11,color:T.textMuted,marginTop:3}}>PDF, JPG, PNG, DOC supported</div></>
-            }
-          </div>
-        </div>
-
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={onClose} style={{flex:1,background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"11px",fontSize:13,fontWeight:600}}>Cancel</button>
-          <button onClick={handleUpload} disabled={uploading}
-            style={{flex:2,background:uploading?T.border:T.green,border:"none",color:"#fff",borderRadius:10,padding:"11px",fontSize:14,fontWeight:700,cursor:uploading?"not-allowed":"pointer"}}>
-            {uploading?"Uploading…":"Upload Document"}
-          </button>
-        </div>
-      </div>
-    </Overlay>
   );
 }
 /* ════════════════════════════════════════════════════════════════════════════
