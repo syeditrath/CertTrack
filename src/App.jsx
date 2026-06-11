@@ -9429,7 +9429,7 @@ const delDoc = (id) => {
         ))}
       </div>
     }
-    {docModal&&<DocUploadModal person={person} onClose={()=>setDocModal(false)} onSave={saveDoc} showToast={showToast}/>}
+    {docModal&&<MpDocUploadModal person={person} onClose={()=>setDocModal(false)} onSave={saveDoc} showToast={showToast}/>}
   </div>
 )}
 
@@ -9486,7 +9486,7 @@ function CertModal({mode,cert,onClose,onSave}) {
     </FormModal>
   );
 }
-function DocUploadModal({person, onClose, onSave, showToast}) {
+function MpDocUploadModal({person, onClose, onSave, showToast}) {
   const [f, setF] = useState({docType:"", expiryDate:"", name:""});
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
