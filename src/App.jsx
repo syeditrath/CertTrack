@@ -4004,7 +4004,7 @@ function Dashboard({ data, alerts, go, onDeepLink }) {
                     : `${alerts.filter(a=>a.days>=0&&a.days<=30).length} item${alerts.filter(a=>a.days>=0&&a.days<=30).length!==1?"s":""} expiring within 30 days`}
                 </div>
               </div>
-              <button onClick={()=>{ onDeepLink(a.page, a.id); setAlertModal(null)}} style={{background:"none",border:"none",color:T.textMuted,fontSize:20,cursor:"pointer"}}>✕</button>
+              <button onClick={()=>setAlertModal(null)} style={{background:"none",border:"none",color:T.textMuted,fontSize:20,cursor:"pointer"}}>✕</button>
             </div>
             <div style={{display:"grid",gap:8}}>
               {(alertModal==="overdue"
