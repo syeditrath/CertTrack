@@ -7172,7 +7172,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   );
 }
 
-function DocUploadModal({ title, categories, projects, selectedProject, onClose, onSave }) {
+function MpDocUploadModal({ title, categories, projects, selectedProject, onClose, onSave }) {
   const [form, setForm] = useState({
     project:  selectedProject||"",
     category: "",
