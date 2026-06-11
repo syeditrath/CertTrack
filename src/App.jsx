@@ -9136,15 +9136,16 @@ function ManpowerPage({data,setData,showToast,isAdmin}) {
       </PageHeader>
 
       {/* Excel import banner */}
-      <div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-        <div>
-          <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Manpower Certifications from Excel</div>
-          <div style={{fontSize:12,color:T.textSub,marginTop:2}}>
-  Columns: <strong style={{color:T.textSub}}>ID, NAME, POSITION, NATIONALITY, NATIONAL/IQAMA ID, ID EXP. DATE, PASSPORT NO., PASSPORT EXP. DATE, SPONSOR</strong> — cert columns optional: <strong style={{color:T.textSub}}>CERTIFICATE, ISSUED BY, CERT ISSUE DATE, CERT EXPIRY DATE</strong>
-</div>
-        <input ref={mpFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){setImpModal({file:e.target.files[0]});e.target.value="";}}}/>
-        <button onClick={()=>mpFileRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
-      </div>
+<div style={{background:T.goldDim,border:`1px solid ${T.gold}33`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+  <div>
+    <div style={{fontSize:13,fontWeight:600,color:T.gold}}>📂 Import Manpower Certifications from Excel</div>
+    <div style={{fontSize:12,color:T.textSub,marginTop:2}}>
+      Columns: <strong style={{color:T.textSub}}>ID, NAME, POSITION, NATIONALITY, NATIONAL/IQAMA ID, ID EXP. DATE, PASSPORT NO., PASSPORT EXP. DATE, SPONSOR</strong> — cert columns optional: <strong style={{color:T.textSub}}>CERTIFICATE, ISSUED BY, CERT ISSUE DATE, CERT EXPIRY DATE</strong>
+    </div>
+  </div>  {/* ← closes the inner <div> */}
+  <input ref={mpFileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0]){setImpModal({file:e.target.files[0]});e.target.value="";}}}/>
+  <button onClick={()=>mpFileRef.current.click()} style={{background:T.gold,color:"#000",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:700,flexShrink:0}}>⬆ Upload Excel</button>
+</div>  {/* ← closes the outer <div> */}
 
       {/* Category filter */}
       <div style={{display:"flex",gap:8,marginBottom:18,flexWrap:"wrap"}}>
