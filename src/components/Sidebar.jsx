@@ -18,6 +18,7 @@ function Sidebar({page,go,sideOpen,alerts,data,viewportWidth,isAdmin,onManagePro
     {id:"equipment", icon:"◎", label:"Equipment",          desc:"Assets & records"},
     {id:"rigs", icon:"🔩", label:"RIGS", desc:"Rig fleet & attached equipment"},
     {id:"maintenance", icon:"🛠", label:"Maintenance", desc:"Equipment maintenance requests",},
+    {id:"procurement", icon:"📋", label:"Procurement", desc:"PR → PO → GRN → SES tracking"},
     {id:"finance",   icon:"$", label:"Finance",            desc:"Invoices & work orders",    locked:!financeAuthed},
   ];
   const handleNav = (id) => {
