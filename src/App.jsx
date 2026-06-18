@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { GLOBAL_CSS, useViewport, daysUntil } from "./utils.js";
 import { T, DARK, LIGHT, setTheme } from "./theme.js";
-import { AUTH_KEY, ADMIN_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, EMPTY_DATA, loadNotifySettings, saveNotifySettings, buildEmailPayload, NOTIFY_LAST_SENT_KEY, isAuthenticated, COMPANY_PASSWORD, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY } from "./constants.js";
+import { AUTH_KEY, ADMIN_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, PROCUREMENT_PASSWORD, ADMIN_PASSWORD, EMPTY_DATA, loadNotifySettings, saveNotifySettings, buildEmailPayload, NOTIFY_LAST_SENT_KEY, isAuthenticated, COMPANY_PASSWORD, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY } from "./constants.js";
 import { fetchAppData, saveAppData } from "./cloudflare.js";
 import { WelcomeScreen } from "./components/WelcomeScreen.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
@@ -34,6 +34,7 @@ export default function App() {
   const [financeAuthed,  setFinanceAuthed]  = useState(false);
   const [analysisAuthed, setAnalysisAuthed] = useState(false);
   const [costAuthed,     setCostAuthed]     = useState(false);
+  const [procurementAuthed, setProcurementAuthed] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem("cta_dark") === "true"; }
     catch { return false; }
@@ -300,7 +301,7 @@ export default function App() {
       )}
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
 
-      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} isAdmin={isAdmin} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout} financeAuthed={financeAuthed} analysisAuthed={analysisAuthed} costAuthed={costAuthed}/>
+      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} isAdmin={isAdmin} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout} financeAuthed={financeAuthed} analysisAuthed={analysisAuthed} costAuthed={costAuthed} procurementAuthed={procurementAuthed}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         <header style={{background:T.sidebar,borderBottom:"2px solid transparent",backgroundImage:`linear-gradient(${T.sidebar},${T.sidebar}), linear-gradient(90deg,#fbbf24,#38bdf8,#34d399,#fbbf24)`,backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",padding:`0 ${viewportWidth < 600 ? "10px" : "20px"}`,flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
@@ -440,7 +441,14 @@ export default function App() {
             </div>
           )}
           {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
-          {page==="procurement" && <div className="fade-in" key="procurement"><ProcurementPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+          {page==="procurement" && (
+            procurementAuthed
+              ? <div className="fade-in" key="procurement"><ProcurementPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>
+              : <FinanceLoginPage title="PROCUREMENT ACCESS" subtitle="This section contains procurement workflow data.\nEnter the procurement password to continue." passwordLabel="PROCUREMENT PASSWORD" placeholder="Enter password…" buttonLabel="UNLOCK PROCUREMENT" onLogin={(pw) => {
+                  if (pw === PROCUREMENT_PASSWORD) { setProcurementAuthed(true); return true; }
+                  return false;
+                }}/>
+          )}
           {page==="costs" && (
             costAuthed
               ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
