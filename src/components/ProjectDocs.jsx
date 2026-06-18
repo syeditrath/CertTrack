@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
 import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
-import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
+import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, BulkUploadModal, MultiPdfCertUpload } from "./UI.jsx";
 
@@ -2145,6 +2145,157 @@ function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
   );
 }
 
+/* ─── Daily Progress Report (DPR) Excel Parsing ─────────────────────────── */
+const DR_COL_MAP = {
+  "DATE":"date","REPORT DATE":"date","DAY":"date",
+  "WEATHER":"weather","WEATHER CONDITIONS":"weather","CONDITIONS":"weather",
+  "ACTIVITIES":"activities","WORK DONE":"activities","WORK":"activities","ACTIVITY":"activities","DESCRIPTION":"activities","WORK DESCRIPTION":"activities",
+  "MANPOWER":"manpower","MANPOWER COUNT":"manpower","WORKERS":"manpower","NO. OF WORKERS":"manpower","HEADCOUNT":"manpower","NO OF WORKERS":"manpower",
+  "EQUIPMENT":"equipment","EQUIPMENT USED":"equipment","PLANT":"equipment","PLANT & EQUIPMENT":"equipment","MACHINERY":"equipment",
+  "ISSUES":"issues","DELAYS":"issues","ISSUES / DELAYS":"issues","PROBLEMS":"issues","REMARKS":"issues",
+  "NOTES":"notes","ADDITIONAL NOTES":"notes","COMMENTS":"notes","SUPERVISOR NOTES":"notes",
+};
+
+/* ── Scorpion DPR template cell reader ───────────────────────────────────── */
+function dprReadRange(ws, rangeStr) {
+  try {
+    const range = XLSX.utils.decode_range(rangeStr);
+    const parts = new Set();
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      for (let c2 = range.s.c; c2 <= range.e.c; c2++) {
+        const ref = XLSX.utils.encode_cell({r, c:c2});
+        if (ws[ref]?.v != null && String(ws[ref].v).trim()) parts.add(String(ws[ref].v).trim());
+      }
+    }
+    return [...parts].join(" ");
+  } catch { return ""; }
+}
+
+/* Detect if workbook is the Scorpion DPR template.
+   The template always has a sheet named "Daily DPR Form". */
+function isScorpionDprTemplate(wb) {
+  return wb.SheetNames.includes("Daily DPR Form");
+}
+
+/* Read a cell value cleanly — handles dates, numbers (including 0), strings.
+   Falls back to the merge anchor map if the cell itself is empty. */
+function dprReadExact(ws, ref, mergeMap) {
+  const c = ws[ref];
+  if (c !== undefined) {
+    // Date type
+    if (c.t === "d" || c.v instanceof Date) return excelDateToStr(c.v) || c.w || "";
+    // Any value including numeric 0
+    if (c.v !== undefined && c.v !== null) return String(c.v).trim();
+    if (c.w) return String(c.w).trim();
+  }
+  // Merged cell — value lives in the anchor cell, not here
+  return (mergeMap && mergeMap[ref]) ? mergeMap[ref] : "";
+}
+
+/* Parse the Scorpion DPR template.
+   PRIMARY: reads the ERP field table in columns L/M (most reliable, no merge issues).
+   FALLBACK: reads the exact named cells directly. */
+function parseScorpionDprSheet(wb) {
+  const ws = wb.Sheets["Daily DPR Form"] || wb.Sheets[wb.SheetNames[0]];
+
+  // Build merge map so any cell in a merged region resolves to the anchor value
+  const mergeMap = {};
+  if (ws["!merges"]) {
+    ws["!merges"].forEach(m => {
+      const anchorRef = XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c });
+      const ac = ws[anchorRef];
+      let v = "";
+      if (ac) {
+        if (ac.t === "d" || ac.v instanceof Date) v = excelDateToStr(ac.v) || ac.w || "";
+        else if (ac.v !== undefined && ac.v !== null) v = String(ac.v).trim();
+        else if (ac.w) v = String(ac.w).trim();
+      }
+      for (let r = m.s.r; r <= m.e.r; r++) {
+        for (let c2 = m.s.c; c2 <= m.e.c; c2++) {
+          mergeMap[XLSX.utils.encode_cell({ r, c: c2 })] = v;
+        }
+      }
+    });
+  }
+
+  const rd = (ref) => dprReadExact(ws, ref, mergeMap);
+
+  // Read ERP key-value table from columns L & M (rows 1 onward)
+  const erp = {};
+  for (let row = 1; row <= 40; row++) {
+    const key = rd(XLSX.utils.encode_cell({ r: row - 1, c: 11 }));   // col L
+    const val = rd(XLSX.utils.encode_cell({ r: row - 1, c: 12 }));   // col M
+    if (key) erp[key.trim()] = val;
+  }
+
+  // Helper: prefer ERP table value, fall back to direct cell read
+  const get = (erpKey, cellRef) => {
+    const erpVal = erp[erpKey];
+    // ERP value of "0" is valid — only skip if truly missing
+    if (erpVal !== undefined && erpVal !== null && erpVal !== "") return erpVal;
+    return rd(cellRef);
+  };
+
+  // Date: ERP stores as Excel serial (number), direct cell is a Date object
+  const rawDate = erp["report_date"] || rd("H8");
+  const date = excelDateToStr(
+    typeof rawDate === "string" && /^\d+$/.test(rawDate.trim())
+      ? Number(rawDate)
+      : rawDate
+  ) || rawDate;
+
+  return {
+    id: uid(),
+    dprSource: "scorpion_template",
+    project:        get("project_name",  "C8"),
+    rig:            rd("G6"),
+    date:           date,
+    profile:        get("profile",       "C13"),
+    activity:       get("activity",      "H13"),
+    permitStartTime: rd("C11"),
+    permitEndTime:   rd("H11"),
+    permitReceived: rd("C14"),
+    permitHours:    rd("H14"),
+    standbyReason:  rd("C15"),
+    progressToday:  get("progress_today_m",   "E18"),
+    accumulated:    get("accumulated_progress_m", "G18"),
+    activities:     get("today_summary",  "A27") || dprReadRange(ws, "A27:I29"),
+  };
+}
+
+function parseDailyReportExcel(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, { type:"array", cellDates:true });
+
+  // ── Scorpion DPR Template path — always try this first ──
+  if (isScorpionDprTemplate(wb)) {
+    const rec = parseScorpionDprSheet(wb);
+    // Always return the record so the user can see what was parsed
+    return [rec];
+  }
+
+  // ── Generic column-mapped path (legacy / other formats) ──
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json(ws, { defval:"" });
+  return rawRows
+    .filter(row => Object.values(row).some(v => v !== null && v !== ""))
+    .map(row => {
+      const rec = { id: uid() };
+      const upper = {};
+      Object.entries(row).forEach(([k,v]) => { upper[String(k).toUpperCase().trim()] = v; });
+      Object.entries(DR_COL_MAP).forEach(([col, key]) => {
+        const val = upper[col];
+        if (val === undefined || val === null || val === "") return;
+        if (key === "date") {
+          rec[key] = excelDateToStr(val) || String(val);
+        } else {
+          rec[key] = String(val).trim();
+        }
+      });
+      return rec;
+    })
+    .filter(rec => Object.keys(rec).filter(k => k !== "id").length > 0);
+}
+
 function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClose,onSave}) {
   const [f,setF] = useState({ project: defaultProject || "", rig: "", ...(doc || {}) });
   const [parsing,setParsing] = useState(false);
@@ -2311,4 +2462,4 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClo
    SCORPION DOCUMENTS
 ════════════════════════════════════════════════════════════════════════════ */
 
-export { ProjectDocs };
+export { ProjectDocs, parseDailyReportExcel };
