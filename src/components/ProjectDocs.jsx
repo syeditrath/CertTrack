@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
 import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
-import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
+import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, METHOD_STATEMENT_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, BulkUploadModal, MultiPdfCertUpload } from "./UI.jsx";
+import { FinanceLoginPage } from "./FinancePage.jsx";
 
 /* ─── HSE & Project Document Categories ─────────────────────────────────── */
 const HSE_CATEGORIES = [
@@ -47,6 +48,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   const [bulkModal, setBulkModal] = useState(false);
   const [multiPdfModal, setMultiPdfModal] = useState(null);
   const [rigInput, setRigInput] = useState("");
+  const [msAuthed, setMsAuthed] = useState(false);
   const docs     = data.projectDocs || [];
   const projects = data.projects    || [];
   const cur      = PD_TABS.find(t=>t.id===subTab);
@@ -283,7 +285,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           <div style={{fontSize:13,color:T.textMuted,marginTop:3}}>Project dashboard and document records</div>
         </div>
       </div>
-      <SubTabBar tabs={PD_TABS} active={subTab} counts={counts} onChange={changeTab}/>
+      <SubTabBar tabs={PD_TABS.map(t=>t.id==="methodstatement"&&!msAuthed?{...t,label:`🔒 ${t.label}`}:t)} active={subTab} counts={counts} onChange={changeTab}/>
 
       {/* ── Rigs / Spreads panel ── */}
       <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 18px",marginBottom:16}}>
@@ -749,16 +751,23 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
       {/* ══ METHOD STATEMENT & DRAWING ═══════════════════════════════════ */}
       {subTab==="methodstatement" && (
-        <MethodStatementSection
-          docs={docs.filter(d=>d.subTab==="methodstatement" && (!selectedProject||d.project===selectedProject))}
-          projects={projects}
-          selectedProject={selectedProject}
-          isAdmin={isAdmin}
-          showToast={showToast}
-          onAdd={doc=>setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...doc,id:uid(),subTab:"methodstatement"}]}))}
-          onEdit={doc=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===doc.id?{...doc,subTab:"methodstatement"}:d)}))}
-          onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}))}
-        />
+        msAuthed ? (
+          <MethodStatementSection
+            docs={docs.filter(d=>d.subTab==="methodstatement" && (!selectedProject||d.project===selectedProject))}
+            projects={projects}
+            selectedProject={selectedProject}
+            isAdmin={isAdmin}
+            showToast={showToast}
+            onAdd={doc=>setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...doc,id:uid(),subTab:"methodstatement"}]}))}
+            onEdit={doc=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===doc.id?{...doc,subTab:"methodstatement"}:d)}))}
+            onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}))}
+          />
+        ) : (
+          <FinanceLoginPage title="METHOD STATEMENT & DRAWING ACCESS" subtitle="This section is restricted.\nEnter the password to continue." passwordLabel="METHOD STATEMENT PASSWORD" placeholder="Enter password…" buttonLabel="UNLOCK SECTION" onLogin={(pw) => {
+            if (pw === METHOD_STATEMENT_PASSWORD) { setMsAuthed(true); return true; }
+            return false;
+          }}/>
+        )
       )}
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
@@ -932,12 +941,10 @@ function DocSectionUI({ docs, categories, accentColor, accentDim, projects, sele
             {catList.map(c=><option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        {isAdmin && (
-          <button onClick={()=>setModal("add")}
-            style={{background:`linear-gradient(135deg,${accentColor},${accentColor}cc)`,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-            + Add Document
-          </button>
-        )}
+        <button onClick={()=>setModal("add")}
+          style={{background:`linear-gradient(135deg,${accentColor},${accentColor}cc)`,border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          + Add Document
+        </button>
       </div>
 
       {/* Empty state */}
