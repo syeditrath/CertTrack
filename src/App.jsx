@@ -11,6 +11,7 @@ import { ScorpionDocs } from "./components/ScorpionDocs.jsx";
 import { ManpowerPage } from "./components/ManpowerPage.jsx";
 import { EquipmentPage } from "./components/EquipmentPage.jsx";
 import { MaintenancePage } from "./components/MaintenancePage.jsx";
+import { ProcurementPage } from "./components/ProcurementPage.jsx";
 import { RigsPage } from "./components/RigsPage.jsx";
 import { CostControlPage } from "./components/CostControlPage.jsx";
 import { FinancePage, LoginPage, FinanceLoginPage } from "./components/FinancePage.jsx";
@@ -439,6 +440,7 @@ export default function App() {
             </div>
           )}
           {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
+          {page==="procurement" && <div className="fade-in" key="procurement"><ProcurementPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
           {page==="costs" && (
             costAuthed
               ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
