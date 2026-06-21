@@ -384,6 +384,45 @@ function MpDocUploadModal({person, onClose, onSave, showToast}) {
     </Overlay>
   );
 }
+/* ─── Add / Edit Person Modal ────────────────────────────────────────────── */
+function PersonModal({mode,person,cats,projects,onClose,onSave}) {
+  const [f,setF]=useState(person||{});
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} PERSON`} color={T.green} onClose={onClose}
+      onSave={()=>{if(!f.name){alert("Name required");return;}onSave(f,mode);}}>
+      <FieldRow label="Full Name *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
+      <FieldRow label="Category">
+        <FSelect value={f.category||""} onChange={set("category")} color={T.green}>
+          <option value="">Select…</option>
+          {cats.map(c=><option key={c} value={c}>{c}</option>)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Assigned Project">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
+          <option value="">No project assigned</option>
+          {renderProjectOptions(projects)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="ID No."><FInput value={f.idNo||""} onChange={set("idNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Nationality"><FInput value={f.nationality||""} onChange={set("nationality")} color={T.green}/></FieldRow>
+      <FieldRow label="Designation"><FInput value={f.designation||""} onChange={set("designation")} color={T.green}/></FieldRow>
+      <SectionDivider label="PASSPORT"/>
+      <FieldRow label="Passport No."><FInput value={f.passportNo||""} onChange={set("passportNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Passport Expiry"><FInput type="date" value={f.passportExpiry||""} onChange={set("passportExpiry")} color={T.green}/></FieldRow>
+      <SectionDivider label="VISA"/>
+      <FieldRow label="Visa No."><FInput value={f.visaNo||""} onChange={set("visaNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Visa Expiry"><FInput type="date" value={f.visaExpiry||""} onChange={set("visaExpiry")} color={T.green}/></FieldRow>
+      <SectionDivider label="IQAMA"/>
+      <FieldRow label="Iqama No."><FInput value={f.iqamaNo||""} onChange={set("iqamaNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Iqama Expiry"><FInput type="date" value={f.iqamaExpiry||""} onChange={set("iqamaExpiry")} color={T.green}/></FieldRow>
+      <SectionDivider label="MUQEEM"/>
+      <FieldRow label="Muqeem No."><FInput value={f.muqeemNo||""} onChange={set("muqeemNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Muqeem Expiry"><FInput type="date" value={f.muqeemExpiry||""} onChange={set("muqeemExpiry")} color={T.green}/></FieldRow>
+    </FormModal>
+  );
+}
+
 /* ─── Person Detail view ─────────────────────────────────────────────────── */
 function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast,isAdmin}) {
   const [certModal, setCertModal] = useState(null);
@@ -571,6 +610,23 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast,isA
     </div>
   );
 }
+/* ─── Add / Edit Certification Modal ─────────────────────────────────────── */
+function CertModal({mode,cert,onClose,onSave}) {
+  const [f,setF]=useState(cert||{});
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} CERTIFICATION`} color={T.green} onClose={onClose}
+      onSave={()=>{if(!f.name){alert("Cert name required");return;}onSave(f,mode);}}>
+      <FieldRow label="Certification Name *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
+      <FieldRow label="Certificate No."><FInput value={f.certNo||""} onChange={set("certNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Issued By"><FInput value={f.issuedBy||""} onChange={set("issuedBy")} color={T.green}/></FieldRow>
+      <FieldRow label="Issue Date"><FInput type="date" value={f.issueDate||""} onChange={set("issueDate")} color={T.green}/></FieldRow>
+      <FieldRow label="Expiry Date"><FInput type="date" value={f.expiryDate||""} onChange={set("expiryDate")} color={T.green}/></FieldRow>
+      <FieldRow label="File Link"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
+    </FormModal>
+  );
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
    EQUIPMENT PAGE
 ════════════════════════════════════════════════════════════════════════════ */
