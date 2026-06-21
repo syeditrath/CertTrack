@@ -163,55 +163,6 @@ function WelcomeScreen({onEnter}) {
 ════════════════════════════════════════════════════════════════════════════ */
 
 /* ── pure helpers ── */
-function pctColor(p) {
-  if (p >= 80) return T.green;
-  if (p >= 40) return T.blue;
-  if (p >= 20) return T.gold;
-  return T.red;
-}
-function daysLeft(d) {
-  if (!d) return null;
-  return Math.ceil((new Date(d) - new Date()) / 86400000);
-}
-
-/* Derive live stats for one project from projectDocs invoices */
-function deriveProjectStats(projectName, projectDocs) {
-  const invs  = (projectDocs || []).filter(d => d.subTab === "invoices"     && d.project === projectName);
-  const certs = (projectDocs || []).filter(d => d.subTab === "certificates" && d.project === projectName);
-
-  const totalInvoiced  = invs.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
-  const totalCollected = invs.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0);
-  const totalDue       = invs.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0);
-
-  // Group ONLY invoices/certs that have a jobNo into named job phases
-  const jobMap = {};
-  invs.forEach(d => {
-    const key = d.jobNo ? String(d.jobNo).trim() : null;
-    if (!key) return;
-    if (!jobMap[key]) jobMap[key] = { jobNo: key, invoices: [], certs: [] };
-    jobMap[key].invoices.push(d);
-  });
-  certs.forEach(d => {
-    const key = d.jobNo ? String(d.jobNo).trim() : null;
-    if (!key) return;
-    if (!jobMap[key]) jobMap[key] = { jobNo: key, invoices: [], certs: [] };
-    jobMap[key].certs.push(d);
-  });
-
-  const jobs = Object.values(jobMap).map(j => ({
-    ...j,
-    totalInvoiced:  j.invoices.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0),
-    totalCollected: j.invoices.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0),
-    totalDue:       j.invoices.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0),
-  })).sort((a, b) => a.jobNo.localeCompare(b.jobNo, undefined, { numeric: true }));
-
-  // Invoices & certs with no jobNo shown as a flat list
-  const ungroupedInvs  = invs.filter(d => !d.jobNo);
-  const ungroupedCerts = certs.filter(d => !d.jobNo);
-
-  return { invs, certs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts };
-}
-
 /* ── Daily Report Modal ── */
 /* ── Bulk Daily Report Import (multiple rows from one Excel) ── */
 function BulkDailyReportImport({ projectName, onImport }) {
