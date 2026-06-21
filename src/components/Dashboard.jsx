@@ -4,7 +4,7 @@ import { T } from "../theme.js";
 import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
-import { pName, Btn, Chip, Tag, ABtn, Overlay, PageHeader } from "./UI.jsx";
+import { pName, Btn, Chip, Tag, ABtn, Overlay, PageHeader, InvoiceMetricCard } from "./UI.jsx";
 import { AlertRow } from "./FinancePage.jsx";
 
 function Dashboard({ data, alerts, go, onDeepLink }) {
@@ -259,91 +259,6 @@ function DashboardMiniCard({ title, sub, icon, color, stats, actionLabel, onClic
       </div>
     </div>
   );
-}
-
-function InvoiceMetricCard({ title, amount, sub, color, onClick, miniCards = [] }) {
-  const cardGlow = `0 10px 34px ${String(color || T.blue).replace(')', ',0.16)').replace('rgb', 'rgba')}`;
-  return (
-    <div
-      className="card-hover"
-      style={{
-        background:`linear-gradient(180deg, ${T.card} 0%, ${T.bg} 100%)`,
-        border:`1px solid ${T.border}`,
-        borderRadius:18,
-        padding:"18px 18px 16px",
-        boxShadow:T.shadow,
-        position:"relative",
-        overflow:"hidden",
-      }}
-    >
-      <div
-        style={{
-          position:"absolute",
-          inset:0,
-          pointerEvents:"none",
-          background:`radial-gradient(circle at top right, ${String(color || T.blue).replace(')', ',0.14)').replace('rgb', 'rgba')} 0%, transparent 40%)`,
-        }}
-      />
-
-      <button
-        onClick={onClick}
-        style={{
-          background:"transparent",
-          border:"none",
-          padding:0,
-          margin:0,
-          width:"100%",
-          textAlign:"left",
-          cursor:"pointer",
-          position:"relative",
-          zIndex:1,
-        }}
-      >
-        <div style={{fontSize:12,color:T.textMuted,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>{title}</div>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(28px,4vw,44px)",color,lineHeight:1,textShadow:darkenTextShadow(color)}}>{amount}</div>
-        <div style={{fontSize:13,color:T.textMuted,marginTop:10}}>{sub}</div>
-        <div style={{fontSize:12,color:color,marginTop:10,fontWeight:700}}>Click to view details →</div>
-      </button>
-
-      {miniCards.length > 0 && (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:14,position:"relative",zIndex:1}}>
-          {miniCards.map((card) => {
-            const type = /advance/i.test(card.title) ? "advance" : "income";
-            const theme = getMetricTypeTheme(type);
-            return (
-              <button
-                key={card.title}
-                onClick={card.onClick}
-                style={{
-                  background:`linear-gradient(180deg, ${theme.dim} 0%, ${T.card} 100%)`,
-                  border:`1px solid ${theme.accent}55`,
-                  borderRadius:14,
-                  padding:"12px 12px 10px",
-                  textAlign:"left",
-                  cursor:"pointer",
-                  boxShadow:`inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 18px ${theme.glow}`,
-                  transition:"transform .18s ease, box-shadow .18s ease, border-color .18s ease",
-                }}
-                onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow=`inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px ${theme.glow}`; e.currentTarget.style.borderColor=`${theme.accent}88`;}}
-                onMouseLeave={e=>{e.currentTarget.style.transform='none'; e.currentTarget.style.boxShadow=`inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 18px ${theme.glow}`; e.currentTarget.style.borderColor=`${theme.accent}55`;}}
-              >
-                <div style={{fontSize:10,color:theme.accent,fontWeight:800,letterSpacing:".09em",marginBottom:8}}>{card.title}</div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:theme.accent,lineHeight:1}}>{card.amount}</div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function darkenTextShadow(color) {
-  if (color === T.gold) return '0 2px 16px rgba(251,191,36,0.16)';
-  if (color === T.blue) return '0 2px 16px rgba(56,189,248,0.16)';
-  if (color === T.red) return '0 2px 16px rgba(248,113,113,0.12)';
-  if (color === T.green) return '0 2px 16px rgba(52,211,153,0.12)';
-  return 'none';
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
