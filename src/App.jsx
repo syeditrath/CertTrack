@@ -144,17 +144,14 @@ export default function App() {
   }, [darkMode]);
 
   // ✅ FIX 2: saveAppData useEffect had a misplaced }; that broke the effect body
+  // ✅ FIX 3: hasRealData was a hardcoded checklist that missed costControl, quotations,
+  //    procurement, and checked nonexistent keys (invoices/workOrders) — silently skipping
+  //    the Cloudflare save whenever a user's only activity was in one of the missed sections.
+  //    Now it generically checks every array-valued key in `data` so new sections are
+  //    automatically covered without needing to remember to update this list.
   useEffect(() => {
     if (loadingData) return;
-    const hasRealData = (data.manpower?.length > 0)
-      || (data.equipment?.length > 0)
-      || (data.scorpionDocs?.length > 0)
-      || (data.projectDocs?.length > 0)
-      || (data.invoices?.length > 0)
-      || (data.workOrders?.length > 0)
-      || (data.costSheets?.length > 0)
-      || (data.rigs?.length > 0)
-      || (data.projectAnalysis?.some(p => p.poValue || p.dailyReports?.length > 0));
+    const hasRealData = Object.values(data).some(v => Array.isArray(v) && v.length > 0);
     if (!hasRealData) return;
 
     const t = setTimeout(() => {
