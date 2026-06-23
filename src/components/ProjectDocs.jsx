@@ -41,6 +41,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   const [selectedRig, setSelectedRig] = useState(null);
   const [collapsedRigs, setCollapsedRigs] = useState({});
   const toggleRig = id => setCollapsedRigs(p => ({...p, [id]: !p[id]}));
+  const [collapsedCrossings, setCollapsedCrossings] = useState({});
+  const toggleCrossing = id => setCollapsedCrossings(p => ({...p, [id]: !p[id]}));
   const [subTab,  setSubTab]  = useState("certificates");
   const [selProj, setSelProj] = useState(null);
   const [modal,   setModal]   = useState(null);
@@ -169,6 +171,31 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   const delRig = id => {
     setData(prev=>({...prev, rigs:(prev.rigs||[]).filter(r=>r.id!==id)}));
     showToast("Rig removed","del");
+  };
+
+  const crossings = data.crossings || [];
+
+  const addCrossing = (project, rig, name) => {
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    if (crossings.some(c=>c.project===project && c.rig===rig && c.name===trimmed)) {
+      showToast("Crossing already exists","del");
+      return;
+    }
+    setData(prev=>({...prev, crossings:[...(prev.crossings||[]), {id:uid(), project, rig, name:trimmed, status:"Active"}]}));
+    showToast("Crossing added ✓");
+  };
+
+  const toggleCrossingStatus = (id) => {
+    setData(prev=>({
+      ...prev,
+      crossings:(prev.crossings||[]).map(c=>c.id===id?{...c,status:c.status==="Completed"?"Active":"Completed"}:c),
+    }));
+  };
+
+  const delCrossing = id => {
+    setData(prev=>({...prev, crossings:(prev.crossings||[]).filter(c=>c.id!==id)}));
+    showToast("Crossing removed","del");
   };
 
   // ── Derived data (no hooks below this line) ───────────────────────────
@@ -572,11 +599,24 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
   // ── Per-project view ──
   if (selProj) {
-    const rigSections = projRigs.map((rig, ri) => ({
-      rig,
-      color: rigColors[ri % rigColors.length],
-      reports: projDRs.filter(d=>d.rig===rig.name).sort((a,b)=>(b.date||"").localeCompare(a.date||"")),
-    }));
+    const rigSections = projRigs.map((rig, ri) => {
+      const rigReports = projDRs.filter(d=>d.rig===rig.name);
+      const rigCrossings = crossings.filter(c=>c.project===selProj && c.rig===rig.name);
+      const crossingSections = rigCrossings.map(c => ({
+        crossing: c,
+        reports: rigReports.filter(d=>d.crossing===c.name).sort((a,b)=>(b.date||"").localeCompare(a.date||"")),
+      }));
+      const noCrossingReports = rigReports
+        .filter(d=>!d.crossing || !rigCrossings.some(c=>c.name===d.crossing))
+        .sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+      return {
+        rig,
+        color: rigColors[ri % rigColors.length],
+        reports: rigReports.sort((a,b)=>(b.date||"").localeCompare(a.date||"")),
+        crossingSections,
+        noCrossingReports,
+      };
+    });
     const unassigned = projDRs
       .filter(d=>!d.rig||!projRigs.some(r=>r.name===d.rig))
       .sort((a,b)=>(b.date||"").localeCompare(a.date||""));
@@ -610,8 +650,10 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           </div>
         ) : (
           <div style={{display:"grid",gap:16}}>
-            {rigSections.map(({rig, color, reports})=>{
+            {rigSections.map(({rig, color, reports, crossingSections, noCrossingReports})=>{
               const isCollapsed = collapsedRigs[rig.id];
+              const activeCrossings = crossingSections.filter(cs=>cs.crossing.status!=="Completed");
+              const completedCrossings = crossingSections.filter(cs=>cs.crossing.status==="Completed");
               return (
                 <div key={rig.id} style={{background:T.card,border:`2px solid ${color}44`,borderRadius:16,overflow:"hidden"}}>
                   {/* Rig header */}
@@ -625,7 +667,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                       <div>
                         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color}}>{rig.name}</div>
                         <div style={{fontSize:12,color:T.textMuted,marginTop:1}}>
-                          {isCollapsed?`${reports.length} report${reports.length!==1?"s":""} — click to expand`:`${reports.length} report${reports.length!==1?"s":""}`}
+                          {isCollapsed?`${reports.length} report${reports.length!==1?"s":""} · ${activeCrossings.length} active crossing${activeCrossings.length!==1?"s":""} — click to expand`:`${reports.length} report${reports.length!==1?"s":""} · ${activeCrossings.length} active crossing${activeCrossings.length!==1?"s":""}`}
                         </div>
                       </div>
                     </div>
@@ -642,13 +684,117 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                   </div>
                   {/* Collapsible body */}
                   {!isCollapsed&&(
-                    <div style={{padding:"14px 16px",display:"grid",gap:8}}>
-                      {reports.length===0
-                        ?<div style={{textAlign:"center",padding:"20px 0",fontSize:13,color:T.textMuted}}>
-                          No reports yet — <button onClick={()=>setModal({mode:"add",doc:{project:selProj,rig:rig.name}})} style={{background:"none",border:"none",color,fontWeight:700,cursor:"pointer",padding:0,fontSize:13}}>add the first one</button>
-                         </div>
-                        :reports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)
-                      }
+                    <div style={{padding:"14px 16px",display:"grid",gap:12}}>
+                      {activeCrossings.length===0 && completedCrossings.length===0 && noCrossingReports.length===0 && (
+                        <div style={{textAlign:"center",padding:"20px 0",fontSize:13,color:T.textMuted}}>
+                          No crossings yet — <button onClick={()=>setModal({mode:"add",doc:{project:selProj,rig:rig.name}})} style={{background:"none",border:"none",color,fontWeight:700,cursor:"pointer",padding:0,fontSize:13}}>add a report to create one</button>
+                        </div>
+                      )}
+
+                      {/* Active crossings */}
+                      {activeCrossings.map(({crossing, reports:crReports})=>{
+                        const isCrCollapsed = collapsedCrossings[crossing.id];
+                        return (
+                          <div key={crossing.id} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                            <div
+                              onClick={()=>toggleCrossing(crossing.id)}
+                              style={{padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",cursor:"pointer",userSelect:"none"}}
+                            >
+                              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                <span style={{fontSize:11,color:T.textMuted,transition:"transform 0.2s",display:"inline-block",transform:isCrCollapsed?"rotate(-90deg)":"rotate(0deg)"}}>▼</span>
+                                <span style={{fontSize:14}}>📍</span>
+                                <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.text}}>{crossing.name}</span>
+                                <span style={{fontSize:11,color:T.textMuted}}>({crReports.length} report{crReports.length!==1?"s":""})</span>
+                              </div>
+                              <div style={{display:"flex",gap:6,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                                {crReports.length>0&&(
+                                  <button onClick={()=>exportDRs(crReports,`Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_${rig.name.replace(/\s+/g,"_")}_${crossing.name.replace(/\s+/g,"_")}`)}
+                                    style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                                    ⬇ Export
+                                  </button>
+                                )}
+                                <button onClick={()=>toggleCrossingStatus(crossing.id)}
+                                  style={{background:T.greenDim,border:`1px solid ${T.green}44`,color:T.green,borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                                  ✓ Mark Completed
+                                </button>
+                                {isAdmin&&(
+                                  <button onClick={()=>{if(window.confirm("Delete this crossing? Reports will remain but become unassigned."))delCrossing(crossing.id);}}
+                                    style={{background:T.redDim,border:`1px solid ${T.red}44`,color:T.red,borderRadius:7,padding:"5px 8px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            {!isCrCollapsed&&(
+                              <div style={{padding:"0 14px 12px",display:"grid",gap:8}}>
+                                {crReports.length===0
+                                  ?<div style={{textAlign:"center",padding:"12px 0",fontSize:12,color:T.textMuted}}>No reports yet for this crossing</div>
+                                  :crReports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)
+                                }
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Completed crossings, collapsed by default styling */}
+                      {completedCrossings.length>0&&(
+                        <div style={{marginTop:4}}>
+                          <div style={{fontSize:11,color:T.textMuted,fontWeight:700,marginBottom:8,letterSpacing:".05em"}}>✓ COMPLETED CROSSINGS</div>
+                          <div style={{display:"grid",gap:8}}>
+                            {completedCrossings.map(({crossing, reports:crReports})=>{
+                              return (
+                                <div key={crossing.id} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,overflow:"hidden",opacity:0.75}}>
+                                  <div
+                                    onClick={()=>toggleCrossing(crossing.id)}
+                                    style={{padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",cursor:"pointer",userSelect:"none"}}
+                                  >
+                                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                      <span style={{fontSize:11,color:T.textMuted,transition:"transform 0.2s",display:"inline-block",transform:collapsedCrossings[crossing.id]===false?"rotate(0deg)":"rotate(-90deg)"}}>▼</span>
+                                      <span style={{fontSize:14}}>✅</span>
+                                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.textMuted,textDecoration:"line-through"}}>{crossing.name}</span>
+                                      <span style={{fontSize:11,color:T.textMuted}}>({crReports.length} report{crReports.length!==1?"s":""})</span>
+                                    </div>
+                                    <div style={{display:"flex",gap:6,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
+                                      {crReports.length>0&&(
+                                        <button onClick={()=>exportDRs(crReports,`Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_${rig.name.replace(/\s+/g,"_")}_${crossing.name.replace(/\s+/g,"_")}`)}
+                                          style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                                          ⬇ Export
+                                        </button>
+                                      )}
+                                      <button onClick={()=>toggleCrossingStatus(crossing.id)}
+                                        style={{background:T.goldDim,border:`1px solid ${T.gold}44`,color:T.gold,borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                                        ↺ Reopen
+                                      </button>
+                                      {isAdmin&&(
+                                        <button onClick={()=>{if(window.confirm("Delete this crossing? Reports will remain but become unassigned."))delCrossing(crossing.id);}}
+                                          style={{background:T.redDim,border:`1px solid ${T.red}44`,color:T.red,borderRadius:7,padding:"5px 8px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                                          ✕
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {collapsedCrossings[crossing.id]===false&&(
+                                    <div style={{padding:"0 14px 12px",display:"grid",gap:8}}>
+                                      {crReports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reports under this rig with no crossing assigned (legacy / not yet tagged) */}
+                      {noCrossingReports.length>0&&(
+                        <div style={{marginTop:4}}>
+                          <div style={{fontSize:11,color:T.textMuted,fontWeight:700,marginBottom:8,letterSpacing:".05em"}}>⚠ NO CROSSING ASSIGNED</div>
+                          <div style={{display:"grid",gap:8}}>
+                            {noCrossingReports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -772,7 +918,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
       {modal && subTab==="certificates"  && <CertificateModal  mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
-      {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} rigs={data.rigs||[]} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} rigs={data.rigs||[]} crossings={crossings} onAddCrossing={addCrossing} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,...rows.map(r=>({...r,id:uid(),subTab}))]})); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
       {multiPdfModal && (
   <MultiPdfCertUpload
@@ -1283,6 +1429,7 @@ function CertificateModal({mode,doc,projects,onClose,onSave}) {
 const DR_COL_MAP = {
   "DATE":"date","REPORT DATE":"date","DAY":"date",
   "WEATHER":"weather","WEATHER CONDITIONS":"weather","CONDITIONS":"weather",
+  "CROSSING":"crossing","CROSSING NO":"crossing","CROSSING NO.":"crossing","CROSSING NAME":"crossing","CROSSING/KP":"crossing","KP":"crossing","KP NO":"crossing","CROSSING LOCATION":"crossing",
   "ACTIVITIES":"activities","WORK DONE":"activities","WORK":"activities","ACTIVITY":"activities","DESCRIPTION":"activities","WORK DESCRIPTION":"activities",
   "MANPOWER":"manpower","MANPOWER COUNT":"manpower","WORKERS":"manpower","NO. OF WORKERS":"manpower","HEADCOUNT":"manpower","NO OF WORKERS":"manpower",
   "EQUIPMENT":"equipment","EQUIPMENT USED":"equipment","PLANT":"equipment","PLANT & EQUIPMENT":"equipment","MACHINERY":"equipment",
@@ -1383,6 +1530,7 @@ function parseScorpionDprSheet(wb) {
     dprSource: "scorpion_template",
     project:        get("project_name",  "C8"),
     rig:            rd("G6"),
+    crossing:       erp["crossing"] || erp["crossing_no"] || erp["crossing_name"] || "",
     date:           date,
     profile:        get("profile",       "C13"),
     activity:       get("activity",      "H13"),
@@ -1430,10 +1578,11 @@ function parseDailyReportExcel(arrayBuffer) {
     .filter(rec => Object.keys(rec).filter(k => k !== "id").length > 0);
 }
 
-function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClose,onSave}) {
-  const [f,setF] = useState({ project: defaultProject || "", rig: "", ...(doc || {}) });
+function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,crossings,onAddCrossing,onClose,onSave}) {
+  const [f,setF] = useState({ project: defaultProject || "", rig: "", crossing: "", ...(doc || {}) });
   const [parsing,setParsing] = useState(false);
   const [msg,setMsg] = useState("");
+  const [newCrossingName,setNewCrossingName] = useState("");
   const excelRef = useRef();
 
   const handleExcel = async (file) => {
@@ -1512,6 +1661,10 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClo
           alert("Please select a rig for this project");
           return;
         }
+        if (f.rig && !f.crossing) {
+          alert("Please select or add a crossing for this rig");
+          return;
+        }
         if (!f.extractedFields) {
           alert("Please upload the Excel daily report first");
           return;
@@ -1531,10 +1684,49 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClo
         if (!projRigs.length) return null;
         return (
           <FieldRow label="Rig / Spread *">
-            <FSelect value={f.rig||""} onChange={v=>setF(p=>({...p,rig:v}))} color={T.gold}>
+            <FSelect value={f.rig||""} onChange={v=>setF(p=>({...p,rig:v,crossing:""}))} color={T.gold}>
               <option value="">Select rig…</option>
               {projRigs.map(r=><option key={r.id} value={r.name}>{r.name}</option>)}
             </FSelect>
+          </FieldRow>
+        );
+      })()}
+
+      {f.project && f.rig && (() => {
+        const rigCrossings = (crossings||[]).filter(c=>c.project===f.project && c.rig===f.rig && c.status!=="Completed");
+        return (
+          <FieldRow label="Crossing *">
+            <FSelect value={f.crossing||""} onChange={v=>setF(p=>({...p,crossing:v}))} color={T.gold}>
+              <option value="">Select crossing…</option>
+              {rigCrossings.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
+            </FSelect>
+            <div style={{display:"flex",gap:8,marginTop:8}}>
+              <input
+                value={newCrossingName}
+                onChange={e=>setNewCrossingName(e.target.value)}
+                onKeyDown={e=>{
+                  if(e.key==="Enter"){
+                    e.preventDefault();
+                    const name=newCrossingName.trim();
+                    if(!name) return;
+                    onAddCrossing(f.project, f.rig, name);
+                    setF(p=>({...p,crossing:name}));
+                    setNewCrossingName("");
+                  }
+                }}
+                placeholder="New crossing name…"
+                style={{flex:1,background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.text,outline:"none"}}
+              />
+              <button type="button" onClick={()=>{
+                const name=newCrossingName.trim();
+                if(!name) return;
+                onAddCrossing(f.project, f.rig, name);
+                setF(p=>({...p,crossing:name}));
+                setNewCrossingName("");
+              }} style={{background:T.gold,border:"none",color:"#000",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                + Add Crossing
+              </button>
+            </div>
           </FieldRow>
         );
       })()}
