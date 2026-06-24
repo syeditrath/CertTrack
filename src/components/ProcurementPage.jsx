@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useRef, useMemo } from "react";
 import { T } from "../theme.js";
 import { uid, fmtDate } from "../utils.js";
 import { getStatus, ExportBtn } from "../constants.js";
@@ -46,10 +46,20 @@ function DoneToggle({ value, onChange, label }) {
 /* ─── Docs cell: clickable chips that toggle which docs are attached ────── */
 function DocsCell({ docsAttached, onToggle }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState(null);
+  const btnRef = useRef(null);
   const active = docsAttached || [];
+
+  const handleOpen = () => {
+    if (open) { setOpen(false); return; }
+    const rect = btnRef.current.getBoundingClientRect();
+    setCoords({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 220) });
+    setOpen(true);
+  };
+
   return (
     <div style={{position:"relative"}}>
-      <button onClick={()=>setOpen(o=>!o)}
+      <button ref={btnRef} onClick={handleOpen}
         style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:600,cursor:"pointer",width:"100%",textAlign:"left"}}>
         {active.length === 0 ? "+ Add docs…" : `${active.length} doc${active.length!==1?"s":""} ▾`}
       </button>
@@ -58,10 +68,10 @@ function DocsCell({ docsAttached, onToggle }) {
           {active.map(d=><Chip key={d}>{d}</Chip>)}
         </div>
       )}
-      {open && (
+      {open && coords && (
         <>
-          <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:10}}/>
-          <div style={{position:"absolute",top:"100%",left:0,marginTop:4,background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:10,zIndex:20,boxShadow:"0 10px 30px rgba(0,0,0,0.3)",minWidth:200,display:"flex",flexWrap:"wrap",gap:6}}>
+          <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:1000}}/>
+          <div style={{position:"fixed",top:coords.top,left:coords.left,width:coords.width,background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:10,zIndex:1001,boxShadow:"0 10px 30px rgba(0,0,0,0.4)",display:"flex",flexWrap:"wrap",gap:6}}>
             {PROC_DOC_OPTIONS.map(doc=>{
               const isActive = active.includes(doc);
               return (
