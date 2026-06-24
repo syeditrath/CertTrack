@@ -1,12 +1,10 @@
-import { useState, useEffect, useRef, Fragment, useMemo } from "react";
-import * as XLSX from "xlsx-js-style";
+import { useState, useMemo } from "react";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
-import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
-import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
-import { Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, PageHeader, Empty } from "./UI.jsx";
+import { uid, fmtDate } from "../utils.js";
+import { getStatus, ExportBtn } from "../constants.js";
+import { Btn, Chip, ABtn, PageHeader, Empty } from "./UI.jsx";
 
-/* ─── Procurement document options (multi-select chips, no file upload) ──── */
+/* ─── Procurement document chip options ──────────────────────────────────── */
 const PROC_DOC_OPTIONS = [
   "Quotation","Comparative Statement","Invoice","Delivery Note","Packing List","Other",
 ];
@@ -20,8 +18,8 @@ function ReleaseToggle({ value, onChange }) {
         background: released ? T.greenDim : T.redDim,
         border: `1px solid ${released ? T.green : T.red}55`,
         color: released ? T.green : T.red,
-        borderRadius: 999, padding: "4px 12px", fontSize: 11, fontWeight: 700,
-        cursor: "pointer", whiteSpace: "nowrap", transition: "all .15s",
+        borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700,
+        cursor: "pointer", whiteSpace: "nowrap", transition: "all .15s", width: "100%",
       }}>
       {released ? "✓ Released" : "○ Unreleased"}
     </button>
@@ -37,23 +35,66 @@ function DoneToggle({ value, onChange, label }) {
         background: done ? T.greenDim : T.goldDim,
         border: `1px solid ${done ? T.green : T.gold}55`,
         color: done ? T.green : T.gold,
-        borderRadius: 999, padding: "4px 12px", fontSize: 11, fontWeight: 700,
-        cursor: "pointer", whiteSpace: "nowrap", transition: "all .15s",
+        borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700,
+        cursor: "pointer", whiteSpace: "nowrap", transition: "all .15s", width: "100%",
       }}>
-      {done ? `✓ ${label} Done` : `○ ${label} Pending`}
+      {done ? `✓ ${label}` : `○ ${label}`}
     </button>
   );
 }
 
+/* ─── Docs cell: clickable chips that toggle which docs are attached ────── */
+function DocsCell({ docsAttached, onToggle }) {
+  const [open, setOpen] = useState(false);
+  const active = docsAttached || [];
+  return (
+    <div style={{position:"relative"}}>
+      <button onClick={()=>setOpen(o=>!o)}
+        style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:600,cursor:"pointer",width:"100%",textAlign:"left"}}>
+        {active.length === 0 ? "+ Add docs…" : `${active.length} doc${active.length!==1?"s":""} ▾`}
+      </button>
+      {active.length > 0 && (
+        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
+          {active.map(d=><Chip key={d}>{d}</Chip>)}
+        </div>
+      )}
+      {open && (
+        <>
+          <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:10}}/>
+          <div style={{position:"absolute",top:"100%",left:0,marginTop:4,background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:10,zIndex:20,boxShadow:"0 10px 30px rgba(0,0,0,0.3)",minWidth:200,display:"flex",flexWrap:"wrap",gap:6}}>
+            {PROC_DOC_OPTIONS.map(doc=>{
+              const isActive = active.includes(doc);
+              return (
+                <button key={doc} type="button" onClick={()=>onToggle(doc)}
+                  style={{background:isActive?T.tealDim:T.bg,border:`1px solid ${isActive?T.teal:T.border}`,color:isActive?T.teal:T.textSub,borderRadius:999,padding:"5px 11px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
+                  {isActive?"✓ ":""}{doc}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ─── Editable text cell ─────────────────────────────────────────────────── */
+function EditableCell({ value, onChange, placeholder }) {
+  return (
+    <input value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+      style={{width:"100%",background:"transparent",border:"none",color:T.text,fontSize:13,fontWeight:600,outline:"none",padding:"4px 2px"}}/>
+  );
+}
+
 function ProcurementPage({data,setData,showToast,isAdmin}) {
-  const [modal, setModal] = useState(null);
   const [search, setSearch] = useState("");
   const [fStatus, setFStatus] = useState("");
+  const [newRow, setNewRow] = useState(null); // draft row being added, or null
 
   const rows = data.procurement || [];
 
   const visible = rows.filter(r=>{
-    const matchesSearch = !search || [r.itemDesc,r.prNo,r.poNo,r.requestedBy].some(v=>(v||"").toLowerCase().includes(search.toLowerCase()));
+    const matchesSearch = !search || [r.prNo,r.poNo].some(v=>(v||"").toLowerCase().includes(search.toLowerCase()));
     const matchesStatus = !fStatus
       || (fStatus==="pending_pr"   && r.prStatus!=="Released")
       || (fStatus==="pending_po"   && r.prStatus==="Released" && r.poStatus!=="Released")
@@ -73,28 +114,6 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
     return { total, prPending, poPending, grnPending, sesPending, complete };
   }, [rows]);
 
-  const saveRow = (row, mode) => {
-    setModal(null);
-    setTimeout(()=>{
-      setData(prev=>{
-        const list=[...(prev.procurement||[])];
-        if(mode==="add"){
-          list.push({...row,id:uid(),date:new Date().toISOString().slice(0,10)});
-        } else {
-          const i=list.findIndex(r=>r.id===row.id);
-          if(i>=0)list[i]={...list[i],...row};
-        }
-        return{...prev,procurement:list};
-      });
-      showToast(mode==="add"?"Request added":"Updated");
-    },0);
-  };
-
-  const delRow = id => {
-    setData(prev=>({...prev,procurement:(prev.procurement||[]).filter(r=>r.id!==id)}));
-    showToast("Deleted","del");
-  };
-
   const patchRow = (id, patch) => {
     setData(prev=>({
       ...prev,
@@ -102,10 +121,37 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
     }));
   };
 
+  const toggleDoc = (id, doc, currentDocs) => {
+    const cur = currentDocs || [];
+    const next = cur.includes(doc) ? cur.filter(d=>d!==doc) : [...cur,doc];
+    patchRow(id, { docsAttached: next });
+  };
+
+  const delRow = id => {
+    setData(prev=>({...prev,procurement:(prev.procurement||[]).filter(r=>r.id!==id)}));
+    showToast("Deleted","del");
+  };
+
+  const startNewRow = () => {
+    setNewRow({ prNo:"", prStatus:"Unreleased", poNo:"", poStatus:"Unreleased", docsAttached:[], grnDone:false, sesDone:false });
+  };
+
+  const commitNewRow = () => {
+    if (!newRow.prNo && !newRow.poNo) { showToast("Enter at least a PR or PO number","del"); return; }
+    setData(prev=>({
+      ...prev,
+      procurement:[...(prev.procurement||[]), {...newRow, id:uid(), date:new Date().toISOString().slice(0,10)}],
+    }));
+    setNewRow(null);
+    showToast("Request added");
+  };
+
+  const colWidths = "120px 110px 120px 110px 200px 130px 130px 40px";
+
   return (
     <div style={{maxWidth:"min(1500px,96vw)",margin:"0 auto",width:"100%"}}>
       <PageHeader title="PROCUREMENT WORKFLOW" sub="PR → PO → Documents → GRN → SES tracking" color={T.teal}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search PR / PO / item / requester…"
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search PR / PO…"
           style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.text,outline:"none",minWidth:220}}/>
         <select value={fStatus} onChange={e=>setFStatus(e.target.value)}
           style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:T.textSub,outline:"none",colorScheme:"light"}}>
@@ -117,12 +163,11 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
           <option value="complete">Fully Complete</option>
         </select>
         <ExportBtn data={rows.map(r=>({
-          "Item / Description":r.itemDesc, "PR No":r.prNo, "PR Status":r.prStatus||"Unreleased",
+          "PR No":r.prNo, "PR Status":r.prStatus||"Unreleased",
           "PO No":r.poNo, "PO Status":r.poStatus||"Unreleased", "Documents":(r.docsAttached||[]).join(", "),
-          "GRN":r.grnDone?"Done":"Not Done", "SES":r.sesDone?"Done":"Not Done",
-          "Requested By":r.requestedBy, "Date":r.date, "Notes":r.notes,
+          "GRN":r.grnDone?"Done":"Not Done", "SES":r.sesDone?"Done":"Not Done", "Date":r.date,
         }))} filename="Procurement_Tracker"/>
-        <Btn color={T.teal} solid onClick={()=>setModal({mode:"add"})}>+ New Request</Btn>
+        <Btn color={T.teal} solid onClick={startNewRow}>+ New Request</Btn>
       </PageHeader>
 
       {/* Stats row */}
@@ -142,138 +187,49 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
         ))}
       </div>
 
-      {visible.length===0
-        ? <Empty icon="📋" label="No procurement requests found" sub="Add your first PR to start tracking" color={T.teal} onAdd={()=>setModal({mode:"add"})}/>
-        : <div style={{display:"grid",gap:10}}>
+      {visible.length===0 && !newRow
+        ? <Empty icon="📋" label="No procurement requests found" sub="Add your first PR to start tracking" color={T.teal} onAdd={startNewRow}/>
+        : <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
+          {/* Header row */}
+          <div style={{display:"grid",gridTemplateColumns:colWidths,gap:10,padding:"10px 14px",background:T.bg,borderBottom:`1px solid ${T.border}`,fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:".04em"}}>
+            <div>PR NO.</div><div>PR STATUS</div><div>PO NO.</div><div>PO STATUS</div><div>DOCUMENTS</div><div>GRN</div><div>SES</div><div></div>
+          </div>
+
+          {/* Draft new row */}
+          {newRow && (
+            <div style={{display:"grid",gridTemplateColumns:colWidths,gap:10,padding:"8px 14px",alignItems:"center",borderBottom:`1px solid ${T.border}`,background:T.tealDim}}>
+              <EditableCell value={newRow.prNo} onChange={v=>setNewRow(p=>({...p,prNo:v}))} placeholder="PR-0001"/>
+              <ReleaseToggle value={newRow.prStatus} onChange={v=>setNewRow(p=>({...p,prStatus:v}))}/>
+              <EditableCell value={newRow.poNo} onChange={v=>setNewRow(p=>({...p,poNo:v}))} placeholder="PO-0001"/>
+              <ReleaseToggle value={newRow.poStatus} onChange={v=>setNewRow(p=>({...p,poStatus:v}))}/>
+              <DocsCell docsAttached={newRow.docsAttached} onToggle={doc=>setNewRow(p=>({...p,docsAttached:(p.docsAttached||[]).includes(doc)?p.docsAttached.filter(d=>d!==doc):[...(p.docsAttached||[]),doc]}))}/>
+              <DoneToggle value={newRow.grnDone} onChange={v=>setNewRow(p=>({...p,grnDone:v}))} label="GRN"/>
+              <DoneToggle value={newRow.sesDone} onChange={v=>setNewRow(p=>({...p,sesDone:v}))} label="SES"/>
+              <div style={{display:"flex",gap:4}}>
+                <ABtn color={T.green} onClick={commitNewRow}>✓</ABtn>
+                <ABtn color={T.red} onClick={()=>setNewRow(null)}>✕</ABtn>
+              </div>
+            </div>
+          )}
+
+          {/* Data rows */}
           {visible.map((r,i)=>(
-            <div key={r.id} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 18px",animationDelay:`${i*.03}s`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:10,flexWrap:"wrap"}}>
-                <div style={{flex:1,minWidth:220}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{r.itemDesc||"Untitled Request"}</div>
-                  <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>
-                    {r.requestedBy&&<>Requested by {r.requestedBy} · </>}{fmtDate(r.date)}
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:6,flexShrink:0}}>
-                  <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",row:r})}>✎</ABtn>
-                  {isAdmin && <ABtn color={T.red} onClick={()=>{if(window.confirm("Delete this request?"))delRow(r.id);}}>✕</ABtn>}
-                </div>
+            <div key={r.id} className="fade-up" style={{display:"grid",gridTemplateColumns:colWidths,gap:10,padding:"8px 14px",alignItems:"center",borderBottom:i!==visible.length-1?`1px solid ${T.border}`:"none",animationDelay:`${i*.02}s`}}>
+              <EditableCell value={r.prNo} onChange={v=>patchRow(r.id,{prNo:v})} placeholder="—"/>
+              <ReleaseToggle value={r.prStatus} onChange={v=>patchRow(r.id,{prStatus:v})}/>
+              <EditableCell value={r.poNo} onChange={v=>patchRow(r.id,{poNo:v})} placeholder="—"/>
+              <ReleaseToggle value={r.poStatus} onChange={v=>patchRow(r.id,{poStatus:v})}/>
+              <DocsCell docsAttached={r.docsAttached} onToggle={doc=>toggleDoc(r.id,doc,r.docsAttached)}/>
+              <DoneToggle value={r.grnDone} onChange={v=>patchRow(r.id,{grnDone:v})} label="GRN"/>
+              <DoneToggle value={r.sesDone} onChange={v=>patchRow(r.id,{sesDone:v})} label="SES"/>
+              <div>
+                {isAdmin && <ABtn color={T.red} onClick={()=>{if(window.confirm("Delete this request?"))delRow(r.id);}}>✕</ABtn>}
               </div>
-
-              {/* Workflow stage row */}
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:12}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,background:T.bg,borderRadius:8,padding:"6px 10px"}}>
-                  <span style={{color:T.textMuted,fontWeight:600}}>PR:</span>
-                  <span style={{color:T.text,fontWeight:700}}>{r.prNo||"—"}</span>
-                  <ReleaseToggle value={r.prStatus} onChange={v=>patchRow(r.id,{prStatus:v})}/>
-                </div>
-
-                <span style={{color:T.border}}>→</span>
-
-                <div style={{display:"flex",alignItems:"center",gap:6,background:T.bg,borderRadius:8,padding:"6px 10px"}}>
-                  <span style={{color:T.textMuted,fontWeight:600}}>PO:</span>
-                  <span style={{color:T.text,fontWeight:700}}>{r.poNo||"—"}</span>
-                  <ReleaseToggle value={r.poStatus} onChange={v=>patchRow(r.id,{poStatus:v})}/>
-                </div>
-
-                <span style={{color:T.border}}>→</span>
-
-                <div style={{display:"flex",alignItems:"center",gap:6,background:T.bg,borderRadius:8,padding:"6px 10px"}}>
-                  <DoneToggle value={r.grnDone} onChange={v=>patchRow(r.id,{grnDone:v})} label="GRN"/>
-                </div>
-
-                <span style={{color:T.border}}>→</span>
-
-                <div style={{display:"flex",alignItems:"center",gap:6,background:T.bg,borderRadius:8,padding:"6px 10px"}}>
-                  <DoneToggle value={r.sesDone} onChange={v=>patchRow(r.id,{sesDone:v})} label="SES"/>
-                </div>
-              </div>
-
-              {/* Documents attached */}
-              {(r.docsAttached||[]).length>0 && (
-                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>
-                  <span style={{fontSize:11,color:T.textMuted,fontWeight:600,marginRight:2}}>Docs:</span>
-                  {r.docsAttached.map(d=><Chip key={d}>{d}</Chip>)}
-                </div>
-              )}
-
-              {r.notes && <div style={{fontSize:12,color:T.textSub,marginTop:8,fontStyle:"italic"}}>{r.notes}</div>}
             </div>
           ))}
         </div>
       }
-
-      {modal && <ProcurementModal mode={modal.mode} row={modal.row} onClose={()=>setModal(null)} onSave={saveRow}/>}
     </div>
-  );
-}
-
-/* ─── Add / Edit Procurement Request Modal ──────────────────────────────── */
-function ProcurementModal({mode,row,onClose,onSave}) {
-  const [f,setF]=useState(row||{prStatus:"Unreleased",poStatus:"Unreleased",grnDone:false,sesDone:false,docsAttached:[]});
-  const set=k=>v=>setF(p=>({...p,[k]:v}));
-
-  const toggleDoc = (doc) => {
-    setF(p=>{
-      const cur = p.docsAttached||[];
-      return { ...p, docsAttached: cur.includes(doc) ? cur.filter(d=>d!==doc) : [...cur,doc] };
-    });
-  };
-
-  return (
-    <FormModal title={`${mode==="add"?"NEW":"EDIT"} PROCUREMENT REQUEST`} color={T.teal} onClose={onClose}
-      onSave={()=>{if(!f.itemDesc){alert("Item / description required");return;}onSave(f,mode);}}>
-      <FieldRow label="Item / Description *"><FInput value={f.itemDesc||""} onChange={set("itemDesc")} color={T.teal}/></FieldRow>
-      <FieldRow label="Requested By"><FInput value={f.requestedBy||""} onChange={set("requestedBy")} color={T.teal}/></FieldRow>
-
-      <SectionDivider label="PURCHASE REQUEST (PR)"/>
-      <FieldRow label="PR Number"><FInput value={f.prNo||""} onChange={set("prNo")} color={T.teal}/></FieldRow>
-      <FieldRow label="PR Status">
-        <FSelect value={f.prStatus||"Unreleased"} onChange={set("prStatus")} color={T.teal}>
-          <option value="Unreleased">Unreleased</option>
-          <option value="Released">Released</option>
-        </FSelect>
-      </FieldRow>
-
-      <SectionDivider label="PURCHASE ORDER (PO)"/>
-      <FieldRow label="PO Number"><FInput value={f.poNo||""} onChange={set("poNo")} color={T.teal}/></FieldRow>
-      <FieldRow label="PO Status">
-        <FSelect value={f.poStatus||"Unreleased"} onChange={set("poStatus")} color={T.teal}>
-          <option value="Unreleased">Unreleased</option>
-          <option value="Released">Released</option>
-        </FSelect>
-      </FieldRow>
-
-      <SectionDivider label="DOCUMENTS ATTACHED"/>
-      <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
-        {PROC_DOC_OPTIONS.map(doc=>{
-          const active=(f.docsAttached||[]).includes(doc);
-          return (
-            <button key={doc} type="button" onClick={()=>toggleDoc(doc)}
-              style={{background:active?T.tealDim:T.bg,border:`1px solid ${active?T.teal:T.border}`,color:active?T.teal:T.textSub,borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-              {active?"✓ ":""}{doc}
-            </button>
-          );
-        })}
-      </div>
-
-      <SectionDivider label="RECEIPT & SERVICE"/>
-      <FieldRow label="GRN (Goods Received Note)">
-        <FSelect value={f.grnDone?"Done":"Not Done"} onChange={v=>set("grnDone")(v==="Done")} color={T.teal}>
-          <option value="Not Done">Not Done</option>
-          <option value="Done">Done</option>
-        </FSelect>
-      </FieldRow>
-      <FieldRow label="SES (Service Entry Sheet)">
-        <FSelect value={f.sesDone?"Done":"Not Done"} onChange={v=>set("sesDone")(v==="Done")} color={T.teal}>
-          <option value="Not Done">Not Done</option>
-          <option value="Done">Done</option>
-        </FSelect>
-      </FieldRow>
-
-      <SectionDivider label="NOTES"/>
-      <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.teal}/></FieldRow>
-    </FormModal>
   );
 }
 
