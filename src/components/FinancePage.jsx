@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, pctColor } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, pctColor, live } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, PageHeader, Empty, InvoiceMetricCard, InvoiceCard, InvoiceModal, MultiPdfInvoiceUpload, BulkInvoiceUpload, BulkWorkOrderUpload, WorkOrderModal } from "./UI.jsx";
@@ -154,7 +154,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
   const [selectedInvoiceMonth, setSelectedInvoiceMonth] = useState("All");
 
   const projects  = data.projects    || [];
-  const allDocs   = data.projectDocs || [];
+  const allDocs   = live(data.projectDocs);
   const invoiceDocs = allDocs.filter(d => d.subTab === "invoices");
   const woDocs      = allDocs.filter(d => d.subTab === "workorders");
 
@@ -180,7 +180,7 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
   };
 
   const delDoc = id => {
-    setData(prev => ({...prev, projectDocs:prev.projectDocs.filter(d => d.id !== id)}));
+    setData(prev => ({...prev, projectDocs:prev.projectDocs.map(d => d.id === id ? {...d, _deleted:true} : d)}));
     showToast("Deleted","del");
   };
 
