@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FLink, FileLink, PageHeader, Empty, CatManagerModal } from "./UI.jsx";
@@ -15,7 +15,7 @@ function ManpowerPage({data,setData,showToast,isAdmin}) {
   const [impModal,    setImpModal]    = useState(false);
   const mpFileRef = useRef();
 
-  const people  = data.manpower || [];
+  const people  = live(data.manpower);
   const cats    = data.manpowerCats || DEFAULT_MANPOWER_CATS;
   const visible = selCat==="All" ? people : people.filter(p=>p.category===selCat);
 
@@ -42,7 +42,7 @@ function ManpowerPage({data,setData,showToast,isAdmin}) {
   };
 
   const delPerson = id => {
-    setData(prev=>({...prev,manpower:prev.manpower.filter(p=>p.id!==id)}));
+    setData(prev=>({...prev,manpower:prev.manpower.map(p=>p.id===id?{...p,_deleted:true}:p)}));
     showToast("Deleted","del"); setPerson(null);
   };
 
@@ -209,7 +209,7 @@ function ManpowerPage({data,setData,showToast,isAdmin}) {
         ?<Empty icon="◈" label="No people in this category" sub="Add your first team member" color={T.green} onAdd={()=>setAddModal({mode:"add"})}/>
         :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
           {visible.map((p,i)=>{
-            const exps=[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...(p.certs||[]).map(c=>c.expiryDate)].filter(Boolean);
+            const exps=[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...live(p.certs).map(c=>c.expiryDate)].filter(Boolean);
             const critical=exps.filter(d=>{ const x=daysUntil(d); return x!==null&&x<=90; }).length;
             return (
               <div key={p.id} className="fade-up" onClick={()=>setPerson(p)}
@@ -249,7 +249,7 @@ function ManpowerPage({data,setData,showToast,isAdmin}) {
                   })}
                 </div>
                 <div style={{marginTop:8,fontSize:12,color:T.textMuted,display:"flex",gap:8}}>
-                  <span>{(p.certs||[]).length} cert{(p.certs||[]).length!==1?"s":""}</span>
+                  <span>{live(p.certs).length} cert{live(p.certs).length!==1?"s":""}</span>
                   <span style={{color:T.border}}>·</span>
                   <span>click to view details →</span>
                 </div>
@@ -431,8 +431,8 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast,isA
 
   const PTABS=[
     {id:"profile",label:"Profile"},
-    {id:"certs",label:`Certifications (${(person.certs||[]).length})`},
-    {id:"docs",label:`Documents (${(person.docs||[]).length})`},
+    {id:"certs",label:`Certifications (${live(person.certs).length})`},
+    {id:"docs",label:`Documents (${live(person.docs).length})`},
   ];
 
   const saveCert=(cert,mode)=>{
@@ -447,7 +447,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast,isA
   };
 
   const delCert=id=>{
-    const certs=(person.certs||[]).filter(c=>c.id!==id);
+    const certs=(person.certs||[]).map(c=>c.id===id?{...c,_deleted:true}:c);
     onUpdate({...person,certs});
     showToast("Cert deleted","del");
   };
@@ -460,7 +460,7 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast,isA
   };
 
   const delDoc=(id)=>{
-    const docs=(person.docs||[]).filter(d=>d.id!==id);
+    const docs=(person.docs||[]).map(d=>d.id===id?{...d,_deleted:true}:d);
     onUpdate({...person,docs});
     showToast("Document removed","del");
   };
@@ -536,10 +536,10 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast,isA
           <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
             <Btn color={T.green} solid onClick={()=>setCertModal({mode:"add"})}>+ Add Certification</Btn>
           </div>
-          {(person.certs||[]).length===0
+          {live(person.certs).length===0
             ?<Empty icon="◈" label="No certifications" sub="Add this person's certifications" color={T.green} onAdd={()=>setCertModal({mode:"add"})}/>
             :<div style={{display:"grid",gap:10}}>
-              {(person.certs||[]).map((c,i)=>{
+              {live(person.certs).map((c,i)=>{
                 const s=getStatus(daysUntil(c.expiryDate));
                 return (
                   <div key={c.id} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${s.color}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,animationDelay:`${i*.04}s`}}>
@@ -574,10 +574,10 @@ function PersonDetail({person,cats,onBack,onUpdate,onDelete,onEdit,showToast,isA
           <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
             <Btn color={T.green} solid onClick={()=>setDocModal(true)}>+ Upload Document</Btn>
           </div>
-          {(person.docs||[]).length===0
+          {live(person.docs).length===0
             ?<Empty icon="📄" label="No documents uploaded" sub="Upload Iqama, Muqeem, Passport copies, etc." color={T.green} onAdd={()=>setDocModal(true)}/>
             :<div style={{display:"grid",gap:10}}>
-              {(person.docs||[]).map((d,i)=>(
+              {live(person.docs).map((d,i)=>(
                 <div key={d.id} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,animationDelay:`${i*.04}s`}}>
                   <div style={{fontSize:28,flexShrink:0}}>
                     {d.fileType?.includes("pdf")?"📄":d.fileType?.includes("image")?"🖼️":"📎"}
