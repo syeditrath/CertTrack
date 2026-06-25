@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, parseExcelRows, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal } from "./UI.jsx";
@@ -573,7 +573,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
   };
 
   const delSubRecord=(type,id)=>{
-    const list=(eq[type]||[]).filter(r=>r.id!==id);
+    const list=(eq[type]||[]).map(r=>r.id===id?{...r,_deleted:true}:r);
     onUpdate({...eq,[type]:list});
     showToast("Deleted","del");
   };
@@ -611,7 +611,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
   };
 
   const curTab=EQ_SUBTABS.find(t=>t.id===activeTab);
-  const records=eq[activeTab]||[];
+  const records=live(eq[activeTab]);
 
   return (
     <div style={{maxWidth:"min(1200px,95vw)",margin:"0 auto",width:"100%"}}>
@@ -637,7 +637,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
 
       {/* 90-day expiry alert banner */}
       {(()=>{
-        const expiring=[...(eq.certifications||[]),...(eq.insurance||[]),...(eq.permits||[])].filter(r=>{const d=daysUntil(r.expiryDate);return d!==null&&d<=90;}).sort((a,b)=>daysUntil(a.expiryDate)-daysUntil(b.expiryDate));
+        const expiring=[...live(eq.certifications),...live(eq.insurance),...live(eq.permits)].filter(r=>{const d=daysUntil(r.expiryDate);return d!==null&&d<=90;}).sort((a,b)=>daysUntil(a.expiryDate)-daysUntil(b.expiryDate));
         if(!expiring.length) return null;
         return (
           <div style={{background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:12,padding:"12px 16px",marginBottom:16}}>
@@ -670,7 +670,7 @@ function RaiseTicketModal({equipment,projects,onClose,onSave}) {
       {/* Sub-tabs */}
       <div style={{display:"flex",gap:8,marginBottom:18,overflowX:"auto",paddingBottom:4}}>
         {EQ_SUBTABS.map(t=>{
-          const cnt=(eq[t.id]||[]).length;
+          const cnt=live(eq[t.id]).length;
           const active=activeTab===t.id;
           return (
             <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flexShrink:0,padding:"8px 16px",borderRadius:999,border:`1px solid ${active?t.color:T.border}`,background:active?`${t.color}18`:"transparent",color:active?t.color:T.textSub,fontSize:13,fontWeight:active?700:500,display:"flex",alignItems:"center",gap:6,transition:"all .15s"}}>
@@ -827,4 +827,4 @@ function EqModal({mode,eq,projects,rigs,onClose,onSave}) {
    SHARED COMPONENTS
 ════════════════════════════════════════════════════════════════════════════ */
 
-export { MaintenancePage };
+export { MaintenancePage, EquipmentDetail, EqModal };
