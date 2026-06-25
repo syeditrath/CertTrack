@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, PageHeader, Empty } from "./UI.jsx";
@@ -13,8 +13,8 @@ function CostControlPage({data, setData, showToast, go, isAdmin}) {
 
   const projects  = data.projects       || [];
   const analysis  = data.projectAnalysis|| [];
-  const allCosts  = data.costControl    || [];
-  const invoiceDocs = (data.projectDocs || []).filter(d=>d.subTab==="invoices");
+  const allCosts  = live(data.costControl);
+  const invoiceDocs = live(data.projectDocs).filter(d=>d.subTab==="invoices");
 
   const saveEntry = (entry, mode) => {
     setModal(null);
@@ -30,7 +30,7 @@ function CostControlPage({data, setData, showToast, go, isAdmin}) {
   };
 
   const delEntry = id => {
-    setData(prev=>({...prev, costControl:(prev.costControl||[]).filter(e=>e.id!==id)}));
+    setData(prev=>({...prev, costControl:(prev.costControl||[]).map(e=>e.id===id?{...e,_deleted:true}:e)}));
     showToast("Deleted","del");
   };
 
@@ -38,7 +38,7 @@ function CostControlPage({data, setData, showToast, go, isAdmin}) {
   const getProjFinancials = (proj) => {
     const pa        = analysis.find(a=>a.project===proj);
     // Contract value: pull from work orders first (Finance > Work Orders / Agreements)
-    const woDocs    = (data.projectDocs||[]).filter(d=>d.subTab==="workorders" && d.project===proj);
+    const woDocs    = live(data.projectDocs).filter(d=>d.subTab==="workorders" && d.project===proj);
     const woValue   = woDocs.length ? Math.max(...woDocs.map(d=>parseFloat(d.amount)||0)) : 0;
     const poValue   = woValue || parseFloat(pa?.poValue) || 0;
     const invs        = invoiceDocs.filter(d=>d.project===proj);
