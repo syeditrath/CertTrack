@@ -1,42 +1,48 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, Btn, Chip, Tag, ABtn, Overlay, PageHeader, InvoiceMetricCard } from "./UI.jsx";
 import { AlertRow } from "./FinancePage.jsx";
 
 function Dashboard({ data, alerts, go, onDeepLink }) {
+  /* ── tombstone-filtered source arrays ── */
+  const scorpionDocs = live(data.scorpionDocs);
+  const manpower      = live(data.manpower);
+  const equipment     = live(data.equipment);
+  const projectDocs   = live(data.projectDocs);
+
   /* ── computed stats ── */
-  const scorpionExp = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=90; }).length;
-  const scorpionExp30 = data.scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=30; }).length;
-  const mpPeople = data.manpower.length;
+  const scorpionExp = scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=90; }).length;
+  const scorpionExp30 = scorpionDocs.filter(d=>{ const x=daysUntil(d.expiryDate); return x!==null&&x<=30; }).length;
+  const mpPeople = manpower.length;
   const mpCats   = data.manpowerCats.length;
-  const mpDocAlerts = data.manpower.reduce((n,p)=>{
-    const ds=[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...(p.certs||[]).map(c=>c.expiryDate)];
+  const mpDocAlerts = manpower.reduce((n,p)=>{
+    const ds=[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...live(p.certs).map(c=>c.expiryDate)];
     return n + ds.filter(d=>{ const x=daysUntil(d); return x!==null&&x<=90; }).length;
   },0);
-  const eqTotal  = data.equipment.length;
-  const eqActive = data.equipment.filter(e=>e.status==="Active").length;
-  const eqMaint  = data.equipment.filter(e=>e.status==="Under Maintenance").length;
-  const eqExp    = data.equipment.reduce((n,e)=>{
-    const ds=[...(e.certifications||[]).map(c=>c.expiryDate),...(e.insurance||[]).map(c=>c.expiryDate),...(e.permits||[]).map(c=>c.expiryDate)];
+  const eqTotal  = equipment.length;
+  const eqActive = equipment.filter(e=>e.status==="Active").length;
+  const eqMaint  = equipment.filter(e=>e.status==="Under Maintenance").length;
+  const eqExp    = equipment.reduce((n,e)=>{
+    const ds=[...live(e.certifications).map(c=>c.expiryDate),...live(e.insurance).map(c=>c.expiryDate),...live(e.permits).map(c=>c.expiryDate)];
     return n + ds.filter(d=>{ const x=daysUntil(d); return x!==null&&x<=90; }).length;
   },0);
   const totalAlerts  = alerts.length;
   const overdueCount = alerts.filter(a=>a.days<0).length;
   const expiring30   = alerts.filter(a=>a.days>=0&&a.days<=30).length;
   const allTracked = [
-    ...data.scorpionDocs.filter(d=>d.expiryDate).map(d=>daysUntil(d.expiryDate)),
-    ...data.manpower.flatMap(p=>[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...(p.certs||[]).map(c=>c.expiryDate)].filter(Boolean).map(daysUntil)),
-    ...data.equipment.flatMap(e=>[...(e.certifications||[]),...(e.insurance||[]),...(e.permits||[])].map(r=>daysUntil(r.expiryDate))),
+    ...scorpionDocs.filter(d=>d.expiryDate).map(d=>daysUntil(d.expiryDate)),
+    ...manpower.flatMap(p=>[p.passportExpiry,p.visaExpiry,p.iqamaExpiry,p.muqeemExpiry,...live(p.certs).map(c=>c.expiryDate)].filter(Boolean).map(daysUntil)),
+    ...equipment.flatMap(e=>[...live(e.certifications),...live(e.insurance),...live(e.permits)].map(r=>daysUntil(r.expiryDate))),
   ];
   const validCount = allTracked.filter(d=>d!==null&&d>0).length;
   const pct = allTracked.length ? Math.round(validCount/allTracked.length*100) : 100;
   const expired  = alerts.filter(a=>a.days<0).sort((a,b)=>a.days-b.days);
   const expiring = alerts.filter(a=>a.days>=0).sort((a,b)=>a.days-b.days);
-  const invoiceDocs = (data.projectDocs || []).filter(d => d.subTab === "invoices");
+  const invoiceDocs = projectDocs.filter(d => d.subTab === "invoices");
   const [alertModal, setAlertModal] = useState(null);
 
   const handleAlertClick = (a) => {
@@ -137,18 +143,18 @@ function Dashboard({ data, alerts, go, onDeepLink }) {
       <div style={{display:"grid",gap:18,marginBottom:18}}>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:16}}>
           <DashboardMiniCard title="SCORPION DOCUMENTS" sub="CR, insurance, licenses, contracts" icon="◉" color={T.blue}
-            stats={[{label:"Total Docs",value:data.scorpionDocs.length},{label:"Expiring",value:scorpionExp},{label:"Due in 30d",value:scorpionExp30},{label:"Categories",value:(data.scorpionDocCats||[]).length}]}
+            stats={[{label:"Total Docs",value:scorpionDocs.length},{label:"Expiring",value:scorpionExp},{label:"Due in 30d",value:scorpionExp30},{label:"Categories",value:(data.scorpionDocCats||[]).length}]}
             actionLabel="Open Documents →" onClick={()=>go("scorpion")}/>
           <DashboardMiniCard title="PROJECT DOCS" sub="Invoices, completion certs & work orders" icon="◆" color={T.teal}
-            stats={[{label:"Total",value:(data.projectDocs||[]).length},{label:"Invoices",value:invoiceDocs.length},{label:"Projects",value:(data.projects||[]).length},{label:"Docs per project",value:(data.projects||[]).length>0?Math.round((data.projectDocs||[]).length/(data.projects||[]).length):0}]}
+            stats={[{label:"Total",value:projectDocs.length},{label:"Invoices",value:invoiceDocs.length},{label:"Projects",value:(data.projects||[]).length},{label:"Docs per project",value:(data.projects||[]).length>0?Math.round(projectDocs.length/(data.projects||[]).length):0}]}
             actionLabel="Open Project Docs →" onClick={()=>go("projects")}/>
           <DashboardMiniCard title="MANPOWER" sub="Staff, documents & certifications" icon="◈" color={T.green}
-            stats={[{label:"People",value:mpPeople},{label:"Categories",value:mpCats},{label:"Doc Alerts",value:mpDocAlerts},{label:"Certs",value:data.manpower.reduce((n,p)=>n+(p.certs||[]).length,0)}]}
-            footer={(data.manpowerCats||[]).slice(0,4).map(c=>`${c} (${data.manpower.filter(p=>p.category===c).length})`).join("   •   ")}
+            stats={[{label:"People",value:mpPeople},{label:"Categories",value:mpCats},{label:"Doc Alerts",value:mpDocAlerts},{label:"Certs",value:manpower.reduce((n,p)=>n+live(p.certs).length,0)}]}
+            footer={(data.manpowerCats||[]).slice(0,4).map(c=>`${c} (${manpower.filter(p=>p.category===c).length})`).join("   •   ")}
             actionLabel="Open Manpower →" onClick={()=>go("manpower")}/>
           <DashboardMiniCard title="EQUIPMENT" sub="Assets, certs, invoices & permits" icon="◎" color={T.gold}
             stats={[{label:"Total Assets",value:eqTotal},{label:"Active",value:eqActive},{label:"Maintenance",value:eqMaint},{label:"Exp. Alerts",value:eqExp}]}
-            footer={`Certs: ${data.equipment.reduce((n,e)=>n+(e.certifications||[]).length,0)}   •   Invoices: ${data.equipment.reduce((n,e)=>n+(e.invoices||[]).length,0)}   •   Insurance: ${data.equipment.reduce((n,e)=>n+(e.insurance||[]).length,0)}   •   Permits: ${data.equipment.reduce((n,e)=>n+(e.permits||[]).length,0)}`}
+            footer={`Certs: ${equipment.reduce((n,e)=>n+live(e.certifications).length,0)}   •   Invoices: ${equipment.reduce((n,e)=>n+live(e.invoices).length,0)}   •   Insurance: ${equipment.reduce((n,e)=>n+live(e.insurance).length,0)}   •   Permits: ${equipment.reduce((n,e)=>n+live(e.permits).length,0)}`}
             actionLabel="Open Equipment →" onClick={()=>go("equipment")}/>
           <div className="fade-up card-hover" onClick={()=>go("finance")}
             style={{background:`linear-gradient(135deg,${T.card},${T.card2})`,border:`1px solid ${T.gold}44`,borderRadius:18,boxShadow:T.shadow,padding:"18px 18px 16px",minHeight:230,display:"flex",flexDirection:"column",cursor:"pointer",position:"relative",overflow:"hidden"}}>
