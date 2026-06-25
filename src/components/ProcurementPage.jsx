@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from "react";
 import { T } from "../theme.js";
-import { uid, fmtDate } from "../utils.js";
+import { uid, fmtDate, live } from "../utils.js";
 import { getStatus, ExportBtn } from "../constants.js";
 import { Btn, Chip, ABtn, PageHeader, Empty } from "./UI.jsx";
 
@@ -101,7 +101,7 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
   const [fStatus, setFStatus] = useState("");
   const [newRow, setNewRow] = useState(null); // draft row being added, or null
 
-  const rows = data.procurement || [];
+  const rows = live(data.procurement);
 
   const visible = rows.filter(r=>{
     const matchesSearch = !search || [r.prNo,r.poNo].some(v=>(v||"").toLowerCase().includes(search.toLowerCase()));
@@ -138,7 +138,7 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
   };
 
   const delRow = id => {
-    setData(prev=>({...prev,procurement:(prev.procurement||[]).filter(r=>r.id!==id)}));
+    setData(prev=>({...prev,procurement:(prev.procurement||[]).map(r=>r.id===id?{...r,_deleted:true}:r)}));
     showToast("Deleted","del");
   };
 
