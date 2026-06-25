@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, pctColor, daysLeft, deriveProjectStats } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, pctColor, daysLeft, deriveProjectStats, live } from "../utils.js";
 import { getStatus, ExportBtn, exportToExcel, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl, isCloudflareConfigured } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, FInput, FTextarea, FSelect, PageHeader, Empty } from "./UI.jsx";
@@ -886,7 +886,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
     });
     setDrModal(null);
   };
-  const delReport = id => setData(prev=>({...prev, projectDocs:(prev.projectDocs||[]).filter(d=>d.id!==id)}));
+  const delReport = id => setData(prev=>({...prev, projectDocs:(prev.projectDocs||[]).map(d=>d.id===id?{...d,_deleted:true}:d)}));
 
   return (
     <div style={{maxWidth:"min(1200px,98vw)",margin:"0 auto"}}>
@@ -925,7 +925,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
 
       {/* ══ COST SHEET tab ═══════════════════════════════════════════════ */}
       {detailTab==="costsheet" && (() => {
-        const sheets = (data.costSheets||[]).filter(s=>s.project===proj.project);
+        const sheets = live(data.costSheets).filter(s=>s.project===proj.project);
         const addSheet = () => {
           const desc = window.prompt("Cost item description:");
           if (!desc) return;
@@ -934,12 +934,12 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
           setData(prev=>({...prev, costSheets:[...(prev.costSheets||[]), {id:uid(), project:proj.project, description:desc, estimatedCost:est||"0", actualCost:act||"", date:new Date().toISOString().slice(0,10), notes:""}]}));
           showToast("Cost sheet entry added");
         };
-        const delSheet = id => setData(prev=>({...prev, costSheets:(prev.costSheets||[]).filter(s=>s.id!==id)}));
+        const delSheet = id => setData(prev=>({...prev, costSheets:(prev.costSheets||[]).map(s=>s.id===id?{...s,_deleted:true}:s)}));
         const totalEst = sheets.reduce((s,x)=>s+(parseFloat(x.estimatedCost)||0),0);
         const totalAct = sheets.reduce((s,x)=>s+(parseFloat(x.actualCost)||0),0);
 
         // Cost sheet file upload & estimated total cost (stored on the projectAnalysis entry)
-        const paEntry = (data.projectAnalysis||[]).find(x=>x.project===proj.project) || {};
+        const paEntry = live(data.projectAnalysis).find(x=>x.project===proj.project) || {};
         const handleCsFileUpload = async (file) => {
           if (!file) return;
           setCsUploading(true);
@@ -1053,7 +1053,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
 
       {/* ══ QUOTATION tab ════════════════════════════════════════════════ */}
       {detailTab==="quotation" && (() => {
-        const paEntry = (data.projectAnalysis||[]).find(x=>x.project===proj.project) || {};
+        const paEntry = live(data.projectAnalysis).find(x=>x.project===proj.project) || {};
         const handleQuoteFileUpload = async (file) => {
           if (!file) return;
           setQuoteUploading(p=>({...p, _main:true}));
@@ -1563,10 +1563,10 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
   const [showDprConsolidate, setShowDprConsolidate] = useState(false);
 
   const projects  = data.projects || [];
-  const projectDocs = data.projectDocs || [];
+  const projectDocs = live(data.projectDocs);
 
   // Auto-sync: any project in data.projects not yet in projectAnalysis gets added automatically
-  const rawAnalysis = data.projectAnalysis || [];
+  const rawAnalysis = live(data.projectAnalysis);
   const workOrders = projectDocs.filter(d => d.subTab === "workorders");
 
   // Get contract value for a project from its work order (highest amount if multiple)
@@ -1602,7 +1602,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
     setModal(null);
   };
   const del = id => {
-    setData(prev=>({...prev,projectAnalysis:prev.projectAnalysis.filter(x=>x.id!==id)}));
+    setData(prev=>({...prev,projectAnalysis:prev.projectAnalysis.map(x=>x.id===id?{...x,_deleted:true}:x)}));
     showToast("Project deleted","del");
     setDetail(null);
   };
@@ -1812,7 +1812,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
         </div>
       )}
 
-      {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} projectDocs={data.projectDocs||[]} rigs={data.rigs||[]} onClose={()=>setShowDprConsolidate(false)}/>}
+      {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} projectDocs={live(data.projectDocs)} rigs={live(data.rigs)} onClose={()=>setShowDprConsolidate(false)}/>}
       {modal&&<ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} workOrders={workOrders} onSave={save} onClose={()=>setModal(null)}/>}
     </div>
   );
