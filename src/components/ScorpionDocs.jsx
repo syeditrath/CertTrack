@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FTextarea, FSelect, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, ScorpionBulkModal } from "./UI.jsx";
@@ -14,7 +14,7 @@ function ScorpionDocs({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkConsu
   const [selDoc, setSelDoc] = useState(null);
   useEffect(() => {
   if (deepLinkId) {
-    const doc = (data.scorpionDocs || []).find(
+    const doc = live(data.scorpionDocs).find(
       d => String(d.id) === String(deepLinkId)
     );
 
@@ -27,7 +27,7 @@ function ScorpionDocs({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkConsu
   }
 }, [deepLinkId, data.scorpionDocs, onDeepLinkConsumed]);
 
-  const docs = data.scorpionDocs || [];
+  const docs = live(data.scorpionDocs);
   const cats = data.scorpionDocCats || DEFAULT_SCORPION_CATS;
 
   const filtered = selCat === "All" ? docs : docs.filter(d => d.category === selCat);
@@ -60,7 +60,7 @@ function ScorpionDocs({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkConsu
   };
 
   const delDoc = id => {
-    setData(prev=>({...prev, scorpionDocs:prev.scorpionDocs.filter(d=>d.id!==id)}));
+    setData(prev=>({...prev, scorpionDocs:prev.scorpionDocs.map(d=>d.id===id?{...d,_deleted:true}:d)}));
     showToast("Document deleted","del");
   };
 
