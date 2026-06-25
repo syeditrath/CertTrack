@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
 import { getStatus, ExportBtn, exportToExcel, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, METHOD_STATEMENT_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, BulkUploadModal, MultiPdfCertUpload } from "./UI.jsx";
@@ -51,7 +51,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   const [multiPdfModal, setMultiPdfModal] = useState(null);
   const [rigInput, setRigInput] = useState("");
   const [msAuthed, setMsAuthed] = useState(false);
-  const docs     = data.projectDocs || [];
+  const docs     = live(data.projectDocs);
   const projects = data.projects    || [];
   const cur      = PD_TABS.find(t=>t.id===subTab);
   const counts   = Object.fromEntries(PD_TABS.map(t=>[t.id,
@@ -147,12 +147,12 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 };
 
   const delDoc = id => {
-    setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}));
+    setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===id?{...d,_deleted:true}:d)}));
     showToast("Deleted","del");
   };
 
   // ── Rig management ──────────────────────────────────────────────────
-  const rigs = data.rigs || [];
+  const rigs = live(data.rigs);
   const analysisMap = Object.fromEntries(
   (data.projectAnalysis || []).map(p => [p.project, p.status || "Active"])
 );
@@ -163,17 +163,17 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     const name = rigInput.trim();
     if (!name) { showToast("Enter a rig name first","del"); return; }
     if (!selectedProject) { showToast("No project selected","del"); return; }
-    if ((data.rigs||[]).some(r=>r.project===selectedProject && r.name===name)) { showToast("Rig already exists","del"); return; }
+    if (rigs.some(r=>r.project===selectedProject && r.name===name)) { showToast("Rig already exists","del"); return; }
     setData(prev=>({...prev, rigs:[...(prev.rigs||[]), {id:uid(), project:selectedProject, name}]}));
     setRigInput("");
     showToast("Rig added ✓");
   };
   const delRig = id => {
-    setData(prev=>({...prev, rigs:(prev.rigs||[]).filter(r=>r.id!==id)}));
+    setData(prev=>({...prev, rigs:(prev.rigs||[]).map(r=>r.id===id?{...r,_deleted:true}:r)}));
     showToast("Rig removed","del");
   };
 
-  const crossings = data.crossings || [];
+  const crossings = live(data.crossings);
 
   const addCrossing = (project, rig, name) => {
     if (!name || !name.trim()) return;
@@ -194,7 +194,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   };
 
   const delCrossing = id => {
-    setData(prev=>({...prev, crossings:(prev.crossings||[]).filter(c=>c.id!==id)}));
+    setData(prev=>({...prev, crossings:(prev.crossings||[]).map(c=>c.id===id?{...c,_deleted:true}:c)}));
     showToast("Crossing removed","del");
   };
 
@@ -292,7 +292,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                       </div>
                     </div>
 
-                    {(()=>{ const rc=(data.rigs||[]).filter(r=>r.project===project).length; if(!rc) return null; const rigNames=(data.rigs||[]).filter(r=>r.project===project).map(r=>r.name); return (<div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:6}}>{rigNames.map(n=><span key={n} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 8px",fontSize:11,color:T.textMuted,fontWeight:600}}>🔩 {n}</span>)}</div>); })()}
+                    {(()=>{ const rc=rigs.filter(r=>r.project===project).length; if(!rc) return null; const rigNames=rigs.filter(r=>r.project===project).map(r=>r.name); return (<div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:6}}>{rigNames.map(n=><span key={n} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 8px",fontSize:11,color:T.textMuted,fontWeight:600}}>🔩 {n}</span>)}</div>); })()}
                     <div style={{marginTop:14,fontSize:12,color:T.blue,fontWeight:700,textAlign:"right"}}>Open Project →</div>
                   </button>
                 );
@@ -877,7 +877,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           showToast={showToast}
           onAdd={doc=>setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...doc,id:uid(),subTab:"hse"}]}))}
           onEdit={doc=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===doc.id?{...doc,subTab:"hse"}:d)}))}
-          onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}))}
+          onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===id?{...d,_deleted:true}:d)}))}
         />
       )}
 
@@ -891,7 +891,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           showToast={showToast}
           onAdd={doc=>setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...doc,id:uid(),subTab:"projectdocuments"}]}))}
           onEdit={doc=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===doc.id?{...doc,subTab:"projectdocuments"}:d)}))}
-          onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}))}
+          onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===id?{...d,_deleted:true}:d)}))}
         />
       )}
 
@@ -906,7 +906,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
             showToast={showToast}
             onAdd={doc=>setData(prev=>({...prev,projectDocs:[...prev.projectDocs,{...doc,id:uid(),subTab:"methodstatement"}]}))}
             onEdit={doc=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===doc.id?{...doc,subTab:"methodstatement"}:d)}))}
-            onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.filter(d=>d.id!==id)}))}
+            onDel={id=>setData(prev=>({...prev,projectDocs:prev.projectDocs.map(d=>d.id===id?{...d,_deleted:true}:d)}))}
           />
         ) : (
           <FinanceLoginPage title="METHOD STATEMENT & DRAWING ACCESS" subtitle="This section is restricted.\nEnter the password to continue." passwordLabel="METHOD STATEMENT PASSWORD" placeholder="Enter password…" buttonLabel="UNLOCK SECTION" onLogin={(pw) => {
@@ -918,7 +918,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════ */}
       {modal && subTab==="certificates"  && <CertificateModal  mode={modal.mode} doc={modal.doc} projects={projects}                          onClose={()=>setModal(null)} onSave={saveDoc}/>}
-      {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} rigs={data.rigs||[]} crossings={crossings} onAddCrossing={addCrossing} onClose={()=>setModal(null)} onSave={saveDoc}/>}
+      {modal && subTab==="dailyreports"  && <ProjectDocDailyReportModal mode={modal.mode} doc={modal.doc} projects={projects} defaultProject={selectedProject} rigs={rigs} crossings={crossings} onAddCrossing={addCrossing} onClose={()=>setModal(null)} onSave={saveDoc}/>}
       {bulkModal && <BulkUploadModal subTab={subTab} projects={projects} onClose={()=>setBulkModal(false)} onImport={(rows)=>{ setData(prev=>({...prev,projectDocs:[...prev.projectDocs,...rows.map(r=>({...r,id:uid(),subTab}))]})); setBulkModal(false); showToast(`✓ ${rows.length} records imported`); }}/>}
       {multiPdfModal && (
   <MultiPdfCertUpload
