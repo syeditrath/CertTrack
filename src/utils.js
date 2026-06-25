@@ -347,8 +347,19 @@ function deriveProjectStats(projectName, projectDocs) {
   return { invs, certs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts };
 }
 
+/* ─── Tombstone helper ────────────────────────────────────────────────────
+   Records are soft-deleted (marked {_deleted:true}) instead of being removed
+   outright, so the Worker's merge-by-id logic can propagate a deletion
+   instead of accidentally resurrecting a record from another client's stale
+   snapshot. Every place that reads/displays a list should pass it through
+   live() first so tombstoned records don't visibly reappear.
+   ────────────────────────────────────────────────────────────────────────── */
+function live(arr) {
+  return (arr || []).filter(item => !item?._deleted);
+}
+
 export {
   GLOBAL_CSS, uid, daysUntil, fmtDate, formatSarCompact,
   getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme,
-  useViewport, printPage, pctColor, daysLeft, deriveProjectStats,
+  useViewport, printPage, pctColor, daysLeft, deriveProjectStats, live,
 };
