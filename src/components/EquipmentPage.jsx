@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, parseExcelRows, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal } from "./UI.jsx";
+import { EquipmentDetail, EqModal } from "./MaintenancePage.jsx";
 
 function EquipmentPage({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkConsumed}) {
   const rigs = data.rigs || [];
@@ -31,7 +32,7 @@ function EquipmentPage({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkCons
   }
 }, [deepLinkId, data.equipment, onDeepLinkConsumed]);
 
-  const equipment = data.equipment || [];
+  const equipment = live(data.equipment);
   const projects  = data.projects  || [];
 
   const visible = equipment.filter(e=>{
@@ -53,7 +54,7 @@ function EquipmentPage({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkCons
   };
 
   const delEq=id=>{
-    setData(prev=>({...prev,equipment:prev.equipment.filter(e=>e.id!==id)}));
+    setData(prev=>({...prev,equipment:prev.equipment.map(e=>e.id===id?{...e,_deleted:true}:e)}));
     showToast("Deleted","del");setSelEq(null);
   };
 
@@ -145,7 +146,7 @@ function EquipmentPage({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkCons
         ?<Empty icon="◎" label="No equipment found" sub="Add your first asset" color={T.gold} onAdd={()=>setModal({mode:"add"})}/>
         :<div style={{display:"grid",gap:10}}>
           {visible.map((eq,i)=>{
-            const allExp=[...(eq.certifications||[]).map(c=>c.expiryDate),...(eq.insurance||[]).map(c=>c.expiryDate),...(eq.permits||[]).map(c=>c.expiryDate)];
+            const allExp=[...live(eq.certifications).map(c=>c.expiryDate),...live(eq.insurance).map(c=>c.expiryDate),...live(eq.permits).map(c=>c.expiryDate)];
             const alerts=allExp.filter(d=>{const x=daysUntil(d);return x!==null&&x<=90;}).length;
             const sCol=STATUS_COLORS[eq.status]||T.textMuted;
             return (
@@ -168,10 +169,10 @@ function EquipmentPage({data,setData,showToast,isAdmin,deepLinkId,onDeepLinkCons
                       {eq.operator&&<Chip>Op: {eq.operator}</Chip>}
                     </div>
                     <div style={{marginTop:8,fontSize:12,color:T.textMuted,display:"flex",gap:12}}>
-                      <span>📜 {(eq.certifications||[]).length} certs</span>
-                      <span>🧾 {(eq.invoices||[]).length} invoices</span>
-                      <span>🛡 {(eq.insurance||[]).length} insurance</span>
-                      <span>⬡ {(eq.permits||[]).length} permits</span>
+                      <span>📜 {live(eq.certifications).length} certs</span>
+                      <span>🧾 {live(eq.invoices).length} invoices</span>
+                      <span>🛡 {live(eq.insurance).length} insurance</span>
+                      <span>⬡ {live(eq.permits).length} permits</span>
                       <span style={{color:T.blue}}>click to view →</span>
                     </div>
                   </div>
