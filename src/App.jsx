@@ -118,6 +118,9 @@ export default function App() {
 
   useEffect(() => {
     if (loadingData) return;
+    if (!isAdmin) return; // ✅ FIX: auto-backup was firing for every logged-in user,
+                           // silently downloading the full dataset to anyone's device.
+                           // Only admins should receive automatic backups.
     const isEmpty = !data.manpower?.length && !data.equipment?.length && !data.projects?.length
       && !data.scorpionDocs?.length && !data.projectDocs?.length && !data.invoices?.length;
     if (isEmpty) return;
@@ -127,7 +130,7 @@ export default function App() {
     if (hoursSince >= 24) {
       backupToDrive(true);
     }
-  }, [loadingData]);
+  }, [loadingData, isAdmin]);
 
   useEffect(() => {
     if (window.emailjs) return;
@@ -362,7 +365,7 @@ export default function App() {
                 onMouseLeave={e=>e.currentTarget.style.borderColor=isAdmin?"#ef4444":T.border}>
                 {isAdmin ? (viewportWidth < 480 ? "🔓" : "🔓 Admin") : "🔒"}
               </button>
-              {viewportWidth >= 400 && <>
+              {viewportWidth >= 400 && isAdmin && <>
               <input id="restore-input" type="file" accept=".json" style={{display:"none"}} onChange={e=>{
                 const file = e.target.files[0];
                 if (!file) return;
@@ -380,13 +383,13 @@ export default function App() {
                 e.target.value = "";
               }}/>
               <button onClick={()=>document.getElementById("restore-input").click()}
-                title="Restore data from backup JSON file"
+                title="Restore data from backup JSON file (admin only)"
                 style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:14,color:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s",flexShrink:0}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=T.blue}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
                 📂
               </button>
-              <button onClick={() => backupToDrive(false)} disabled={backingUp || loadingData} title={backupStatus ? `Last backup: ${backupStatus}` : "No backup yet"}
+              <button onClick={() => backupToDrive(false)} disabled={backingUp || loadingData} title={backupStatus ? `Last backup: ${backupStatus} (admin only)` : "No backup yet (admin only)"}
                 style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:14,color:T.textMuted,display:"flex",alignItems:"center",gap:4,transition:"all .15s",opacity:backingUp?0.5:1,flexShrink:0}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=T.green}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
