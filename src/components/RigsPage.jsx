@@ -4,10 +4,243 @@ import { T } from "../theme.js";
 import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
-import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, PageHeader, Empty, CatManagerModal } from "./UI.jsx";
+import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FTextarea, FSelect, FLink, FileLink, PageHeader, Empty, CatManagerModal } from "./UI.jsx";
 
-function RigDetailsPage({ rig, equipment, onBack }) {
+
+/* ── Document section config (Invoices / Insurance / Inspection) ── */
+const RIG_DOC_TYPES = {
+  invoices: {
+    label: "Invoices",
+    icon: "🧾",
+    color: T.green,
+    hasExpiry: false,
+    fields: [
+      { key: "refNo",  label: "Invoice No.",       type: "text" },
+      { key: "vendor", label: "Vendor / Supplier", type: "text" },
+      { key: "date",   label: "Invoice Date",      type: "date" },
+      { key: "amount", label: "Amount (SAR)",      type: "number" },
+    ],
+  },
+  insurance: {
+    label: "Insurance Certificate",
+    icon: "🛡️",
+    color: T.blue,
+    hasExpiry: true,
+    fields: [
+      { key: "refNo",      label: "Certificate No.",    type: "text" },
+      { key: "provider",   label: "Insurance Provider", type: "text" },
+      { key: "issueDate",  label: "Issue Date",         type: "date" },
+      { key: "expiryDate", label: "Expiry Date",        type: "date" },
+    ],
+  },
+  inspections: {
+    label: "Inspection Certificates",
+    icon: "🔍",
+    color: T.gold,
+    hasExpiry: true,
+    fields: [
+      { key: "refNo",          label: "Certificate No.",  type: "text" },
+      { key: "inspector",      label: "Inspector / Body", type: "text" },
+      { key: "inspectionDate", label: "Inspection Date",  type: "date" },
+      { key: "expiryDate",     label: "Expiry Date",      type: "date" },
+    ],
+  },
+};
+const RIG_DOC_ORDER = ["invoices", "insurance", "inspections"];
+const EMPTY_RIG_DOCS = { invoices: [], insurance: [], inspections: [] };
+
+/* ── Add-record form for a single doc type (uses the shared FormModal shell) ── */
+function RigDocRecordModal({ type, rigName, onClose, onSave }) {
+  const cfg = RIG_DOC_TYPES[type];
+  const [f, setF] = useState({});
+  const set = k => v => setF(prev => ({ ...prev, [k]: v }));
+
+  return (
+    <FormModal
+      title={`ADD ${cfg.label.toUpperCase()}`}
+      color={cfg.color}
+      onClose={onClose}
+      onSave={() => {
+        if (!f.fileLink) { alert("Please attach a file or paste a link"); return; }
+        onSave({ id: uid(), ...f });
+      }}
+    >
+      {cfg.fields.map(field => (
+        <FieldRow key={field.key} label={field.label}>
+          <FInput type={field.type} value={f[field.key] || ""} onChange={set(field.key)} color={cfg.color} />
+        </FieldRow>
+      ))}
+      <FieldRow label="File">
+        <FLink value={f.fileLink || ""} onChange={set("fileLink")} folder={`rigs/${rigName.replace(/\s+/g, "_")}/${type}`} />
+      </FieldRow>
+      <FieldRow label="Notes"><FTextarea value={f.notes || ""} onChange={set("notes")} color={cfg.color} /></FieldRow>
+    </FormModal>
+  );
+}
+
+/* ── Modal: manage Invoices / Insurance / Inspection docs for a rig ── */
+function RigDocumentsModal({ rig, docs, onSave, onClose, showToast }) {
+  const [tab, setTab]       = useState(RIG_DOC_ORDER[0]);
+  const [adding, setAdding] = useState(false);
+
+  const cfg  = RIG_DOC_TYPES[tab];
+  const list = docs[tab] || [];
+
+  const addRecord = record => {
+    onSave({ ...docs, [tab]: [...list, record] });
+    setAdding(false);
+    showToast && showToast(`${cfg.label} added`, "success");
+  };
+
+  const deleteRecord = id => {
+    if (!confirm("Delete this record?")) return;
+    onSave({ ...docs, [tab]: list.filter(r => r.id !== id) });
+    showToast && showToast(`${cfg.label} removed`, "success");
+  };
+
+  const expiryTag = record => {
+    if (!cfg.hasExpiry || !record.expiryDate) return null;
+    const days = daysUntil(record.expiryDate);
+    if (days < 0)        return <Tag color={T.red}>Expired</Tag>;
+    if (days <= 30)      return <Tag color={T.gold}>Expires in {days}d</Tag>;
+    return <Tag color={T.green}>Valid</Tag>;
+  };
+
+  return (
+    <>
+      <Overlay onClose={onClose}>
+        <div
+          className="slide-up"
+          style={{
+            background: T.sidebar,
+            border: `1px solid ${T.border}`,
+            borderRadius: 18,
+            width: "100%",
+            maxWidth: 700,
+            maxHeight: "calc(100vh - 48px)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          }}
+        >
+          {/* Header */}
+          <div style={{ padding: "20px 24px 0", flexShrink: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontWeight: 800, fontSize: 20, color: T.text }}>
+                  DOCUMENTS — {rig.name.toUpperCase()}
+                </div>
+                <div style={{ fontSize: 12, color: T.textMuted, marginTop: 3 }}>
+                  Invoices, insurance & inspection certificates
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.textSub, borderRadius: 8, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, cursor: "pointer" }}
+              >×</button>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              {RIG_DOC_ORDER.map(t => {
+                const active = t === tab;
+                const c = RIG_DOC_TYPES[t].color;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => { setTab(t); setAdding(false); }}
+                    style={{
+                      background: active ? c + "18" : "transparent",
+                      border: `1px solid ${active ? c : T.border}`,
+                      color: active ? c : T.textMuted,
+                      borderRadius: "10px 10px 0 0",
+                      padding: "9px 16px",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <span>{RIG_DOC_TYPES[t].icon}</span>{RIG_DOC_TYPES[t].label}
+                    <span style={{ background: active ? c + "33" : T.border, borderRadius: 10, padding: "0 7px", fontSize: 11 }}>
+                      {(docs[t] || []).length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Body */}
+          <div style={{ padding: "18px 24px 22px", overflowY: "auto", flex: 1, minHeight: 0, borderTop: `1px solid ${T.border}`, marginTop: 14 }}>
+            <button
+              onClick={() => setAdding(true)}
+              style={{ background: cfg.color, color: "#000", border: "none", borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 16 }}
+            >
+              + Add {cfg.label}
+            </button>
+
+            {list.length === 0 ? (
+              <Empty icon={cfg.icon} label={`No ${cfg.label.toLowerCase()} yet`} sub="Add one using the button above" color={cfg.color} onAdd={() => setAdding(true)} />
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {list.map(r => (
+                  <div
+                    key={r.id}
+                    style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                        {cfg.fields.filter(f => f.key !== "amount" && r[f.key]).map(f => (
+                          <span key={f.key} style={{ fontSize: 13, fontWeight: 700, color: T.text }}>
+                            {f.type === "date" ? fmtDate(r[f.key]) : r[f.key]}
+                          </span>
+                        ))}
+                        {r.amount && <Tag color={T.gold}>{formatSarCompact(Number(r.amount))}</Tag>}
+                        {expiryTag(r)}
+                      </div>
+                      {r.notes && <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 6 }}>{r.notes}</div>}
+                      <FileLink href={r.fileLink} label="View File" />
+                    </div>
+                    <ABtn color={T.red} onClick={() => deleteRecord(r.id)}>✕</ABtn>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Overlay>
+
+      {adding && (
+        <RigDocRecordModal type={tab} rigName={rig.name} onClose={() => setAdding(false)} onSave={addRecord} />
+      )}
+    </>
+  );
+}
+
+function RigDetailsPage({ rig, equipment, onBack, data, setData, showToast }) {
   const today = new Date();
+  const [docsOpen, setDocsOpen] = useState(false);
+  const [rigDocs, setRigDocs] = useState(rig.documents || EMPTY_RIG_DOCS);
+
+  const docsTotal = RIG_DOC_ORDER.reduce((n, t) => n + (rigDocs[t] || []).length, 0);
+
+  const saveRigDocs = newDocs => {
+    setRigDocs(newDocs);
+    if (typeof setData === "function") {
+      setData(prev => {
+        const rigs = (prev.rigs || []).map(r =>
+          r.name === rig.name ? { ...r, documents: newDocs } : r
+        );
+        const newData = { ...prev, rigs };
+        saveAppData(newData).catch(() => showToast && showToast("Failed to save — check connection", "error"));
+        return newData;
+      });
+    }
+  };
 
   const openMaintenance = equipment.reduce(
     (count, eq) =>
@@ -100,10 +333,32 @@ function RigDetailsPage({ rig, equipment, onBack }) {
   </div>
 </div>
 
+        <button
+          onClick={() => setDocsOpen(true)}
+          style={{
+            marginLeft: "auto",
+            background: T.blueDim || "transparent",
+            border: `1px solid ${T.blue}55`,
+            color: T.blue,
+            borderRadius: 20,
+            padding: "6px 16px",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 8
+          }}
+        >
+          📁 Documents
+          {docsTotal > 0 && (
+            <span style={{ background: T.blue + "33", borderRadius: 10, padding: "0 8px", fontSize: 11 }}>{docsTotal}</span>
+          )}
+        </button>
+
         {rig.status && (
           <div
             style={{
-              marginLeft: "auto",
               background: statusColor(rig.status) + "22",
               color: statusColor(rig.status),
               border: `1px solid ${statusColor(rig.status)}55`,
@@ -117,6 +372,16 @@ function RigDetailsPage({ rig, equipment, onBack }) {
           </div>
         )}
       </div>
+
+      {docsOpen && (
+        <RigDocumentsModal
+          rig={rig}
+          docs={rigDocs}
+          onSave={saveRigDocs}
+          onClose={() => setDocsOpen(false)}
+          showToast={showToast}
+        />
+      )}
 
       {/* ── Hero image + stats row ── */}
       {/* ── Hero image + stats row ── */}
@@ -321,6 +586,9 @@ function RigsPage({ data, setData, showToast, isAdmin }) {
         rig={selectedRig}
         equipment={equipment.filter(eq => eq.rig === selectedRig.name)}
         onBack={() => setSelectedRig(null)}
+        data={data}
+        setData={setData}
+        showToast={showToast}
       />
     );
   }
