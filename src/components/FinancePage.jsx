@@ -138,9 +138,42 @@ function FinanceLoginPage({ onLogin, title="FINANCE ACCESS", subtitle="This sect
 ════════════════════════════════════════════════════════════════════════════ */
 const FIN_TABS = [
   {id:"overview",    label:"Overview",                 icon:"$",  color:T.gold,   dim:T.goldDim},
+  {id:"revenue",     label:"Revenue",                  icon:"📈", color:T.teal,   dim:T.teal+"22"},
   {id:"invoices",    label:"Invoices",                 icon:"🧾", color:T.green,  dim:T.greenDim},
   {id:"workorders",  label:"Work Orders / Agreements", icon:"📋", color:T.purple, dim:T.purpleDim},
 ];
+
+const REV_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+/* Spreads each work order's contract value evenly across the months it spans
+   (Date Signed → Expiry Date). If there's no expiry date, the full value is
+   recognized in the month it was signed. Returns { "YYYY-MM": {total, entries[]} } */
+function computeRevenueBuckets(woDocs) {
+  const buckets = {};
+  woDocs.forEach(doc => {
+    const amount = parseFloat(doc.amount) || 0;
+    if (amount <= 0 || !doc.date) return;
+    const start = new Date(doc.date);
+    if (Number.isNaN(start.getTime())) return;
+    let end = doc.expiryDate ? new Date(doc.expiryDate) : null;
+    if (!end || Number.isNaN(end.getTime()) || end < start) end = start;
+
+    const keys = [];
+    let y = start.getFullYear(), m = start.getMonth();
+    const endY = end.getFullYear(), endM = end.getMonth();
+    while (y < endY || (y === endY && m <= endM)) {
+      keys.push(`${y}-${String(m + 1).padStart(2, "0")}`);
+      m++; if (m > 11) { m = 0; y++; }
+    }
+    const perMonth = amount / keys.length;
+    keys.forEach(key => {
+      if (!buckets[key]) buckets[key] = { total: 0, entries: [] };
+      buckets[key].total += perMonth;
+      buckets[key].entries.push({ doc, allocated: perMonth, spanMonths: keys.length });
+    });
+  });
+  return buckets;
+}
 
 function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelectedInvoiceYear, isAdmin }) {
   const [finTab, setFinTab] = useState("overview");
@@ -152,6 +185,9 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
   const [fProj, setFProj] = useState("");
   const [selProj, setSelProj] = useState(null);
   const [selectedInvoiceMonth, setSelectedInvoiceMonth] = useState("All");
+  const [selectedRevenueYear, setSelectedRevenueYear] = useState("All");
+  const [revenueProj, setRevenueProj] = useState("");
+  const [revenueMonthModal, setRevenueMonthModal] = useState(null); // {key, label}
 
   const projects  = data.projects    || [];
   const allDocs   = live(data.projectDocs);
@@ -239,6 +275,38 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
     const pct       = invoiced > 0 ? Math.round((collected / invoiced) * 100) : 0;
     return {proj, invoiced, collected, due, pct, count:pinvs.length};
   }).filter(p => p.invoiced > 0 || p.count > 0).sort((a,b) => b.invoiced - a.invoiced);
+
+  // ── Revenue (recognized from Work Order / Agreement values) ──
+  const revWoDocs = revenueProj ? woDocs.filter(d => d.project === revenueProj) : woDocs;
+  const revenueBuckets = useMemo(() => computeRevenueBuckets(revWoDocs), [revWoDocs]);
+  const revenueYears = Array.from(new Set(Object.keys(revenueBuckets).map(k => k.split("-")[0]))).sort((a,b) => Number(b) - Number(a));
+  const yearlyRevenueTotals = revenueYears.map(y => ({
+    year: y,
+    total: Object.entries(revenueBuckets).filter(([k]) => k.startsWith(y + "-")).reduce((s,[,b]) => s + b.total, 0),
+  })).sort((a,b) => Number(a.year) - Number(b.year));
+  const monthlyRevenueForYear = selectedRevenueYear === "All" ? [] : REV_MONTH_NAMES.map((name, idx) => {
+    const key = `${selectedRevenueYear}-${String(idx + 1).padStart(2, "0")}`;
+    return { key, name, idx, total: revenueBuckets[key]?.total || 0, entries: revenueBuckets[key]?.entries || [] };
+  });
+  const totalRecognizedRevenue = selectedRevenueYear === "All"
+    ? yearlyRevenueTotals.reduce((s,y) => s + y.total, 0)
+    : (monthlyRevenueForYear.reduce((s,m) => s + m.total, 0));
+  const totalContractValue = revWoDocs.reduce((s,d) => s + (parseFloat(d.amount) || 0), 0);
+  const nowForRevenue = new Date();
+  const activeAgreements = revWoDocs.filter(d => {
+    if (!d.date) return false;
+    const start = new Date(d.date);
+    if (Number.isNaN(start.getTime()) || start > nowForRevenue) return false;
+    if (!d.expiryDate) return true;
+    const end = new Date(d.expiryDate);
+    return Number.isNaN(end.getTime()) || end >= nowForRevenue;
+  }).length;
+  const activeMonthCount = selectedRevenueYear === "All"
+    ? Object.values(revenueBuckets).filter(b => b.total > 0).length
+    : monthlyRevenueForYear.filter(m => m.total > 0).length;
+  const avgMonthlyRevenue = activeMonthCount > 0 ? totalRecognizedRevenue / activeMonthCount : 0;
+  const maxYearlyRevenue = Math.max(1, ...yearlyRevenueTotals.map(y => y.total));
+  const maxMonthlyRevenue = Math.max(1, ...monthlyRevenueForYear.map(m => m.total));
 
   // ── Filtered work orders ──
   const filteredWoDocs = fProj ? woDocs.filter(d => d.project === fProj) : woDocs;
@@ -440,6 +508,126 @@ function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelecte
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.textSub,marginBottom:8}}>NO INVOICES</div>
               <div style={{fontSize:13,color:T.textMuted}}>{selectedInvoiceYear === "All" ? "No invoices found. Add invoices via the Invoices tab above." : effectiveMonth !== "All" ? `No invoices found for ${MONTH_NAMES[Number(effectiveMonth)]} ${selectedInvoiceYear}. Try a different month or year.` : `No invoices found for ${selectedInvoiceYear}. Try selecting a different year.`}</div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ REVENUE TAB ════════════════════════════════════════════════════ */}
+      {finTab === "revenue" && (
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20,flexWrap:"wrap",justifyContent:"flex-end"}}>
+            <label style={{fontSize:12,fontWeight:700,color:T.textMuted}}>PROJECT</label>
+            <select value={revenueProj} onChange={e => setRevenueProj(e.target.value)}
+              style={{background:T.inputBg,color:T.text,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,outline:"none",colorScheme:"light"}}>
+              <option value="">All Projects</option>
+              {renderProjectOptions(projects)}
+            </select>
+            <label style={{fontSize:12,fontWeight:700,color:T.textMuted}}>YEAR</label>
+            <select value={selectedRevenueYear} onChange={e => setSelectedRevenueYear(e.target.value)}
+              style={{background:T.inputBg,color:T.text,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,fontWeight:600,outline:"none",colorScheme:"light"}}>
+              <option value="All">All Years</option>
+              {revenueYears.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+
+          {/* KPI strip */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:20}}>
+            {[
+              {label:"Recognized Revenue", v:formatSarCompact(totalRecognizedRevenue), color:T.teal,   icon:"📈"},
+              {label:"Total Contract Value", v:formatSarCompact(totalContractValue),   color:T.purple, icon:"📋"},
+              {label:"Active Agreements",  v:activeAgreements,                         color:T.green,  icon:"✓"},
+              {label:"Avg Monthly Revenue",v:formatSarCompact(avgMonthlyRevenue),      color:T.gold,   icon:"◎"},
+            ].map((k,i) => (
+              <div key={k.label} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 18px",animationDelay:`${i*.05}s`,position:"relative",overflow:"hidden",boxShadow:T.shadow}}>
+                <div style={{position:"absolute",top:10,right:14,fontSize:22,opacity:.1}}>{k.icon}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"clamp(22px,2.5vw,36px)",fontWeight:800,color:k.color,lineHeight:1}}>{k.v}</div>
+                <div style={{fontSize:11,color:T.textSub,marginTop:5,fontWeight:500}}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{fontSize:12,color:T.textMuted,marginBottom:20,fontStyle:"italic"}}>
+            Revenue is recognized by spreading each work order / agreement's contract value evenly across the months between its Date Signed and Expiry Date. Agreements without an expiry date are recognized in full in their signed month.
+          </div>
+
+          {/* ── Chart: years (All) or months (specific year) ── */}
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px",marginBottom:20}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text,marginBottom:4}}>
+              {selectedRevenueYear === "All" ? "REVENUE BY YEAR" : `REVENUE BY MONTH — ${selectedRevenueYear}`}
+            </div>
+            <div style={{fontSize:13,color:T.textMuted,marginBottom:22}}>
+              {selectedRevenueYear === "All" ? "Click a year to see its monthly breakdown" : "Click a month to see contributing agreements"}
+            </div>
+
+            {selectedRevenueYear === "All" ? (
+              yearlyRevenueTotals.length === 0 ? (
+                <div style={{textAlign:"center",padding:"30px 10px",color:T.textMuted,fontSize:13}}>No work orders with a value and signed date yet.</div>
+              ) : (
+                <div style={{display:"flex",alignItems:"flex-end",gap:14,height:220,padding:"0 4px"}}>
+                  {yearlyRevenueTotals.map(y => (
+                    <div key={y.year} onClick={() => setSelectedRevenueYear(y.year)}
+                      style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",cursor:"pointer"}}>
+                      <div style={{fontSize:12,fontWeight:700,color:T.teal,marginBottom:6}}>{formatSarCompact(y.total)}</div>
+                      <div style={{width:"100%",maxWidth:64,height:`${Math.max(4,(y.total/maxYearlyRevenue)*160)}px`,borderRadius:"8px 8px 0 0",background:`linear-gradient(180deg,${T.teal},${T.teal}88)`,transition:"height .8s cubic-bezier(0.22,1,0.36,1)"}}/>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text,marginTop:8}}>{y.year}</div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              <div style={{display:"flex",alignItems:"flex-end",gap:8,height:220,padding:"0 4px",overflowX:"auto"}}>
+                {monthlyRevenueForYear.map(m => (
+                  <div key={m.key} onClick={() => m.total > 0 && setRevenueMonthModal(m)}
+                    style={{flex:1,minWidth:38,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",height:"100%",cursor:m.total>0?"pointer":"default"}}>
+                    {m.total > 0 && <div style={{fontSize:10,fontWeight:700,color:T.teal,marginBottom:6,whiteSpace:"nowrap"}}>{formatSarCompact(m.total)}</div>}
+                    <div style={{width:"100%",maxWidth:36,height:`${Math.max(3,(m.total/maxMonthlyRevenue)*150)}px`,borderRadius:"6px 6px 0 0",background:m.total>0?`linear-gradient(180deg,${T.teal},${T.teal}88)`:T.border,transition:"height .8s cubic-bezier(0.22,1,0.36,1)"}}/>
+                    <div style={{fontSize:10,color:T.textMuted,fontWeight:600,marginTop:6}}>{m.name.slice(0,3)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── List view (same data, easier to scan) ── */}
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,boxShadow:T.shadow,padding:"22px"}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,marginBottom:14}}>
+              {selectedRevenueYear === "All" ? "YEARLY BREAKDOWN" : "MONTHLY BREAKDOWN"}
+            </div>
+            {selectedRevenueYear === "All" ? (
+              yearlyRevenueTotals.length === 0
+                ? <div style={{fontSize:13,color:T.textMuted}}>No data yet.</div>
+                : <div style={{display:"grid",gap:8}}>
+                    {[...yearlyRevenueTotals].sort((a,b)=>Number(b.year)-Number(a.year)).map(y => (
+                      <div key={y.year} onClick={() => setSelectedRevenueYear(y.year)}
+                        style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 16px",cursor:"pointer"}}>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{y.year}</span>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.teal}}>{formatSarCompact(y.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+            ) : (
+              <div style={{display:"grid",gap:8}}>
+                {monthlyRevenueForYear.map(m => (
+                  <div key={m.key} onClick={() => m.total > 0 && setRevenueMonthModal(m)}
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:T.bg,border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 16px",cursor:m.total>0?"pointer":"default",opacity:m.total>0?1:.6}}>
+                    <span style={{fontSize:14,fontWeight:600,color:T.text}}>{m.name}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      {m.entries.length > 0 && <Chip>{m.entries.length} agreement{m.entries.length!==1?"s":""}</Chip>}
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:m.total>0?T.teal:T.textMuted}}>{formatSarCompact(m.total)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {revenueMonthModal && (
+            <RevenueMonthDetailsModal
+              monthLabel={`${revenueMonthModal.name} ${selectedRevenueYear}`}
+              entries={revenueMonthModal.entries}
+              total={revenueMonthModal.total}
+              onClose={() => setRevenueMonthModal(null)}
+            />
           )}
         </div>
       )}
@@ -736,6 +924,54 @@ function InvoiceYearDetailsModal({ view, invoices, yearLabel, onClose }) {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+function RevenueMonthDetailsModal({ monthLabel, entries, total, onClose }) {
+  return (
+    <Overlay onClose={onClose}>
+      <div className="slide-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,width:"min(800px, calc(100vw - 24px))",maxHeight:"calc(100vh - 24px)",display:"flex",flexDirection:"column",boxShadow:T.shadow}}>
+        <div style={{padding:"18px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexShrink:0}}>
+          <div>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:24,color:T.text}}>{monthLabel} Revenue</div>
+            <div style={{fontSize:13,color:T.textMuted,marginTop:4}}>{entries.length} contributing agreement{entries.length!==1?"s":""} · {formatSarCompact(total)} recognized</div>
+          </div>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.text,borderRadius:10,width:38,height:38,fontSize:20,cursor:"pointer"}}>×</button>
+        </div>
+        <div style={{padding:"18px 22px 22px",overflowY:"auto"}}>
+          {entries.length === 0 ? (
+            <div style={{textAlign:"center",padding:"30px 10px",color:T.textMuted}}>No agreements contributed to this month.</div>
+          ) : (
+            <div style={{display:"grid",gap:10}}>
+              {entries.map((e,i) => (
+                <div key={i} style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text}}>{e.doc.name}</span>
+                        {e.doc.project && <Tag color={T.teal}>{e.doc.project}</Tag>}
+                        {e.doc.refNo && <Tag color={T.purple}>#{e.doc.refNo}</Tag>}
+                      </div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {e.doc.supplier && <Chip>Client: {e.doc.supplier}</Chip>}
+                        <Chip color={T.purple}>Total Value: {formatSarCompact(parseFloat(e.doc.amount)||0)}</Chip>
+                        {e.doc.date && <Chip>Signed: {fmtDate(e.doc.date)}</Chip>}
+                        {e.doc.expiryDate && <Chip>Expires: {fmtDate(e.doc.expiryDate)}</Chip>}
+                        <Chip>{e.spanMonths} month{e.spanMonths!==1?"s":""} spread</Chip>
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:20,color:T.teal}}>{formatSarCompact(e.allocated)}</div>
+                      <div style={{fontSize:10,color:T.textMuted,fontWeight:600}}>THIS MONTH</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
