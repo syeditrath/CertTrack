@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, pctColor, live } from "../utils.js";
 import { getStatus, ExportBtn, exportToExcel, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, METHOD_STATEMENT_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, BulkUploadModal, MultiPdfCertUpload } from "./UI.jsx";
@@ -33,6 +33,75 @@ const PD_TABS = [
   {id:"projectdocuments",label:"Project Documents",           icon:"📁", color:"#a78bfa", dim:"rgba(167,139,250,0.12)"},
   {id:"methodstatement", label:"Method Statement & Drawing",  icon:"📐", color:"#fb923c", dim:"rgba(251,146,60,0.12)"},
 ];
+
+const HOURS_PER_DAY = 10;   // full working day = 10 permit hours
+const CAPACITY_OFF_DAY = 5; // Date.getDay(): 0=Sun … 5=Fri … 6=Sat — Fridays excluded from capacity
+
+/* Total hours worked (sum of Permit Hours, cell H14 on each daily report)
+   vs. total hours of capacity (working days between the first and last
+   report in the set, excluding Fridays, × 10h/day). */
+function computeHoursSummary(reports, hoursPerDay = HOURS_PER_DAY) {
+  const list = reports || [];
+  const workedHours = list.reduce((s, r) => s + (parseFloat(r.permitHours) || 0), 0);
+
+  const validDates = list
+    .map(r => r.date)
+    .filter(Boolean)
+    .map(d => new Date(d))
+    .filter(d => !Number.isNaN(d.getTime()));
+
+  if (validDates.length === 0) {
+    return { workedHours, capacityHours: 0, workingDays: 0, utilization: 0 };
+  }
+
+  const start = new Date(Math.min(...validDates));
+  const end   = new Date(Math.max(...validDates));
+  let workingDays = 0;
+  const cur = new Date(start);
+  while (cur <= end) {
+    if (cur.getDay() !== CAPACITY_OFF_DAY) workingDays++;
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  const capacityHours = workingDays * hoursPerDay;
+  const utilization = capacityHours > 0 ? Math.round((workedHours / capacityHours) * 100) : 0;
+  return { workedHours, capacityHours, workingDays, utilization };
+}
+
+/* Compact inline badge — used in rig / crossing headers */
+function HoursBadge({ reports }) {
+  const { workedHours, capacityHours, utilization } = computeHoursSummary(reports);
+  if (capacityHours === 0) return null;
+  const color = pctColor(utilization);
+  return (
+    <span style={{display:"inline-flex",alignItems:"center",gap:5,background:`${color}18`,border:`1px solid ${color}44`,color,borderRadius:7,padding:"2px 9px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>
+      ⏱ {Math.round(workedHours)}h / {capacityHours}h · {utilization}%
+    </span>
+  );
+}
+
+/* Larger KPI-style row — used at the top of a project's Daily Reports view */
+function HoursSummaryPanel({ reports }) {
+  const hs = computeHoursSummary(reports);
+  if (hs.capacityHours === 0) return null;
+  const color = pctColor(hs.utilization);
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:16}}>
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.blue,lineHeight:1}}>{Math.round(hs.workedHours)}h</div>
+        <div style={{fontSize:11,color:T.textSub,marginTop:5,fontWeight:600}}>HOURS WORKED (Permit)</div>
+      </div>
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color:T.textSub,lineHeight:1}}>{hs.capacityHours}h</div>
+        <div style={{fontSize:11,color:T.textSub,marginTop:5,fontWeight:600}}>CAPACITY ({hs.workingDays}d × {HOURS_PER_DAY}h, Fridays excluded)</div>
+      </div>
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:26,fontWeight:800,color,lineHeight:1}}>{hs.utilization}%</div>
+        <div style={{fontSize:11,color:T.textSub,marginTop:5,fontWeight:600}}>UTILIZATION</div>
+      </div>
+    </div>
+  );
+}
 
 function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   // ALL hooks must be at the top — never after a conditional return
@@ -293,6 +362,11 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                     </div>
 
                     {(()=>{ const rc=rigs.filter(r=>r.project===project).length; if(!rc) return null; const rigNames=rigs.filter(r=>r.project===project).map(r=>r.name); return (<div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:6}}>{rigNames.map(n=><span key={n} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 8px",fontSize:11,color:T.textMuted,fontWeight:600}}>🔩 {n}</span>)}</div>); })()}
+                    {projectDailyReports.length>0 && (
+                      <div style={{marginTop:10}}>
+                        <HoursBadge reports={projectDailyReports}/>
+                      </div>
+                    )}
                     <div style={{marginTop:14,fontSize:12,color:T.blue,fontWeight:700,textAlign:"right"}}>Open Project →</div>
                   </button>
                 );
@@ -313,6 +387,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
         </div>
       </div>
       <SubTabBar tabs={PD_TABS.map(t=>t.id==="methodstatement"&&!msAuthed?{...t,label:`🔒 ${t.label}`}:t)} active={subTab} counts={counts} onChange={changeTab}/>
+
+      {subTab === "dailyreports" && <HoursSummaryPanel reports={projDRs}/>}
 
       {/* ── Rigs / Spreads panel ── */}
       <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 18px",marginBottom:16}}>
@@ -670,6 +746,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                           {isCollapsed?`${reports.length} report${reports.length!==1?"s":""} · ${activeCrossings.length} active crossing${activeCrossings.length!==1?"s":""} — click to expand`:`${reports.length} report${reports.length!==1?"s":""} · ${activeCrossings.length} active crossing${activeCrossings.length!==1?"s":""}`}
                         </div>
                       </div>
+                      <HoursBadge reports={reports}/>
                     </div>
                     <div style={{display:"flex",gap:8,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
                       {reports.length>0&&(
@@ -705,6 +782,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                                 <span style={{fontSize:14}}>📍</span>
                                 <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.text}}>{crossing.name}</span>
                                 <span style={{fontSize:11,color:T.textMuted}}>({crReports.length} report{crReports.length!==1?"s":""})</span>
+                                <HoursBadge reports={crReports}/>
                               </div>
                               <div style={{display:"flex",gap:6,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
                                 {crReports.length>0&&(
@@ -754,6 +832,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                                       <span style={{fontSize:14}}>✅</span>
                                       <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.textMuted,textDecoration:"line-through"}}>{crossing.name}</span>
                                       <span style={{fontSize:11,color:T.textMuted}}>({crReports.length} report{crReports.length!==1?"s":""})</span>
+                                      <HoursBadge reports={crReports}/>
                                     </div>
                                     <div style={{display:"flex",gap:6,alignItems:"center"}} onClick={e=>e.stopPropagation()}>
                                       {crReports.length>0&&(
