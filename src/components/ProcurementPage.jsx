@@ -1,8 +1,8 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { T } from "../theme.js";
 import { uid, fmtDate, live } from "../utils.js";
 import { getStatus, ExportBtn } from "../constants.js";
-import { Btn, Chip, ABtn, PageHeader, Empty } from "./UI.jsx";
+import { Btn, ABtn, PageHeader, Empty, FormModal, FieldRow, SectionDivider, FInput, FTextarea, FSelect, FLink } from "./UI.jsx";
 
 /* ─── Procurement document chip options ──────────────────────────────────── */
 const PROC_DOC_OPTIONS = [
@@ -43,48 +43,87 @@ function DoneToggle({ value, onChange, label }) {
   );
 }
 
-/* ─── Docs cell: clickable chips that toggle which docs are attached ────── */
-function DocsCell({ docsAttached, onToggle }) {
-  const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState(null);
-  const btnRef = useRef(null);
-  const active = docsAttached || [];
+/* ─── Count of documents actually attached (handles legacy tag-only entries too) ── */
+function docCount(docsAttached) {
+  return (docsAttached || []).filter(d => (typeof d === "string" ? true : !!(d && d.fileLink))).length;
+}
 
-  const handleOpen = () => {
-    if (open) { setOpen(false); return; }
-    const rect = btnRef.current.getBoundingClientRect();
-    setCoords({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 220) });
-    setOpen(true);
+/* ─── Full request details modal: extra fields + per-doc-type file uploads ─── */
+function ProcurementDetailsModal({ row, rigNames, onClose, onSave, onDelete, isAdmin }) {
+  const [f, setF] = useState({ ...row });
+  const set = k => v => setF(p => ({ ...p, [k]: v }));
+
+  const getDocLink = type => {
+    const entry = (f.docsAttached || []).find(d => (typeof d === "string" ? d === type : d.type === type));
+    return entry && typeof entry !== "string" ? (entry.fileLink || "") : "";
+  };
+
+  const setDocLink = (type, link) => {
+    setF(p => {
+      const cur = (p.docsAttached || []).filter(d => (typeof d === "string" ? d !== type : d.type !== type));
+      const next = link ? [...cur, { type, fileLink: link }] : cur;
+      return { ...p, docsAttached: next };
+    });
   };
 
   return (
-    <div style={{position:"relative"}}>
-      <button ref={btnRef} onClick={handleOpen}
-        style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:600,cursor:"pointer",width:"100%",textAlign:"left"}}>
-        {active.length === 0 ? "+ Add docs…" : `${active.length} doc${active.length!==1?"s":""} ▾`}
-      </button>
-      {active.length > 0 && (
-        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
-          {active.map(d=><Chip key={d}>{d}</Chip>)}
-        </div>
-      )}
-      {open && coords && (
-        <>
-          <div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:1000}}/>
-          <div style={{position:"fixed",top:coords.top,left:coords.left,width:coords.width,background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:10,zIndex:1001,boxShadow:"0 10px 30px rgba(0,0,0,0.4)",display:"flex",flexWrap:"wrap",gap:6}}>
-            {PROC_DOC_OPTIONS.map(doc=>{
-              const isActive = active.includes(doc);
-              return (
-                <button key={doc} type="button" onClick={()=>onToggle(doc)}
-                  style={{background:isActive?T.tealDim:T.bg,border:`1px solid ${isActive?T.teal:T.border}`,color:isActive?T.teal:T.textSub,borderRadius:999,padding:"5px 11px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>
-                  {isActive?"✓ ":""}{doc}
-                </button>
-              );
-            })}
+    <FormModal
+      title={`REQUEST — ${row.prNo || row.poNo || "New"}`}
+      color={T.teal}
+      onClose={onClose}
+      onSave={() => onSave(f)}
+    >
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <FieldRow label="PR No."><FInput value={f.prNo||""} onChange={set("prNo")} color={T.teal}/></FieldRow>
+        <FieldRow label="PO No."><FInput value={f.poNo||""} onChange={set("poNo")} color={T.teal}/></FieldRow>
+      </div>
+
+      <FieldRow label="Rig">
+        {rigNames.length > 0 ? (
+          <FSelect value={f.rig||""} onChange={set("rig")} color={T.teal}>
+            <option value="">— Select rig —</option>
+            {rigNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </FSelect>
+        ) : (
+          <FInput value={f.rig||""} onChange={set("rig")} color={T.teal} placeholder="Rig name"/>
+        )}
+      </FieldRow>
+
+      <FieldRow label="Description">
+        <FTextarea value={f.description||""} onChange={set("description")} color={T.teal} placeholder="What is this request for?"/>
+      </FieldRow>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        <FieldRow label="Invoice No."><FInput value={f.invoiceNo||""} onChange={set("invoiceNo")} color={T.teal}/></FieldRow>
+        <FieldRow label="Vendor"><FInput value={f.vendor||""} onChange={set("vendor")} color={T.teal}/></FieldRow>
+      </div>
+
+      <FieldRow label="Requester"><FInput value={f.requester||""} onChange={set("requester")} color={T.teal} placeholder="Name of requester"/></FieldRow>
+
+      <SectionDivider label="Documents"/>
+      <div style={{display:"grid",gap:12,marginBottom:6}}>
+        {PROC_DOC_OPTIONS.map(type => (
+          <div key={type}>
+            <div style={{fontSize:12,fontWeight:700,color:T.textSub,marginBottom:4}}>{type}</div>
+            <FLink
+              value={getDocLink(type)}
+              onChange={link => setDocLink(type, link)}
+              folder={`procurement/${(row.prNo||row.poNo||row.id||"request").replace(/\s+/g,"_")}/${type.replace(/\s+/g,"_")}`}
+            />
           </div>
-        </>
+        ))}
+      </div>
+
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => { if (window.confirm("Delete this request?")) { onDelete(); onClose(); } }}
+          style={{marginTop:10,background:T.redDim,border:`1px solid ${T.red}55`,color:T.red,borderRadius:8,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}
+        >
+          ✕ Delete Request
+        </button>
       )}
-    </div>
+    </FormModal>
   );
 }
 
@@ -100,11 +139,13 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
   const [search, setSearch] = useState("");
   const [fStatus, setFStatus] = useState("");
   const [newRow, setNewRow] = useState(null); // draft row being added, or null
+  const [detailsRow, setDetailsRow] = useState(null); // row currently open in the details modal
 
   const rows = live(data.procurement);
+  const rigNames = live(data.rigs || []).map(r => r.name).filter(Boolean);
 
   const visible = rows.filter(r=>{
-    const matchesSearch = !search || [r.prNo,r.poNo].some(v=>(v||"").toLowerCase().includes(search.toLowerCase()));
+    const matchesSearch = !search || [r.prNo,r.poNo,r.rig,r.vendor,r.invoiceNo,r.requester].some(v=>(v||"").toLowerCase().includes(search.toLowerCase()));
     const matchesStatus = !fStatus
       || (fStatus==="pending_pr"   && r.prStatus!=="Released")
       || (fStatus==="pending_po"   && r.prStatus==="Released" && r.poStatus!=="Released")
@@ -131,10 +172,10 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
     }));
   };
 
-  const toggleDoc = (id, doc, currentDocs) => {
-    const cur = currentDocs || [];
-    const next = cur.includes(doc) ? cur.filter(d=>d!==doc) : [...cur,doc];
-    patchRow(id, { docsAttached: next });
+  const saveDetails = updatedRow => {
+    patchRow(updatedRow.id, updatedRow);
+    setDetailsRow(null);
+    showToast("Request updated");
   };
 
   const delRow = id => {
@@ -143,7 +184,7 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
   };
 
   const startNewRow = () => {
-    setNewRow({ prNo:"", prStatus:"Unreleased", poNo:"", poStatus:"Unreleased", docsAttached:[], grnDone:false, sesDone:false });
+    setNewRow({ prNo:"", prStatus:"Unreleased", poNo:"", poStatus:"Unreleased", docsAttached:[], grnDone:false, sesDone:false, rig:"", description:"", invoiceNo:"", vendor:"", requester:"" });
   };
 
   const commitNewRow = () => {
@@ -156,7 +197,7 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
     showToast("Request added");
   };
 
-  const colWidths = "120px 110px 120px 110px 200px 130px 130px 40px";
+  const colWidths = "120px 110px 120px 110px 90px 110px 110px 40px 40px";
 
   return (
     <div style={{maxWidth:"min(1500px,96vw)",margin:"0 auto",width:"100%"}}>
@@ -174,7 +215,9 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
         </select>
         <ExportBtn data={rows.map(r=>({
           "PR No":r.prNo, "PR Status":r.prStatus||"Unreleased",
-          "PO No":r.poNo, "PO Status":r.poStatus||"Unreleased", "Documents":(r.docsAttached||[]).join(", "),
+          "PO No":r.poNo, "PO Status":r.poStatus||"Unreleased",
+          "Rig":r.rig||"", "Description":r.description||"", "Invoice No":r.invoiceNo||"", "Vendor":r.vendor||"", "Requester":r.requester||"",
+          "Documents":(r.docsAttached||[]).map(d=>typeof d==="string"?d:d.type).join(", "),
           "GRN":r.grnDone?"Done":"Not Done", "SES":r.sesDone?"Done":"Not Done", "Date":r.date,
         }))} filename="Procurement_Tracker"/>
         <Btn color={T.teal} solid onClick={startNewRow}>+ New Request</Btn>
@@ -202,7 +245,7 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
         : <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
           {/* Header row */}
           <div style={{display:"grid",gridTemplateColumns:colWidths,gap:10,padding:"10px 14px",background:T.bg,borderBottom:`1px solid ${T.border}`,fontSize:11,fontWeight:700,color:T.textMuted,letterSpacing:".04em"}}>
-            <div>PR NO.</div><div>PR STATUS</div><div>PO NO.</div><div>PO STATUS</div><div>DOCUMENTS</div><div>GRN</div><div>SES</div><div></div>
+            <div>PR NO.</div><div>PR STATUS</div><div>PO NO.</div><div>PO STATUS</div><div>DOCS</div><div>GRN</div><div>SES</div><div></div><div></div>
           </div>
 
           {/* Draft new row */}
@@ -212,9 +255,10 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
               <ReleaseToggle value={newRow.prStatus} onChange={v=>setNewRow(p=>({...p,prStatus:v}))}/>
               <EditableCell value={newRow.poNo} onChange={v=>setNewRow(p=>({...p,poNo:v}))} placeholder="PO-0001"/>
               <ReleaseToggle value={newRow.poStatus} onChange={v=>setNewRow(p=>({...p,poStatus:v}))}/>
-              <DocsCell docsAttached={newRow.docsAttached} onToggle={doc=>setNewRow(p=>({...p,docsAttached:(p.docsAttached||[]).includes(doc)?p.docsAttached.filter(d=>d!==doc):[...(p.docsAttached||[]),doc]}))}/>
+              <div style={{fontSize:12,color:T.textMuted}}>—</div>
               <DoneToggle value={newRow.grnDone} onChange={v=>setNewRow(p=>({...p,grnDone:v}))} label="GRN"/>
               <DoneToggle value={newRow.sesDone} onChange={v=>setNewRow(p=>({...p,sesDone:v}))} label="SES"/>
+              <div/>
               <div style={{display:"flex",gap:4}}>
                 <ABtn color={T.green} onClick={commitNewRow}>✓</ABtn>
                 <ABtn color={T.red} onClick={()=>setNewRow(null)}>✕</ABtn>
@@ -229,9 +273,14 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
               <ReleaseToggle value={r.prStatus} onChange={v=>patchRow(r.id,{prStatus:v})}/>
               <EditableCell value={r.poNo} onChange={v=>patchRow(r.id,{poNo:v})} placeholder="—"/>
               <ReleaseToggle value={r.poStatus} onChange={v=>patchRow(r.id,{poStatus:v})}/>
-              <DocsCell docsAttached={r.docsAttached} onToggle={doc=>toggleDoc(r.id,doc,r.docsAttached)}/>
+              <div style={{fontSize:12,color:docCount(r.docsAttached)>0?T.teal:T.textMuted,fontWeight:600}}>
+                {docCount(r.docsAttached)>0 ? `${docCount(r.docsAttached)} doc${docCount(r.docsAttached)!==1?"s":""}` : "—"}
+              </div>
               <DoneToggle value={r.grnDone} onChange={v=>patchRow(r.id,{grnDone:v})} label="GRN"/>
               <DoneToggle value={r.sesDone} onChange={v=>patchRow(r.id,{sesDone:v})} label="SES"/>
+              <div>
+                <ABtn color={T.blue} onClick={()=>setDetailsRow(r)}>⋯</ABtn>
+              </div>
               <div>
                 {isAdmin && <ABtn color={T.red} onClick={()=>{if(window.confirm("Delete this request?"))delRow(r.id);}}>✕</ABtn>}
               </div>
@@ -239,6 +288,17 @@ function ProcurementPage({data,setData,showToast,isAdmin}) {
           ))}
         </div>
       }
+
+      {detailsRow && (
+        <ProcurementDetailsModal
+          row={detailsRow}
+          rigNames={rigNames}
+          isAdmin={isAdmin}
+          onClose={()=>setDetailsRow(null)}
+          onSave={saveDetails}
+          onDelete={()=>delRow(detailsRow.id)}
+        />
+      )}
     </div>
   );
 }
