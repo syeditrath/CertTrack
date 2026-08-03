@@ -6,6 +6,21 @@ import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, PageHeader, Empty } from "./UI.jsx";
 
+/* ─── Cost categories used throughout this page (breakdown bars, entry form,
+   filter dropdown, chart colors). Edit this list to add/rename/re-color categories. ── */
+const COST_CATS = [
+  { id:"Labour",                icon:"👷", color:T.blue },
+  { id:"Equipment",              icon:"🔧", color:T.purple },
+  { id:"Materials",              icon:"📦", color:T.gold },
+  { id:"Fuel",                   icon:"⛽", color:T.red },
+  { id:"Transportation",         icon:"🚚", color:T.teal },
+  { id:"Permits & Fees",         icon:"📄", color:T.green },
+  { id:"Subcontractor",          icon:"🤝", color:T.blue },
+  { id:"Maintenance & Repairs",  icon:"🛠️", color:T.purple },
+  { id:"Other",                  icon:"◎",  color:T.textMuted },
+];
+const COST_CAT_MAP = COST_CATS.reduce((m,c)=>{ m[c.id]=c; return m; }, {});
+
 function CostControlPage({data, setData, showToast, go, isAdmin}) {
   const [selProj, setSelProj] = useState(null);
   const [modal,   setModal]   = useState(null);
