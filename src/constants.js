@@ -288,6 +288,7 @@ const AUTH_KEY          = "cta_auth";
 const FINANCE_PASSWORD  = "finance2025"; // Change this to your desired finance password
 const ANALYSIS_PASSWORD = "analysis2025";
 const COST_PASSWORD     = "cost2025"; // Change this to your desired cost control password
+const PROCUREMENT_PASSWORD = "procurement2025"; // Change this to your desired procurement password
 const ADMIN_PASSWORD    = "admin2025";  // Only admin can delete — change this
 const ADMIN_KEY         = "cta_admin";
 
@@ -429,6 +430,6 @@ export {
   EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_MAINT_TEMPLATE_ID, EMAILJS_PUBLIC_KEY,
   NOTIFY_STORAGE_KEY, NOTIFY_LAST_SENT_KEY,
   loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail,
-  COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY,
+  COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, PROCUREMENT_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY,
   isAuthenticated, EMPTY_DATA,
 };
