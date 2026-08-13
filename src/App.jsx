@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { GLOBAL_CSS, useViewport, daysUntil } from "./utils.js";
+import { GLOBAL_CSS } from "./utils.js";
 import { T, DARK, LIGHT, setTheme } from "./theme.js";
-import { AUTH_KEY, ADMIN_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, PROCUREMENT_PASSWORD, ADMIN_PASSWORD, EMPTY_DATA, loadNotifySettings, saveNotifySettings, buildEmailPayload, NOTIFY_LAST_SENT_KEY, isAuthenticated, COMPANY_PASSWORD, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY } from "./constants.js";
+import { AUTH_KEY, ADMIN_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, EMPTY_DATA, loadNotifySettings, saveNotifySettings, buildEmailPayload, NOTIFY_LAST_SENT_KEY, isAuthenticated, COMPANY_PASSWORD } from "./constants.js";
 import { fetchAppData, saveAppData } from "./cloudflare.js";
 import { WelcomeScreen } from "./components/WelcomeScreen.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
@@ -11,7 +11,6 @@ import { ScorpionDocs } from "./components/ScorpionDocs.jsx";
 import { ManpowerPage } from "./components/ManpowerPage.jsx";
 import { EquipmentPage } from "./components/EquipmentPage.jsx";
 import { MaintenancePage } from "./components/MaintenancePage.jsx";
-import { ProcurementPage } from "./components/ProcurementPage.jsx";
 import { RigsPage } from "./components/RigsPage.jsx";
 import { CostControlPage } from "./components/CostControlPage.jsx";
 import { FinancePage, LoginPage, FinanceLoginPage } from "./components/FinancePage.jsx";
@@ -34,7 +33,6 @@ export default function App() {
   const [financeAuthed,  setFinanceAuthed]  = useState(false);
   const [analysisAuthed, setAnalysisAuthed] = useState(false);
   const [costAuthed,     setCostAuthed]     = useState(false);
-  const [procurementAuthed, setProcurementAuthed] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem("cta_dark") === "true"; }
     catch { return false; }
@@ -118,9 +116,6 @@ export default function App() {
 
   useEffect(() => {
     if (loadingData) return;
-    if (!isAdmin) return; // ✅ FIX: auto-backup was firing for every logged-in user,
-                           // silently downloading the full dataset to anyone's device.
-                           // Only admins should receive automatic backups.
     const isEmpty = !data.manpower?.length && !data.equipment?.length && !data.projects?.length
       && !data.scorpionDocs?.length && !data.projectDocs?.length && !data.invoices?.length;
     if (isEmpty) return;
@@ -130,7 +125,7 @@ export default function App() {
     if (hoursSince >= 24) {
       backupToDrive(true);
     }
-  }, [loadingData, isAdmin]);
+  }, [loadingData]);
 
   useEffect(() => {
     if (window.emailjs) return;
@@ -147,14 +142,17 @@ export default function App() {
   }, [darkMode]);
 
   // ✅ FIX 2: saveAppData useEffect had a misplaced }; that broke the effect body
-  // ✅ FIX 3: hasRealData was a hardcoded checklist that missed costControl, quotations,
-  //    procurement, and checked nonexistent keys (invoices/workOrders) — silently skipping
-  //    the Cloudflare save whenever a user's only activity was in one of the missed sections.
-  //    Now it generically checks every array-valued key in `data` so new sections are
-  //    automatically covered without needing to remember to update this list.
   useEffect(() => {
     if (loadingData) return;
-    const hasRealData = Object.values(data).some(v => Array.isArray(v) && v.length > 0);
+    const hasRealData = (data.manpower?.length > 0)
+      || (data.equipment?.length > 0)
+      || (data.scorpionDocs?.length > 0)
+      || (data.projectDocs?.length > 0)
+      || (data.invoices?.length > 0)
+      || (data.workOrders?.length > 0)
+      || (data.costSheets?.length > 0)
+      || (data.rigs?.length > 0)
+      || (data.projectAnalysis?.some(p => p.poValue || p.dailyReports?.length > 0));
     if (!hasRealData) return;
 
     const t = setTimeout(() => {
@@ -301,7 +299,7 @@ export default function App() {
       )}
       {sideOpen && <div className="fade-in" onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(13,31,53,0.45)",zIndex:49}}/>}
 
-      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} isAdmin={isAdmin} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout} financeAuthed={financeAuthed} analysisAuthed={analysisAuthed} costAuthed={costAuthed} procurementAuthed={procurementAuthed}/>
+      <Sidebar page={page} go={go} sideOpen={sideOpen} alerts={allExpiries.length} data={data} viewportWidth={viewportWidth} isAdmin={isAdmin} onManageProjects={()=>{setSideOpen(false);setProjMod(true);}} darkMode={darkMode} onToggleDark={()=>setDarkMode(d=>!d)} onLogout={logout} financeAuthed={financeAuthed} analysisAuthed={analysisAuthed} costAuthed={costAuthed}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
         <header style={{background:T.sidebar,borderBottom:"2px solid transparent",backgroundImage:`linear-gradient(${T.sidebar},${T.sidebar}), linear-gradient(90deg,#fbbf24,#38bdf8,#34d399,#fbbf24)`,backgroundOrigin:"border-box",backgroundClip:"padding-box, border-box",padding:`0 ${viewportWidth < 600 ? "10px" : "20px"}`,flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.3)"}}>
@@ -365,7 +363,7 @@ export default function App() {
                 onMouseLeave={e=>e.currentTarget.style.borderColor=isAdmin?"#ef4444":T.border}>
                 {isAdmin ? (viewportWidth < 480 ? "🔓" : "🔓 Admin") : "🔒"}
               </button>
-              {viewportWidth >= 400 && isAdmin && <>
+              {viewportWidth >= 400 && <>
               <input id="restore-input" type="file" accept=".json" style={{display:"none"}} onChange={e=>{
                 const file = e.target.files[0];
                 if (!file) return;
@@ -383,13 +381,13 @@ export default function App() {
                 e.target.value = "";
               }}/>
               <button onClick={()=>document.getElementById("restore-input").click()}
-                title="Restore data from backup JSON file (admin only)"
+                title="Restore data from backup JSON file"
                 style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:14,color:T.textMuted,display:"flex",alignItems:"center",gap:5,transition:"all .15s",flexShrink:0}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=T.blue}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
                 📂
               </button>
-              <button onClick={() => backupToDrive(false)} disabled={backingUp || loadingData} title={backupStatus ? `Last backup: ${backupStatus} (admin only)` : "No backup yet (admin only)"}
+              <button onClick={() => backupToDrive(false)} disabled={backingUp || loadingData} title={backupStatus ? `Last backup: ${backupStatus}` : "No backup yet"}
                 style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:14,color:T.textMuted,display:"flex",alignItems:"center",gap:4,transition:"all .15s",opacity:backingUp?0.5:1,flexShrink:0}}
                 onMouseEnter={e=>e.currentTarget.style.borderColor=T.green}
                 onMouseLeave={e=>e.currentTarget.style.borderColor=T.border}>
@@ -441,14 +439,6 @@ export default function App() {
             </div>
           )}
           {page==="maintenance" && <div className="fade-in" key="maintenance"><MaintenancePage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>}
-          {page==="procurement" && (
-            procurementAuthed
-              ? <div className="fade-in" key="procurement"><ProcurementPage data={data} setData={setData} showToast={showToast} isAdmin={isAdmin}/></div>
-              : <FinanceLoginPage title="PROCUREMENT ACCESS" subtitle="This section contains procurement workflow data.\nEnter the procurement password to continue." passwordLabel="PROCUREMENT PASSWORD" placeholder="Enter password…" buttonLabel="UNLOCK PROCUREMENT" onLogin={(pw) => {
-                  if (pw === PROCUREMENT_PASSWORD) { setProcurementAuthed(true); return true; }
-                  return false;
-                }}/>
-          )}
           {page==="costs" && (
             costAuthed
               ? <div className="fade-in" key="costs"><CostControlPage data={data} setData={setData} showToast={showToast} go={go} isAdmin={isAdmin}/></div>
@@ -481,3 +471,7 @@ export default function App() {
     </div>
   );
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SIDEBAR
+════════════════════════════════════════════════════════════════════════════ */
