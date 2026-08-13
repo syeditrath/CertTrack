@@ -1,14 +1,149 @@
 import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
-import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, pctColor, daysLeft, deriveProjectStats, live } from "../utils.js";
-import { getStatus, ExportBtn, exportToExcel, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
-import { uploadFile, saveAppData, getPreviewUrl, isCloudflareConfigured } from "../cloudflare.js";
-import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, FInput, FTextarea, FSelect, PageHeader, Empty } from "./UI.jsx";
-import { parseDailyReportExcel } from "./ProjectDocs.jsx";
-import { BulkDailyReportImport } from "./WelcomeScreen.jsx";
+import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme } from "../utils.js";
+import { getStatus, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA } from "../constants.js";
+import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
+import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, FInput, FTextarea, FSelect, PageHeader, Empty, daysLeft, pctColor, deriveProjectStats } from "./UI.jsx";
+import { RiskAlertsBar, ProjectAnalysisProNav, AnalyticsTab, TimelineTab, BudgetTab, ReportsTab, computeRiskInsights, costSheetsByProject } from "./ProjectAnalysisPro.jsx";
 
+function dprReadRange(ws, rangeStr) {
+  try {
+    const range = XLSX.utils.decode_range(rangeStr);
+    const parts = new Set();
+    for (let r = range.s.r; r <= range.e.r; r++) {
+      for (let c2 = range.s.c; c2 <= range.e.c; c2++) {
+        const ref = XLSX.utils.encode_cell({r, c:c2});
+        if (ws[ref]?.v != null && String(ws[ref].v).trim()) parts.add(String(ws[ref].v).trim());
+      }
+    }
+    return [...parts].join(" ");
+  } catch { return ""; }
+}
 
+/* Detect if workbook is the Scorpion DPR template.
+   The template always has a sheet named "Daily DPR Form". */
+function isScorpionDprTemplate(wb) {
+  return wb.SheetNames.includes("Daily DPR Form");
+}
+
+/* Read a cell value cleanly — handles dates, numbers (including 0), strings.
+   Falls back to the merge anchor map if the cell itself is empty. */
+function dprReadExact(ws, ref, mergeMap) {
+  const c = ws[ref];
+  if (c !== undefined) {
+    // Date type
+    if (c.t === "d" || c.v instanceof Date) return excelDateToStr(c.v) || c.w || "";
+    // Any value including numeric 0
+    if (c.v !== undefined && c.v !== null) return String(c.v).trim();
+    if (c.w) return String(c.w).trim();
+  }
+  // Merged cell — value lives in the anchor cell, not here
+  return (mergeMap && mergeMap[ref]) ? mergeMap[ref] : "";
+}
+
+/* Parse the Scorpion DPR template.
+   PRIMARY: reads the ERP field table in columns L/M (most reliable, no merge issues).
+   FALLBACK: reads the exact named cells directly. */
+function parseScorpionDprSheet(wb) {
+  const ws = wb.Sheets["Daily DPR Form"] || wb.Sheets[wb.SheetNames[0]];
+
+  // Build merge map so any cell in a merged region resolves to the anchor value
+  const mergeMap = {};
+  if (ws["!merges"]) {
+    ws["!merges"].forEach(m => {
+      const anchorRef = XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c });
+      const ac = ws[anchorRef];
+      let v = "";
+      if (ac) {
+        if (ac.t === "d" || ac.v instanceof Date) v = excelDateToStr(ac.v) || ac.w || "";
+        else if (ac.v !== undefined && ac.v !== null) v = String(ac.v).trim();
+        else if (ac.w) v = String(ac.w).trim();
+      }
+      for (let r = m.s.r; r <= m.e.r; r++) {
+        for (let c2 = m.s.c; c2 <= m.e.c; c2++) {
+          mergeMap[XLSX.utils.encode_cell({ r, c: c2 })] = v;
+        }
+      }
+    });
+  }
+
+  const rd = (ref) => dprReadExact(ws, ref, mergeMap);
+
+  // Read ERP key-value table from columns L & M (rows 1 onward)
+  const erp = {};
+  for (let row = 1; row <= 40; row++) {
+    const key = rd(XLSX.utils.encode_cell({ r: row - 1, c: 11 }));   // col L
+    const val = rd(XLSX.utils.encode_cell({ r: row - 1, c: 12 }));   // col M
+    if (key) erp[key.trim()] = val;
+  }
+
+  // Helper: prefer ERP table value, fall back to direct cell read
+  const get = (erpKey, cellRef) => {
+    const erpVal = erp[erpKey];
+    // ERP value of "0" is valid — only skip if truly missing
+    if (erpVal !== undefined && erpVal !== null && erpVal !== "") return erpVal;
+    return rd(cellRef);
+  };
+
+  // Date: ERP stores as Excel serial (number), direct cell is a Date object
+  const rawDate = erp["report_date"] || rd("H8");
+  const date = excelDateToStr(
+    typeof rawDate === "string" && /^\d+$/.test(rawDate.trim())
+      ? Number(rawDate)
+      : rawDate
+  ) || rawDate;
+
+  return {
+    id: uid(),
+    dprSource: "scorpion_template",
+    project:        get("project_name",  "C8"),
+    rig:            rd("G6"),
+    date:           date,
+    profile:        get("profile",       "C13"),
+    activity:       get("activity",      "H13"),
+    permitStartTime: rd("C11"),
+    permitEndTime:   rd("H11"),
+    permitReceived: rd("C14"),
+    permitHours:    rd("H14"),
+    standbyReason:  rd("C15"),
+    progressToday:  get("progress_today_m",   "E18"),
+    accumulated:    get("accumulated_progress_m", "G18"),
+    activities:     get("today_summary",  "A27") || dprReadRange(ws, "A27:I29"),
+  };
+}
+function parseDailyReportExcel(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, { type:"array", cellDates:true });
+
+  // ── Scorpion DPR Template path — always try this first ──
+  if (isScorpionDprTemplate(wb)) {
+    const rec = parseScorpionDprSheet(wb);
+    // Always return the record so the user can see what was parsed
+    return [rec];
+  }
+
+  // ── Generic column-mapped path (legacy / other formats) ──
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json(ws, { defval:"" });
+  return rawRows
+    .filter(row => Object.values(row).some(v => v !== null && v !== ""))
+    .map(row => {
+      const rec = { id: uid() };
+      const upper = {};
+      Object.entries(row).forEach(([k,v]) => { upper[String(k).toUpperCase().trim()] = v; });
+      Object.entries(DR_COL_MAP).forEach(([col, key]) => {
+        const val = upper[col];
+        if (val === undefined || val === null || val === "") return;
+        if (key === "date") {
+          rec[key] = excelDateToStr(val) || String(val);
+        } else {
+          rec[key] = String(val).trim();
+        }
+      });
+      return rec;
+    })
+    .filter(rec => Object.keys(rec).filter(k => k !== "id").length > 0);
+}
 
 function DailyReportModal({ report, projectName, rigs, onSave, onClose }) {
   const blank = { id: uid(), date: new Date().toISOString().slice(0,10), rig:"", weather:"", activities:"", manpower:"", equipment:"", issues:"", notes:"", fileLink:"", fileName:"" };
@@ -886,7 +1021,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
     });
     setDrModal(null);
   };
-  const delReport = id => setData(prev=>({...prev, projectDocs:(prev.projectDocs||[]).map(d=>d.id===id?{...d,_deleted:true}:d)}));
+  const delReport = id => setData(prev=>({...prev, projectDocs:(prev.projectDocs||[]).filter(d=>d.id!==id)}));
 
   return (
     <div style={{maxWidth:"min(1200px,98vw)",margin:"0 auto"}}>
@@ -925,7 +1060,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
 
       {/* ══ COST SHEET tab ═══════════════════════════════════════════════ */}
       {detailTab==="costsheet" && (() => {
-        const sheets = live(data.costSheets).filter(s=>s.project===proj.project);
+        const sheets = (data.costSheets||[]).filter(s=>s.project===proj.project);
         const addSheet = () => {
           const desc = window.prompt("Cost item description:");
           if (!desc) return;
@@ -934,12 +1069,12 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
           setData(prev=>({...prev, costSheets:[...(prev.costSheets||[]), {id:uid(), project:proj.project, description:desc, estimatedCost:est||"0", actualCost:act||"", date:new Date().toISOString().slice(0,10), notes:""}]}));
           showToast("Cost sheet entry added");
         };
-        const delSheet = id => setData(prev=>({...prev, costSheets:(prev.costSheets||[]).map(s=>s.id===id?{...s,_deleted:true}:s)}));
+        const delSheet = id => setData(prev=>({...prev, costSheets:(prev.costSheets||[]).filter(s=>s.id!==id)}));
         const totalEst = sheets.reduce((s,x)=>s+(parseFloat(x.estimatedCost)||0),0);
         const totalAct = sheets.reduce((s,x)=>s+(parseFloat(x.actualCost)||0),0);
 
         // Cost sheet file upload & estimated total cost (stored on the projectAnalysis entry)
-        const paEntry = live(data.projectAnalysis).find(x=>x.project===proj.project) || {};
+        const paEntry = (data.projectAnalysis||[]).find(x=>x.project===proj.project) || {};
         const handleCsFileUpload = async (file) => {
           if (!file) return;
           setCsUploading(true);
@@ -1053,7 +1188,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
 
       {/* ══ QUOTATION tab ════════════════════════════════════════════════ */}
       {detailTab==="quotation" && (() => {
-        const paEntry = live(data.projectAnalysis).find(x=>x.project===proj.project) || {};
+        const paEntry = (data.projectAnalysis||[]).find(x=>x.project===proj.project) || {};
         const handleQuoteFileUpload = async (file) => {
           if (!file) return;
           setQuoteUploading(p=>({...p, _main:true}));
@@ -1561,12 +1696,13 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
   const [fStat,  setFStat]  = useState("All");
   const [search, setSearch] = useState("");
   const [showDprConsolidate, setShowDprConsolidate] = useState(false);
+  const [proTab, setProTab] = useState("portfolio");
 
   const projects  = data.projects || [];
-  const projectDocs = live(data.projectDocs);
+  const projectDocs = data.projectDocs || [];
 
   // Auto-sync: any project in data.projects not yet in projectAnalysis gets added automatically
-  const rawAnalysis = live(data.projectAnalysis);
+  const rawAnalysis = data.projectAnalysis || [];
   const workOrders = projectDocs.filter(d => d.subTab === "workorders");
 
   // Get contract value for a project from its work order (highest amount if multiple)
@@ -1602,7 +1738,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
     setModal(null);
   };
   const del = id => {
-    setData(prev=>({...prev,projectAnalysis:prev.projectAnalysis.map(x=>x.id===id?{...x,_deleted:true}:x)}));
+    setData(prev=>({...prev,projectAnalysis:prev.projectAnalysis.filter(x=>x.id!==id)}));
     showToast("Project deleted","del");
     setDetail(null);
   };
@@ -1695,6 +1831,12 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
           <button onClick={()=>setModal("new")} style={{background:`linear-gradient(135deg,${T.gold},#d97706)`,border:"none",color:"#000",borderRadius:11,padding:"11px 22px",fontSize:14,fontWeight:800,cursor:"pointer",boxShadow:`0 4px 14px ${T.gold}44`}}>+ New Project</button>
         </div>
       </div>
+
+      {/* Risk alerts + tab navigation */}
+      <RiskAlertsBar enriched={enriched} data={data} onOpenProject={setDetail} />
+      <ProjectAnalysisProNav tab={proTab} setTab={setProTab} riskCount={computeRiskInsights(enriched, costSheetsByProject(data.costSheets)).total} />
+
+      {proTab==="portfolio" && (<>
 
       {/* Portfolio KPI strip */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
@@ -1812,7 +1954,14 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
         </div>
       )}
 
-      {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} projectDocs={live(data.projectDocs)} rigs={live(data.rigs)} onClose={()=>setShowDprConsolidate(false)}/>}
+      </>)}
+
+      {proTab==="analytics" && <AnalyticsTab enriched={enriched} />}
+      {proTab==="timeline"  && <TimelineTab enriched={enriched} onOpenProject={setDetail} />}
+      {proTab==="budget"    && <BudgetTab enriched={enriched} data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onOpenProject={setDetail} />}
+      {proTab==="reports"   && <ReportsTab enriched={enriched} fStat={fStat} search={search} risk={computeRiskInsights(enriched, costSheetsByProject(data.costSheets))} />}
+
+      {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} projectDocs={data.projectDocs||[]} rigs={data.rigs||[]} onClose={()=>setShowDprConsolidate(false)}/>}
       {modal&&<ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} workOrders={workOrders} onSave={save} onClose={()=>setModal(null)}/>}
     </div>
   );
