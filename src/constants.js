@@ -3,238 +3,6 @@ import * as XLSX from "xlsx-js-style";
 import { T } from "./theme.js";
 import { uid, daysUntil, fmtDate, printPage } from "./utils.js";
 
-function exportToExcel(rows, filename, opts = {}) {
-  if (!rows || !rows.length) return;
-
-  const wb = XLSX.utils.book_new();
-  const cols  = Object.keys(rows[0]);
-  const nCols = cols.length;
-  const lastCol = String.fromCharCode(64 + nCols); // e.g. "J" for 10 cols
-
-  // ── Meta from opts or parsed from filename ──────────────────────────────
-  const project  = opts.project  || (filename.replace(/_/g," ").split("Daily Reports")[1]||"").replace(/ALL RIGS|Unassigned/i,"").trim() || "";
-  const rigName  = opts.rig      || (() => { const m=filename.match(/Daily_Reports_.+?_(.+)$/); return m?m[1].replace(/_/g," "):""; })();
-  const dateRange= opts.dateRange|| (() => {
-    const dates = rows.map(r=>r["Date"]||r["date"]).filter(Boolean).sort();
-    return dates.length ? (dates[0]===dates[dates.length-1] ? dates[0] : `${dates[0]} → ${dates[dates.length-1]}`) : "";
-  })();
-  const exported = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
-
-  // ── Build sheet data array ───────────────────────────────────────────────
-  const aoa = [
-    // Row 1 — Company name (merged later)
-    ["SCORPION ARABIA", ...Array(nCols-1).fill("")],
-    // Row 2 — Report title
-    ["DAILY PROGRESS REPORT — CONSOLIDATED", ...Array(nCols-1).fill("")],
-    // Row 3 — blank
-    Array(nCols).fill(""),
-    // Row 4 — Project label + value
-    ["Project:", project||filename.replace(/_/g," "), ...Array(nCols-2).fill("")],
-    // Row 5 — Rig label + value
-    ["Rig / Spread:", rigName||"All Rigs", ...Array(nCols-2).fill("")],
-    // Row 6 — Date range
-    ["Date Range:", dateRange, ...Array(nCols-2).fill("")],
-    // Row 7 — Exported
-    ["Exported:", exported, ...Array(nCols-2).fill("")],
-    // Row 8 — blank
-    Array(nCols).fill(""),
-    // Row 9 — column headers
-    cols,
-    // Rows 10+ — data
-    ...rows.map(r => cols.map(c => r[c] ?? "")),
-  ];
-
-  // Summary rows
-  const dataStart = 10; // 1-indexed row where data begins
-  const dataEnd   = 9 + rows.length;
-  aoa.push(Array(nCols).fill("")); // blank
-  // Total progress row if Progress Today column exists
-  const progIdx = cols.indexOf("Progress Today (m)");
-  const accIdx  = cols.indexOf("Accumulated (m)");
-  if (progIdx >= 0) {
-    const sumRow = Array(nCols).fill("");
-    sumRow[0] = "TOTAL";
-    const progCol = String.fromCharCode(65 + progIdx);
-    sumRow[progIdx] = `=SUM(${progCol}${dataStart}:${progCol}${dataEnd})`;
-    if (accIdx >= 0) {
-      const accCol  = String.fromCharCode(65 + accIdx);
-      sumRow[accIdx] = `=MAX(${accCol}${dataStart}:${accCol}${dataEnd})`;
-    }
-    aoa.push(sumRow);
-  }
-
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  // ── Column widths ────────────────────────────────────────────────────────
-  const widthMap = {
-    "Project": 38, "Rig / Spread": 16, "Date": 14, "Work Profile": 14,
-    "Activity": 14, "Permit Received": 16, "Permit Hours": 14,
-    "Standby Reason": 36, "Progress Today (m)": 18, "Accumulated (m)": 16,
-    "Activity Summary": 50, "Notes": 40,
-  };
-  ws["!cols"] = cols.map(c => ({ wch: widthMap[c] || 18 }));
-
-  // ── Merges ───────────────────────────────────────────────────────────────
-  ws["!merges"] = [
-    { s:{r:0,c:0}, e:{r:0,c:nCols-1} }, // Row 1 company name
-    { s:{r:1,c:0}, e:{r:1,c:nCols-1} }, // Row 2 title
-    { s:{r:3,c:1}, e:{r:3,c:nCols-1} }, // Row 4 project value
-    { s:{r:4,c:1}, e:{r:4,c:nCols-1} }, // Row 5 rig value
-    { s:{r:5,c:1}, e:{r:5,c:nCols-1} }, // Row 6 date range value
-    { s:{r:6,c:1}, e:{r:6,c:nCols-1} }, // Row 7 exported value
-  ];
-
-  // ── Row heights ──────────────────────────────────────────────────────────
-  ws["!rows"] = [
-    {hpt:36}, // Row 1 company
-    {hpt:24}, // Row 2 title
-    {hpt:8},  // Row 3 blank
-    {hpt:18}, // Row 4
-    {hpt:18}, // Row 5
-    {hpt:18}, // Row 6
-    {hpt:18}, // Row 7
-    {hpt:8},  // Row 8 blank
-    {hpt:22}, // Row 9 headers
-  ];
-
-  // ── Cell styles via !cellStyles (SheetJS Pro) or inline via html trick ──
-  // SheetJS CE doesn't support cell styles, so we embed via HTML comment trick
-  // Instead, encode styles as custom properties on each cell using the 's' key
-  // This is supported in SheetJS Pro; for CE we use a workaround with xlsx-js-style if available,
-  // otherwise we use a data-driven approach and set explicit cell values + number formats.
-
-  // Style helper
-  const S = (fillRgb, fontRgb, bold, sz, halign, italic) => ({
-    fill:      fillRgb ? {patternType:"solid", fgColor:{rgb:fillRgb}} : {patternType:"none"},
-    font:      {name:"Arial", sz:sz||11, bold:!!bold, italic:!!italic, color:{rgb:fontRgb||"000000"}},
-    alignment: {horizontal:halign||"left", vertical:"center", wrapText:true},
-    border: {
-      top:    {style:"thin",color:{rgb:"D0D0D0"}},
-      bottom: {style:"thin",color:{rgb:"D0D0D0"}},
-      left:   {style:"thin",color:{rgb:"D0D0D0"}},
-      right:  {style:"thin",color:{rgb:"D0D0D0"}},
-    },
-  });
-
-  const ref = ws["!ref"];
-
-  // Apply styles to every cell
-  const applyStyle = (cell, style) => { if (ws[cell]) ws[cell].s = style; };
-
-  // Row 1 — Company name: dark gold bg, white bold large centered
-  for (let c=0;c<nCols;c++) {
-    const addr = XLSX.utils.encode_cell({r:0,c});
-    if (!ws[addr]) ws[addr] = {t:"s",v:""};
-    ws[addr].s = S("1E3A5F","FFFFFF",true,18,"center");
-  }
-
-  // Row 2 — Title: dark grey bg, white bold centered
-  for (let c=0;c<nCols;c++) {
-    const addr = XLSX.utils.encode_cell({r:1,c});
-    if (!ws[addr]) ws[addr] = {t:"s",v:""};
-    ws[addr].s = S("1E2A3A","FFFFFF",true,13,"center");
-  }
-
-  // Row 3 — blank
-  for (let c=0;c<nCols;c++) {
-    const addr = XLSX.utils.encode_cell({r:2,c});
-    if (!ws[addr]) ws[addr] = {t:"s",v:""};
-    ws[addr].s = S("F5F5F5","000000",false,11,"left");
-  }
-
-  // Rows 4–7 — meta rows: light bg, label bold gold, value normal
-  for (let r=3;r<=6;r++) {
-    for (let c=0;c<nCols;c++) {
-      const addr = XLSX.utils.encode_cell({r,c});
-      if (!ws[addr]) ws[addr] = {t:"s",v:""};
-      ws[addr].s = c===0
-        ? S("EEF2F7","2563EB",true,11,"left")   // label cell
-        : S("EEF2F7","1E2A3A",false,11,"left");  // value cell
-    }
-  }
-
-  // Row 8 — blank separator
-  for (let c=0;c<nCols;c++) {
-    const addr = XLSX.utils.encode_cell({r:7,c});
-    if (!ws[addr]) ws[addr] = {t:"s",v:""};
-    ws[addr].s = S("FFFFFF","000000",false,11,"left");
-  }
-
-  // Row 9 — headers: navy bg, white bold centered
-  for (let c=0;c<nCols;c++) {
-    const addr = XLSX.utils.encode_cell({r:8,c});
-    if (!ws[addr]) ws[addr] = {t:"s",v:""};
-    ws[addr].s = {
-      fill: {patternType:"solid", fgColor:{rgb:"1E3A5F"}},
-      font: {name:"Arial", sz:10, bold:true, color:{rgb:"FFFFFF"}},
-      alignment: {horizontal:"center", vertical:"center", wrapText:false},
-      border: {
-        top:    {style:"medium",color:{rgb:"1E3A5F"}},
-        bottom: {style:"medium",color:{rgb:"1E3A5F"}},
-        left:   {style:"thin",  color:{rgb:"FFFFFF"}},
-        right:  {style:"thin",  color:{rgb:"FFFFFF"}},
-      },
-    };
-  }
-
-  // Rows 10+ — data rows: alternating white/light blue
-  for (let r=9; r<9+rows.length; r++) {
-    const isAlt = (r-9) % 2 === 1;
-    for (let c=0;c<nCols;c++) {
-      const addr = XLSX.utils.encode_cell({r,c});
-      if (!ws[addr]) ws[addr] = {t:"s",v:""};
-      ws[addr].s = {
-        fill: {patternType:"solid", fgColor:{rgb: isAlt ? "EBF3FB" : "FFFFFF"}},
-        font: {name:"Arial", sz:10, color:{rgb:"1E2A3A"}},
-        alignment: {horizontal: c===0?"left":"center", vertical:"center", wrapText: c>=8},
-        border: {
-          top:    {style:"thin",color:{rgb:"D0DCE8"}},
-          bottom: {style:"thin",color:{rgb:"D0DCE8"}},
-          left:   {style:"thin",color:{rgb:"D0DCE8"}},
-          right:  {style:"thin",color:{rgb:"D0DCE8"}},
-        },
-      };
-    }
-  }
-
-  // Summary row styling (TOTAL row)
-  if (progIdx >= 0) {
-    const sumR = 9 + rows.length + 1;
-    for (let c=0;c<nCols;c++) {
-      const addr = XLSX.utils.encode_cell({r:sumR,c});
-      if (!ws[addr]) ws[addr] = {t:"s",v:""};
-      ws[addr].s = {
-        fill: {patternType:"solid", fgColor:{rgb:"1E3A5F"}},
-        font: {name:"Arial", sz:10, bold:true, color:{rgb:"FFFFFF"}},
-        alignment: {horizontal:"center", vertical:"center"},
-        border: {
-          top:    {style:"medium",color:{rgb:"1E3A5F"}},
-          bottom: {style:"medium",color:{rgb:"1E3A5F"}},
-          left:   {style:"thin",  color:{rgb:"FFFFFF"}},
-          right:  {style:"thin",  color:{rgb:"FFFFFF"}},
-        },
-      };
-    }
-  }
-
-  // Freeze panes below header row
-  ws["!freeze"] = {xSplit:0, ySplit:9, topLeftCell:"A10", activePane:"bottomLeft", state:"frozen"};
-
-  XLSX.utils.book_append_sheet(wb, ws, "Daily Reports");
-  XLSX.writeFile(wb, filename + ".xlsx");
-}
-
-function ExportBtn({data, filename, label}) {
-  return (
-    <button onClick={()=>exportToExcel(data, filename)}
-      style={{background:"rgba(52,211,153,0.12)",border:"1px solid rgba(52,211,153,0.3)",color:"#34d399",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:6,cursor:"pointer",transition:"all .15s"}}
-      onMouseEnter={e=>{e.currentTarget.style.background="rgba(52,211,153,0.22)";}}
-      onMouseLeave={e=>{e.currentTarget.style.background="rgba(52,211,153,0.12)";}}>
-      ⬇ {label||"Export Excel"}
-    </button>
-  );
-}
-
 function getStatus(days) {
   if (days === null) return { label:"Unknown",       color:T.textMuted, bg:"rgba(61,80,104,.15)" };
   if (days < 0)      return { label:"Expired",       color:T.red,       bg:T.redDim };
@@ -520,8 +288,6 @@ const AUTH_KEY          = "cta_auth";
 const FINANCE_PASSWORD  = "finance2025"; // Change this to your desired finance password
 const ANALYSIS_PASSWORD = "analysis2025";
 const COST_PASSWORD     = "cost2025"; // Change this to your desired cost control password
-const PROCUREMENT_PASSWORD = "procurement2025"; // Change this to your desired procurement password
-const METHOD_STATEMENT_PASSWORD = "methodstatement2025"; // Change this to your desired method statement password
 const ADMIN_PASSWORD    = "admin2025";  // Only admin can delete — change this
 const ADMIN_KEY         = "cta_admin";
 
@@ -637,12 +403,10 @@ const EMPTY_DATA = {
   projectDocs: [],
   projectAnalysis: [],
   rigs: [],          // { id, project, name }
-  crossings: [],     // { id, project, rig, name, status }  status: "Active" | "Completed"
   costControl: [],  // { id, project, category, description, amount, date, refNo, notes, budgeted }
                     // category: "Labour"|"Equipment"|"Materials"|"Subcontractor"|"Overhead"|"Other"
   costSheets:  [],  // { id, project, description, estimatedCost, actualCost, date, notes }
   quotations:  [],  // { id, project, quotationNo, clientName, date, validUntil, items:[], status, notes }
-  procurement: [],  // { id, itemDesc, prNo, prStatus, poNo, poStatus, docsAttached, grnDone, sesDone, requestedBy, date, notes }
 };
 
 
@@ -658,13 +422,13 @@ const EMPTY_DATA = {
 ════════════════════════════════════════════════════════════════════════════ */
 
 export {
-  getStatus, ExportBtn, exportToExcel,
+  getStatus,
   DEFAULT_SCORPION_CATS, DEFAULT_MANPOWER_CATS,
   MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW,
   excelDateToStr, parseExcelRows, parseExcelWithHeaderRow,
   EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_MAINT_TEMPLATE_ID, EMAILJS_PUBLIC_KEY,
   NOTIFY_STORAGE_KEY, NOTIFY_LAST_SENT_KEY,
   loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail,
-  COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, PROCUREMENT_PASSWORD, METHOD_STATEMENT_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY,
+  COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY,
   isAuthenticated, EMPTY_DATA,
 };
