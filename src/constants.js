@@ -450,6 +450,7 @@ const EMPTY_DATA = {
                     // category: "Labour"|"Equipment"|"Materials"|"Subcontractor"|"Overhead"|"Other"
   costSheets:  [],  // { id, project, description, estimatedCost, actualCost, date, notes }
   quotations:  [],  // { id, project, quotationNo, clientName, date, validUntil, items:[], status, notes }
+  procurement: [],  // { id, ... } — used by ProcurementPage.jsx
 };
 
 
