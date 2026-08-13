@@ -231,135 +231,70 @@ function getMetricTypeTheme(type) {
   const glow = isAdvance ? 'rgba(251,191,36,0.22)' : 'rgba(56,189,248,0.22)';
   return { accent, dim, glow };
 }
+
+/* ─── useViewport: tracks window size for responsive layout decisions ──── */
+function useViewport() {
+  const [size, setSize] = useState({
+    width:  typeof window !== "undefined" ? window.innerWidth  : 1200,
+    height: typeof window !== "undefined" ? window.innerHeight : 800,
+  });
+  useEffect(() => {
+    const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return size;
+}
+
+/* ─── printPage: opens a formatted, printable window (used for PDF export
+   via the browser's Print → Save as PDF) ───────────────────────────────── */
+function printPage(title, bodyHtml) {
+  const w = window.open("", "_blank", "width=1000,height=800");
+  if (!w) {
+    alert("Please allow pop-ups for this site to generate the report.");
+    return;
+  }
+  w.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>${title}</title>
+<style>
+  * { box-sizing: border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',Arial,sans-serif; color:#1a0a00; padding:32px; background:#fff; }
+  h1 { font-size:22px; font-weight:800; margin-bottom:4px; }
+  h2 { font-size:15px; font-weight:800; margin:22px 0 10px; border-bottom:2px solid #e8d5b7; padding-bottom:6px; }
+  p { font-size:12px; line-height:1.5; margin-bottom:8px; }
+  .meta { font-size:12px; color:#666; margin-bottom:18px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:10px; }
+  .kpi { border:1px solid #ddd; border-radius:8px; padding:10px 12px; }
+  .kpi-val { font-size:18px; font-weight:800; }
+  .kpi-lbl { font-size:10px; color:#666; font-weight:600; margin-top:2px; }
+  .badge { background:#eef2ff; color:#3730a3; border-radius:6px; padding:2px 8px; font-size:11px; font-weight:700; display:inline-block; }
+  table { width:100%; border-collapse:collapse; font-size:11px; margin-top:6px; }
+  th, td { padding:7px 8px; border-bottom:1px solid #e5e5e5; text-align:left; vertical-align:top; }
+  th { background:#f5f0e6; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:#666; }
+  .bar-wrap { background:#eee; border-radius:4px; height:6px; margin-top:3px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:4px; }
+  @media print { body { padding:12px; } }
+</style>
+</head>
+<body>${bodyHtml}</body>
+</html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { try { w.print(); } catch(e) {} }, 400);
+}
 /* ─── Active theme (module-level, updated by App) ───────────────────────── */
 
-function useViewport() {
-  const [viewport, setViewport] = useState(() => ({
-    width: typeof window !== 'undefined' ? window.innerWidth : 1440,
-    height: typeof window !== 'undefined' ? window.innerHeight : 900,
-  }));
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const onResize = () => {
-      setViewport({ width: window.innerWidth, height: window.innerHeight });
-    };
-
-    window.addEventListener('resize', onResize);
-    window.addEventListener('orientationchange', onResize);
-    onResize();
-
-    return () => {
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('orientationchange', onResize);
-    };
-  }, []);
-
-  return viewport;
-}
-
-/* ─── Print utility ─────────────────────────────────────────────────────── */
-function printPage(title, htmlContent) {
-  const win = window.open("", "_blank", "width=1100,height=800");
-  win.document.write(`<!DOCTYPE html><html><head>
-    <title>${title}</title>
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #111; background: #fff; padding: 24px; }
-      h1 { font-size: 22px; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px; }
-      h2 { font-size: 15px; font-weight: 700; margin: 18px 0 8px; border-bottom: 2px solid #111; padding-bottom: 4px; }
-      .meta { font-size: 11px; color: #555; margin-bottom: 18px; }
-      .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
-      .kpi { border: 1.5px solid #ddd; border-radius: 8px; padding: 10px 14px; }
-      .kpi-val { font-size: 20px; font-weight: 800; }
-      .kpi-lbl { font-size: 10px; color: #666; margin-top: 2px; font-weight: 600; text-transform: uppercase; }
-      table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 11px; }
-      th { background: #111; color: #fff; padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
-      td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
-      tr:nth-child(even) td { background: #f9f9f9; }
-      .bar-wrap { background: #eee; border-radius: 999px; height: 7px; width: 100%; margin-top: 3px; }
-      .bar-fill { height: 7px; border-radius: 999px; background: #16a34a; }
-      .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; border: 1px solid #ddd; }
-      .logo { font-size: 11px; color: #999; text-align: right; margin-bottom: 16px; }
-      @media print { body { padding: 10px; } }
-    </style>
-  </head><body>
-    <div class="logo">SCORPION ARABIA — Confidential</div>
-    ${htmlContent}
-    <div style="margin-top:32px;font-size:10px;color:#aaa;text-align:center">
-      Printed on ${new Date().toLocaleString()} · Scorpion Portal
-    </div>
-    <script>window.onload=()=>{window.print();}<\/script>
-  </body></html>`);
-  win.document.close();
-}
-
-/* ─── Percentage color scale ──────────────────────────────────────────────── */
-function pctColor(p) {
-  if (p >= 80) return T.green;
-  if (p >= 40) return T.blue;
-  if (p >= 20) return T.gold;
-  return T.red;
-}
-
-/* ─── Days remaining until a date ─────────────────────────────────────────── */
-function daysLeft(d) {
-  if (!d) return null;
-  return Math.ceil((new Date(d) - new Date()) / 86400000);
-}
-
-/* ─── Derive live stats for one project from projectDocs invoices ──────────── */
-function deriveProjectStats(projectName, projectDocs) {
-  const invs  = (projectDocs || []).filter(d => d.subTab === "invoices"     && d.project === projectName);
-  const certs = (projectDocs || []).filter(d => d.subTab === "certificates" && d.project === projectName);
-
-  const totalInvoiced  = invs.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
-  const totalCollected = invs.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0);
-  const totalDue       = invs.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0);
-
-  // Group ONLY invoices/certs that have a jobNo into named job phases
-  const jobMap = {};
-  invs.forEach(d => {
-    const key = d.jobNo ? String(d.jobNo).trim() : null;
-    if (!key) return;
-    if (!jobMap[key]) jobMap[key] = { jobNo: key, invoices: [], certs: [] };
-    jobMap[key].invoices.push(d);
-  });
-  certs.forEach(d => {
-    const key = d.jobNo ? String(d.jobNo).trim() : null;
-    if (!key) return;
-    if (!jobMap[key]) jobMap[key] = { jobNo: key, invoices: [], certs: [] };
-    jobMap[key].certs.push(d);
-  });
-
-  const jobs = Object.values(jobMap).map(j => ({
-    ...j,
-    totalInvoiced:  j.invoices.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0),
-    totalCollected: j.invoices.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0),
-    totalDue:       j.invoices.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0),
-  })).sort((a, b) => a.jobNo.localeCompare(b.jobNo, undefined, { numeric: true }));
-
-  // Invoices & certs with no jobNo shown as a flat list
-  const ungroupedInvs  = invs.filter(d => !d.jobNo);
-  const ungroupedCerts = certs.filter(d => !d.jobNo);
-
-  return { invs, certs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts };
-}
-
-/* ─── Tombstone helper ────────────────────────────────────────────────────
-   Records are soft-deleted (marked {_deleted:true}) instead of being removed
-   outright, so the Worker's merge-by-id logic can propagate a deletion
-   instead of accidentally resurrecting a record from another client's stale
-   snapshot. Every place that reads/displays a list should pass it through
-   live() first so tombstoned records don't visibly reappear.
-   ────────────────────────────────────────────────────────────────────────── */
+/* ─── live: defensive array coalesce — always returns a safe array to map/
+   filter/reduce over, even if the underlying data key is undefined ──── */
 function live(arr) {
-  return (arr || []).filter(item => !item?._deleted);
+  return Array.isArray(arr) ? arr : [];
 }
 
 export {
   GLOBAL_CSS, uid, daysUntil, fmtDate, formatSarCompact,
   getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme,
-  useViewport, printPage, pctColor, daysLeft, deriveProjectStats, live,
+  useViewport, printPage, live,
 };
