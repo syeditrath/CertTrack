@@ -10,6 +10,48 @@ function getStatus(days) {
   return               { label:"Valid",            color:T.green,     bg:T.greenDim };
 }
 
+/* ─── ExportBtn: shared export button ────────────────────────────────────
+   Two modes:
+   1) Pass `data` (array) [+ optional `columns`: [{key,label}]] to export
+      straight to an .xlsx file named `filename`.
+   2) Pass `onClick` for custom behavior (e.g. printPage-based PDF export) —
+      ExportBtn just renders the button and defers to your handler.
+   Props: label, data, columns, filename, sheetName, onClick, disabled, icon
+─────────────────────────────────────────────────────────────────────────── */
+function ExportBtn({ label = "Export", data, columns, filename = "export", sheetName = "Sheet1", onClick, disabled = false, icon = "📥" }) {
+  const handleClick = () => {
+    if (disabled) return;
+    if (onClick) { onClick(); return; }
+    if (!data || !data.length) return;
+    const rows = columns
+      ? data.map(row => {
+          const o = {};
+          columns.forEach(c => { o[c.label || c.key] = row[c.key]; });
+          return o;
+        })
+      : data;
+    try {
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      XLSX.writeFile(wb, `${filename}.xlsx`);
+    } catch (e) {
+      console.error("ExportBtn: export failed", e);
+    }
+  };
+  return (
+    <button onClick={handleClick} disabled={disabled}
+      style={{
+        background: T.card, border: `1px solid ${T.border}`, color: T.text,
+        borderRadius: 11, padding: "11px 20px", fontSize: 14, fontWeight: 700,
+        cursor: disabled ? "not-allowed" : "pointer", display: "flex",
+        alignItems: "center", gap: 8, opacity: disabled ? 0.5 : 1,
+      }}>
+      {icon} {label}
+    </button>
+  );
+}
+
 /* ─── Default data ───────────────────────────────────────────────────────── */
 const DEFAULT_SCORPION_CATS = [
   "Company Registration / CR",
@@ -423,7 +465,7 @@ const EMPTY_DATA = {
 ════════════════════════════════════════════════════════════════════════════ */
 
 export {
-  getStatus,
+  getStatus, ExportBtn,
   DEFAULT_SCORPION_CATS, DEFAULT_MANPOWER_CATS,
   MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW,
   excelDateToStr, parseExcelRows, parseExcelWithHeaderRow,
