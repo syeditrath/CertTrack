@@ -7,60 +7,148 @@ import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 
 const pName = p => typeof p === "string" ? p : (p?.name ?? "");
 
+/* ─── InvoiceMetricCard / darkenTextShadow — shared by Dashboard & FinancePage ── */
+function InvoiceMetricCard({ title, amount, sub, color, onClick, miniCards = [] }) {
+  const cardGlow = `0 10px 34px ${String(color || T.blue).replace(')', ',0.16)').replace('rgb', 'rgba')}`;
+  return (
+    <div
+      className="card-hover"
+      style={{
+        background:`linear-gradient(180deg, ${T.card} 0%, ${T.bg} 100%)`,
+        border:`1px solid ${T.border}`,
+        borderRadius:18,
+        padding:"18px 18px 16px",
+        boxShadow:T.shadow,
+        position:"relative",
+        overflow:"hidden",
+      }}
+    >
+      <div
+        style={{
+          position:"absolute",
+          inset:0,
+          pointerEvents:"none",
+          background:`radial-gradient(circle at top right, ${String(color || T.blue).replace(')', ',0.14)').replace('rgb', 'rgba')} 0%, transparent 40%)`,
+        }}
+      />
+
+      <button
+        onClick={onClick}
+        style={{
+          background:"transparent",
+          border:"none",
+          padding:0,
+          margin:0,
+          width:"100%",
+          textAlign:"left",
+          cursor:"pointer",
+          position:"relative",
+          zIndex:1,
+        }}
+      >
+        <div style={{fontSize:12,color:T.textMuted,fontWeight:700,letterSpacing:".08em",marginBottom:10}}>{title}</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"clamp(28px,4vw,44px)",color,lineHeight:1,textShadow:darkenTextShadow(color)}}>{amount}</div>
+        <div style={{fontSize:13,color:T.textMuted,marginTop:10}}>{sub}</div>
+        <div style={{fontSize:12,color:color,marginTop:10,fontWeight:700}}>Click to view details →</div>
+      </button>
+
+      {miniCards.length > 0 && (
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:14,position:"relative",zIndex:1}}>
+          {miniCards.map((card) => {
+            const type = /advance/i.test(card.title) ? "advance" : "income";
+            const theme = getMetricTypeTheme(type);
+            return (
+              <button
+                key={card.title}
+                onClick={card.onClick}
+                style={{
+                  background:`linear-gradient(180deg, ${theme.dim} 0%, ${T.card} 100%)`,
+                  border:`1px solid ${theme.accent}55`,
+                  borderRadius:14,
+                  padding:"12px 12px 10px",
+                  textAlign:"left",
+                  cursor:"pointer",
+                  boxShadow:`inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 18px ${theme.glow}`,
+                  transition:"transform .18s ease, box-shadow .18s ease, border-color .18s ease",
+                }}
+                onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.boxShadow=`inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 24px ${theme.glow}`; e.currentTarget.style.borderColor=`${theme.accent}88`;}}
+                onMouseLeave={e=>{e.currentTarget.style.transform='none'; e.currentTarget.style.boxShadow=`inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 18px ${theme.glow}`; e.currentTarget.style.borderColor=`${theme.accent}55`;}}
+              >
+                <div style={{fontSize:10,color:theme.accent,fontWeight:800,letterSpacing:".09em",marginBottom:8}}>{card.title}</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:theme.accent,lineHeight:1}}>{card.amount}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function darkenTextShadow(color) {
+  if (color === T.gold) return '0 2px 16px rgba(251,191,36,0.16)';
+  if (color === T.blue) return '0 2px 16px rgba(56,189,248,0.16)';
+  if (color === T.red) return '0 2px 16px rgba(248,113,113,0.12)';
+  if (color === T.green) return '0 2px 16px rgba(52,211,153,0.12)';
+  return 'none';
+}
+
+
 /* ─── daysLeft: whole days between today and a target date (negative = overdue) ── */
-function daysLeft(dateStr) {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  if (isNaN(d)) return null;
-  const today = new Date(); today.setHours(0,0,0,0);
-  d.setHours(0,0,0,0);
-  return Math.round((d - today) / 86400000);
+function daysLeft(d) {
+  if (!d) return null;
+  return Math.ceil((new Date(d) - new Date()) / 86400000);
 }
 
 /* ─── pctColor: returns a hex color for a 0-100 progress percentage ─────
    (returned as plain hex so callers can safely append an alpha suffix,
    e.g. `${pctColor(pct)}bb`) ────────────────────────────────────────── */
-function pctColor(pct) {
-  if (pct >= 80) return T.green;
-  if (pct >= 50) return T.gold;
+function pctColor(p) {
+  if (p >= 80) return T.green;
+  if (p >= 40) return T.blue;
+  if (p >= 20) return T.gold;
   return T.red;
 }
 
 /* ─── deriveProjectStats: aggregates a project's invoices/certificates from
    projectDocs into invoice totals and job-phase groupings, keyed by jobNo.
    Shape consumed by ProjectAnalysisPage / ProjectAnalysisDetail:
-   { invs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts } */
+   { invs, certs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts } */
 function deriveProjectStats(projectName, projectDocs) {
-  const docs = projectDocs || [];
-  const invs  = docs.filter(d => d.subTab === "invoices"     && d.project === projectName);
-  const certs = docs.filter(d => d.subTab === "certificates" && d.project === projectName);
+  const invs  = (projectDocs || []).filter(d => d.subTab === "invoices"     && d.project === projectName);
+  const certs = (projectDocs || []).filter(d => d.subTab === "certificates" && d.project === projectName);
 
-  const totalInvoiced  = invs.reduce((s,d) => s + (parseFloat(d.amount) || 0), 0);
-  const totalCollected = invs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0);
-  const totalDue        = invs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0);
+  const totalInvoiced  = invs.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
+  const totalCollected = invs.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0);
+  const totalDue       = invs.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0);
 
+  // Group ONLY invoices/certs that have a jobNo into named job phases
+  const jobMap = {};
+  invs.forEach(d => {
+    const key = d.jobNo ? String(d.jobNo).trim() : null;
+    if (!key) return;
+    if (!jobMap[key]) jobMap[key] = { jobNo: key, invoices: [], certs: [] };
+    jobMap[key].invoices.push(d);
+  });
+  certs.forEach(d => {
+    const key = d.jobNo ? String(d.jobNo).trim() : null;
+    if (!key) return;
+    if (!jobMap[key]) jobMap[key] = { jobNo: key, invoices: [], certs: [] };
+    jobMap[key].certs.push(d);
+  });
+
+  const jobs = Object.values(jobMap).map(j => ({
+    ...j,
+    totalInvoiced:  j.invoices.reduce((s, d) => s + (parseFloat(d.amount) || 0), 0),
+    totalCollected: j.invoices.reduce((s, d) => s + getInvoiceCollectedAmount(d), 0),
+    totalDue:       j.invoices.reduce((s, d) => s + getInvoiceRemainingAmount(d), 0),
+  })).sort((a, b) => a.jobNo.localeCompare(b.jobNo, undefined, { numeric: true }));
+
+  // Invoices & certs with no jobNo shown as a flat list
   const ungroupedInvs  = invs.filter(d => !d.jobNo);
   const ungroupedCerts = certs.filter(d => !d.jobNo);
 
-  const jobNos = Array.from(new Set([
-    ...invs.filter(d => d.jobNo).map(d => d.jobNo),
-    ...certs.filter(d => d.jobNo).map(d => d.jobNo),
-  ]));
-
-  const jobs = jobNos.map(jobNo => {
-    const jobInvs  = invs.filter(d => d.jobNo === jobNo);
-    const jobCerts = certs.filter(d => d.jobNo === jobNo);
-    return {
-      jobNo,
-      invoices:      jobInvs,
-      certs:         jobCerts,
-      totalInvoiced: jobInvs.reduce((s,d) => s + (parseFloat(d.amount) || 0), 0),
-      totalCollected: jobInvs.reduce((s,d) => s + getInvoiceCollectedAmount(d), 0),
-      totalDue:       jobInvs.reduce((s,d) => s + getInvoiceRemainingAmount(d), 0),
-    };
-  }).sort((a,b) => String(a.jobNo).localeCompare(String(b.jobNo), undefined, {numeric:true}));
-
-  return { invs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts };
+  return { invs, certs, totalInvoiced, totalCollected, totalDue, jobs, ungroupedInvs, ungroupedCerts };
 }
 
 function renderProjectOptions(projects) {
@@ -1495,7 +1583,7 @@ function MultiPdfCertUpload({ project, projects, onClose, onImport }) {
 }
 const Btn      = ({children,onClick,color,solid}) => <button onClick={onClick} style={{background:solid?color:T.bg,border:`1px solid ${solid?color:T.border}`,color:solid?"#000":color||T.textSub,borderRadius:8,padding:"8px 16px",fontSize:13,fontWeight:600,transition:"all .15s"}}>{children}</button>;
 
-export { pName, renderProjectOptions, PageHeader, Empty, Overlay, FormModal, CatManagerModal, FieldRow, SectionDivider, FInput, FTextarea, FSelect, FLink, FileLink, FilePreviewModal, ABtn, Btn, Chip, Tag, BulkUploadModal, ScorpionBulkModal, MultiPdfCertUpload, ProjectsModal, daysLeft, pctColor, deriveProjectStats };
+export { pName, renderProjectOptions, PageHeader, Empty, Overlay, FormModal, CatManagerModal, FieldRow, SectionDivider, FInput, FTextarea, FSelect, FLink, FileLink, FilePreviewModal, ABtn, Btn, Chip, Tag, BulkUploadModal, ScorpionBulkModal, MultiPdfCertUpload, ProjectsModal, daysLeft, pctColor, deriveProjectStats, InvoiceMetricCard, darkenTextShadow };
 
 // ── ProjectsModal ──────────────────────────────────────────────────────────
 function ProjectsModal({projects,onSave,onClose,isAdmin}) {
