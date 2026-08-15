@@ -112,6 +112,17 @@ function parseScorpionDprSheet(wb) {
     activities:     get("today_summary",  "A27") || dprReadRange(ws, "A27:I29"),
   };
 }
+/* ── Excel column map for daily report import ───────────────────────────── */
+const DR_COL_MAP = {
+  "DATE":"date","REPORT DATE":"date","DAY":"date",
+  "WEATHER":"weather","WEATHER CONDITIONS":"weather","CONDITIONS":"weather",
+  "ACTIVITIES":"activities","WORK DONE":"activities","WORK":"activities","ACTIVITY":"activities","DESCRIPTION":"activities","WORK DESCRIPTION":"activities",
+  "MANPOWER":"manpower","MANPOWER COUNT":"manpower","WORKERS":"manpower","NO. OF WORKERS":"manpower","HEADCOUNT":"manpower","NO OF WORKERS":"manpower",
+  "EQUIPMENT":"equipment","EQUIPMENT USED":"equipment","PLANT":"equipment","PLANT & EQUIPMENT":"equipment","MACHINERY":"equipment",
+  "ISSUES":"issues","DELAYS":"issues","ISSUES / DELAYS":"issues","PROBLEMS":"issues","REMARKS":"issues",
+  "NOTES":"notes","ADDITIONAL NOTES":"notes","COMMENTS":"notes","SUPERVISOR NOTES":"notes",
+};
+
 function parseDailyReportExcel(arrayBuffer) {
   const wb = XLSX.read(arrayBuffer, { type:"array", cellDates:true });
 
@@ -143,6 +154,47 @@ function parseDailyReportExcel(arrayBuffer) {
       return rec;
     })
     .filter(rec => Object.keys(rec).filter(k => k !== "id").length > 0);
+}
+
+/* ── Bulk Daily Report Import (multiple rows from one Excel) ── */
+function BulkDailyReportImport({ projectName, onImport }) {
+  const [status, setStatus] = useState(null); // null | "parsing" | {count,skipped}  | "error"
+  const fileRef = useRef();
+
+  const handleFile = (file) => {
+    if (!file) return;
+    setStatus("parsing");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const rows = parseDailyReportExcel(e.target.result);
+        if (!rows.length) { setStatus("error"); return; }
+        onImport(rows);
+        setStatus({ count: rows.length });
+        setTimeout(() => setStatus(null), 3000);
+      } catch(err) {
+        console.error(err);
+        setStatus("error");
+        setTimeout(() => setStatus(null), 3000);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <button onClick={()=>fileRef.current.click()} disabled={status==="parsing"}
+        style={{background:T.goldDim,border:`1px solid ${T.gold}44`,color:T.gold,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:status==="parsing"?"wait":"pointer",display:"flex",alignItems:"center",gap:6}}>
+        {status==="parsing"?"⏳ Importing…":"📊 Bulk Import Excel"}
+      </button>
+      <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}}
+        onChange={e=>{if(e.target.files[0]){handleFile(e.target.files[0]);e.target.value="";}}}/>
+      {status&&status!=="parsing"&&status!=="error"&&(
+        <span style={{fontSize:12,color:T.green,fontWeight:700}}>✓ {status.count} row{status.count!==1?"s":""} imported</span>
+      )}
+      {status==="error"&&<span style={{fontSize:12,color:T.red,fontWeight:700}}>✕ Parse failed</span>}
+    </div>
+  );
 }
 
 function DailyReportModal({ report, projectName, rigs, onSave, onClose }) {
@@ -1969,4 +2021,4 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
 
 
 
-export { ProjectAnalysisPage };
+export { ProjectAnalysisPage, parseDailyReportExcel };
