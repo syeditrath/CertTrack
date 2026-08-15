@@ -6,6 +6,7 @@ import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, BulkUploadModal, MultiPdfCertUpload } from "./UI.jsx";
 import { PD_TABS, PROJDOC_CATEGORIES } from "./FinancePage.jsx";
+import { parseDailyReportExcel } from "./ProjectAnalysis.jsx";
 
 function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   // ALL hooks must be at the top — never after a conditional return
