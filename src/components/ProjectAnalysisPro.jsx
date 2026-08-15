@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { T } from "../theme.js";
 import { fmtDate, formatSarCompact, printPage, getInvoiceCollectedAmount, getInvoiceRemainingAmount } from "../utils.js";
+import { deriveProjectStats } from "./UI.jsx";
 
 /* ════════════════════════════════════════════════════════════════════════════
    PROJECT ANALYSIS — PRO SUITE
