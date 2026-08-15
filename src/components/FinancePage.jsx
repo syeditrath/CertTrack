@@ -800,4 +800,4 @@ const PD_TABS = [
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
 
-export { LoginPage, FinanceLoginPage, FinancePage, AlertRow };
+export { LoginPage, FinanceLoginPage, FinancePage, AlertRow, PD_TABS, PROJDOC_CATEGORIES };
