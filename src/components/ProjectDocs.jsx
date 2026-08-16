@@ -609,11 +609,11 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     const rigSections = projRigs.map((rig, ri) => ({
       rig,
       color: rigColors[ri % rigColors.length],
-      reports: projDRs.filter(d=>d.rig===rig.name).sort((a,b)=>(b.date||"").localeCompare(a.date||"")),
+      reports: projDRs.filter(d=>d.rig===rig.name).sort((a,b)=>(a.date||"").localeCompare(b.date||"")),
     }));
     const unassigned = projDRs
       .filter(d=>!d.rig||!projRigs.some(r=>r.name===d.rig))
-      .sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+      .sort((a,b)=>(a.date||"").localeCompare(b.date||""));
 
     return (
       <div>
@@ -625,7 +625,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
             <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>{projDRs.length} report{projDRs.length!==1?"s":""} · {projRigs.length} rig{projRigs.length!==1?"s":""}</div>
           </div>
           {projDRs.length>0&&(
-            <button onClick={()=>exportDRs(projDRs,`Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_ALL_RIGS`)}
+            <button onClick={()=>exportDRs([...projDRs].sort((a,b)=>(a.date||"").localeCompare(b.date||"")),`Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_ALL_RIGS`)}
               style={{background:`${T.green}18`,border:`1px solid ${T.green}44`,color:T.green,borderRadius:9,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
               ⬇ Export All Rigs
             </button>
