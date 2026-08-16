@@ -8,6 +8,67 @@ import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, 
 import { PD_TABS, PROJDOC_CATEGORIES } from "./FinancePage.jsx";
 import { parseDailyReportExcel } from "./ProjectAnalysis.jsx";
 
+/* ─── Excel export helper (styled) ──────────────────────────────────────── */
+function exportToExcel(rows, filename) {
+  if (!rows || !rows.length) return;
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const headers = Object.keys(rows[0]);
+
+  // Style the header row (row 0)
+  headers.forEach((_, colIdx) => {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+    if (!ws[cellRef]) return;
+    ws[cellRef].s = {
+      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+      fill: { fgColor: { rgb: "B8860B" } }, // dark gold background
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border: {
+        top: { style: "thin", color: { rgb: "8B6914" } },
+        bottom: { style: "thin", color: { rgb: "8B6914" } },
+        left: { style: "thin", color: { rgb: "8B6914" } },
+        right: { style: "thin", color: { rgb: "8B6914" } },
+      },
+    };
+  });
+
+  // Style data rows: light borders + zebra striping
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  for (let r = 1; r <= range.e.r; r++) {
+    for (let c = 0; c <= range.e.c; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r, c });
+      if (!ws[cellRef]) continue;
+      ws[cellRef].s = {
+        font: { sz: 10, color: { rgb: "1A0A00" } },
+        fill: { fgColor: { rgb: r % 2 === 0 ? "FDF8F0" : "FFFFFF" } },
+        alignment: { vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "E8D5B7" } },
+          bottom: { style: "thin", color: { rgb: "E8D5B7" } },
+          left: { style: "thin", color: { rgb: "E8D5B7" } },
+          right: { style: "thin", color: { rgb: "E8D5B7" } },
+        },
+      };
+    }
+  }
+
+  // Auto-size columns based on the longest value in each column
+  ws["!cols"] = headers.map((h) => {
+    const maxLen = Math.max(
+      h.length,
+      ...rows.map((row) => String(row[h] ?? "").length)
+    );
+    return { wch: Math.min(Math.max(maxLen + 2, 10), 50) };
+  });
+
+  // Freeze the header row so it stays visible while scrolling
+  ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Daily Reports");
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
 function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   // ALL hooks must be at the top — never after a conditional return
   const [selectedProject, setSelectedProject] = useState(null);
@@ -685,7 +746,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
               </div>
               <div style={{display:"flex",gap:6,flexShrink:0}}>
                 <ABtn color={T.blue} onClick={()=>setModal({mode:"edit",doc})}>✎</ABtn>
-                {isAdmin&&<ABtn color={T.red} onClick={()=>delDoc(doc.id)}>✕</ABtn>}
+                {isAdmin && <ABtn color={T.red} onClick={()=>delDoc(doc.id)}>✕</ABtn>}
               </div>
             </div>
           ))}
