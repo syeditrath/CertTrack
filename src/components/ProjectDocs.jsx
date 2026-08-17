@@ -794,12 +794,71 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
                   </div>
                   {/* Collapsible body */}
                   {!isCollapsed&&(
-                    <div style={{padding:"14px 16px",display:"grid",gap:8}}>
+                    <div style={{padding:"14px 16px",display:"grid",gap:14}}>
                       {reports.length===0
                         ?<div style={{textAlign:"center",padding:"20px 0",fontSize:13,color:T.textMuted}}>
                           No reports yet — <button onClick={()=>setModal({mode:"add",doc:{project:selProj,rig:rig.name}})} style={{background:"none",border:"none",color,fontWeight:700,cursor:"pointer",padding:0,fontSize:13}}>add the first one</button>
                          </div>
-                        :reports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)
+                        :(() => {
+                          const rigCrossings = projCrossings.filter(c=>c.rig===rig.name);
+                          const crossingGroups = rigCrossings.map(c => ({
+                            crossing: c,
+                            reports: reports.filter(d=>d.crossing===c.name),
+                          })).filter(g=>g.reports.length>0);
+                          const noCrossing = reports.filter(d=>!d.crossing || !rigCrossings.some(c=>c.name===d.crossing));
+
+                          if (!crossingGroups.length) {
+                            // No crossing data on any report in this rig — fall back to flat list
+                            return reports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>);
+                          }
+
+                          return (
+                            <>
+                              {crossingGroups.map(({crossing, reports:cReports}) => {
+                                const isCompleted = crossing.status === "Completed";
+                                return (
+                                  <div key={crossing.id} style={{border:`1px solid ${isCompleted?T.green+"44":T.border}`,borderRadius:12,overflow:"hidden"}}>
+                                    <div style={{background:isCompleted?T.greenDim:T.bg,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+                                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                        <span style={{fontSize:14}}>🛤️</span>
+                                        <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,color:isCompleted?T.green:T.text}}>{crossing.name}</span>
+                                        <span style={{fontSize:11,color:T.textMuted}}>{cReports.length} report{cReports.length!==1?"s":""}</span>
+                                      </div>
+                                      <button
+                                        onClick={()=>toggleCrossingStatus(crossing.id)}
+                                        style={{
+                                          background: isCompleted ? T.green : "transparent",
+                                          border: `1px solid ${isCompleted?T.green:T.border}`,
+                                          color: isCompleted ? "#000" : T.textMuted,
+                                          borderRadius: 7,
+                                          padding: "5px 12px",
+                                          fontSize: 11,
+                                          fontWeight: 700,
+                                          cursor: "pointer"
+                                        }}
+                                      >
+                                        {isCompleted ? "✓ Completed" : "Mark Completed"}
+                                      </button>
+                                    </div>
+                                    <div style={{padding:"10px 12px",display:"grid",gap:8}}>
+                                      {cReports.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {noCrossing.length>0 && (
+                                <div style={{border:`1px dashed ${T.border}`,borderRadius:12,overflow:"hidden"}}>
+                                  <div style={{background:T.bg,padding:"10px 14px",fontSize:12,fontWeight:700,color:T.textMuted}}>
+                                    No Crossing Assigned <span style={{fontWeight:500}}>· {noCrossing.length} report{noCrossing.length!==1?"s":""}</span>
+                                  </div>
+                                  <div style={{padding:"10px 12px",display:"grid",gap:8}}>
+                                    {noCrossing.map((doc,i)=><DrCard key={doc.id} doc={doc} i={i}/>)}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()
                       }
                     </div>
                   )}
