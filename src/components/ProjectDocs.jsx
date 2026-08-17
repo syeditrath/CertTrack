@@ -153,6 +153,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           fileName:       savedDoc.fileName,
           fileLink:       savedDoc.fileLink,
           extractedFields:savedDoc.extractedFields,
+          rig:            savedDoc.rig,
+          crossing:       savedDoc.crossing,
           profile:        savedDoc.profile,
           activity:       savedDoc.activity,
           permitReceived: savedDoc.permitReceived,
@@ -590,6 +592,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
         </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {doc.refNo&&<Chip>Ref: {doc.refNo}</Chip>}
+          {doc.crossing&&<Chip>🛤️ {doc.crossing}</Chip>}
           {doc.fileLink&&<FileLink href={doc.fileLink}/>}
         </div>
         {doc.notes&&<div style={{marginTop:5,fontSize:12,color:T.textMuted,fontStyle:"italic"}}>{doc.notes}</div>}
@@ -610,6 +613,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     exportToExcel(sorted.map(r=>({
       "Project":            r.project||selectedProject,
       "Rig / Spread":       r.rig||"",
+      "Crossing":           r.crossing||"",
       "Date":               r.date||"",
       "Work Profile":       r.profile||"",
       "Activity":           r.activity||"",
@@ -2290,6 +2294,10 @@ function ProjectDocDailyReportModal({mode,doc,projects,defaultProject,rigs,onClo
           </FieldRow>
         );
       })()}
+
+      <FieldRow label="Crossing">
+        <FInput value={f.crossing||""} onChange={v=>setF(p=>({...p,crossing:v}))} color={T.gold} placeholder="e.g. KM 12+400 Road Crossing…"/>
+      </FieldRow>
 
       <FieldRow label="Upload Daily Report Excel *">
         <div>
