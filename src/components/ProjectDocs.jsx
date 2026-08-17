@@ -9,6 +9,24 @@ import { PD_TABS, PROJDOC_CATEGORIES } from "./FinancePage.jsx";
 import { parseDailyReportExcel } from "./ProjectAnalysis.jsx";
 
 /* ─── Excel export helper (styled) ──────────────────────────────────────── */
+
+// Normalizes a date value (Date object, Excel serial number, or string in
+// any format) into a sortable timestamp. Returns -Infinity for missing/
+// invalid dates so they sort to the very start of an ascending sort.
+function toSortTime(d) {
+  if (!d) return -Infinity;
+  let dateObj;
+  if (d instanceof Date) {
+    dateObj = d;
+  } else if (typeof d === "number") {
+    dateObj = new Date(Math.round((d - 25569) * 86400 * 1000)); // Excel serial date
+  } else {
+    dateObj = new Date(d);
+  }
+  const t = dateObj.getTime();
+  return isNaN(t) ? -Infinity : t;
+}
+
 function exportToExcel(rows, filename) {
   if (!rows || !rows.length) return;
 
@@ -588,7 +606,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
 
   const exportDRs = (docs, filename) => {
     if (!docs.length) return;
-    exportToExcel(docs.map(r=>({
+    const sorted = [...docs].sort((a,b)=>toSortTime(a.date)-toSortTime(b.date));
+    exportToExcel(sorted.map(r=>({
       "Project":            r.project||selectedProject,
       "Rig / Spread":       r.rig||"",
       "Date":               r.date||"",
@@ -609,11 +628,11 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     const rigSections = projRigs.map((rig, ri) => ({
       rig,
       color: rigColors[ri % rigColors.length],
-      reports: projDRs.filter(d=>d.rig===rig.name).sort((a,b)=>(a.date||"").localeCompare(b.date||"")),
+      reports: projDRs.filter(d=>d.rig===rig.name).sort((a,b)=>toSortTime(b.date)-toSortTime(a.date)),
     }));
     const unassigned = projDRs
       .filter(d=>!d.rig||!projRigs.some(r=>r.name===d.rig))
-      .sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+      .sort((a,b)=>toSortTime(b.date)-toSortTime(a.date));
 
     return (
       <div>
@@ -625,7 +644,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
             <div style={{fontSize:13,color:T.textMuted,marginTop:2}}>{projDRs.length} report{projDRs.length!==1?"s":""} · {projRigs.length} rig{projRigs.length!==1?"s":""}</div>
           </div>
           {projDRs.length>0&&(
-            <button onClick={()=>exportDRs([...projDRs].sort((a,b)=>(a.date||"").localeCompare(b.date||"")),`Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_ALL_RIGS`)}
+            <button onClick={()=>exportDRs(projDRs,`Daily_Reports_${(selectedProject||"Project").replace(/\s+/g,"_")}_ALL_RIGS`)}
               style={{background:`${T.green}18`,border:`1px solid ${T.green}44`,color:T.green,borderRadius:9,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
               ⬇ Export All Rigs
             </button>
