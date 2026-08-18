@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import * as XLSX from "xlsx-js-style";
 import { T } from "../theme.js";
 import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
-import { getStatus, ExportBtn, exportToExcel, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, METHOD_STATEMENT_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
+import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, METHOD_STATEMENT_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, BulkUploadModal, MultiPdfCertUpload } from "./UI.jsx";
 import { FinanceLoginPage } from "./FinancePage.jsx";
@@ -42,6 +42,60 @@ function pctColor(pct) {
   if (pct >= 80) return T.green;
   if (pct >= 50) return T.gold;
   return T.red;
+}
+
+/* Builds a styled .xlsx file from an array of plain row objects and triggers download */
+function exportToExcel(rows, filename) {
+  if (!rows || !rows.length) return;
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const headers = Object.keys(rows[0]);
+
+  headers.forEach((_, colIdx) => {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+    if (!ws[cellRef]) return;
+    ws[cellRef].s = {
+      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+      fill: { fgColor: { rgb: "B8860B" } },
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border: {
+        top: { style: "thin", color: { rgb: "8B6914" } },
+        bottom: { style: "thin", color: { rgb: "8B6914" } },
+        left: { style: "thin", color: { rgb: "8B6914" } },
+        right: { style: "thin", color: { rgb: "8B6914" } },
+      },
+    };
+  });
+
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  for (let r = 1; r <= range.e.r; r++) {
+    for (let c = 0; c <= range.e.c; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r, c });
+      if (!ws[cellRef]) continue;
+      ws[cellRef].s = {
+        font: { sz: 10, color: { rgb: "1A0A00" } },
+        fill: { fgColor: { rgb: r % 2 === 0 ? "FDF8F0" : "FFFFFF" } },
+        alignment: { vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "E8D5B7" } },
+          bottom: { style: "thin", color: { rgb: "E8D5B7" } },
+          left: { style: "thin", color: { rgb: "E8D5B7" } },
+          right: { style: "thin", color: { rgb: "E8D5B7" } },
+        },
+      };
+    }
+  }
+
+  ws["!cols"] = headers.map((h) => {
+    const maxLen = Math.max(h.length, ...rows.map((row) => String(row[h] ?? "").length));
+    return { wch: Math.min(Math.max(maxLen + 2, 10), 50) };
+  });
+
+  ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Export");
+  XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 
 /* Total hours worked (sum of Permit Hours, cell H14 on each daily report)
@@ -179,6 +233,8 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
           fileName:       savedDoc.fileName,
           fileLink:       savedDoc.fileLink,
           extractedFields:savedDoc.extractedFields,
+          rig:            savedDoc.rig,
+          crossing:       savedDoc.crossing,
           profile:        savedDoc.profile,
           activity:       savedDoc.activity,
           permitReceived: savedDoc.permitReceived,
@@ -667,6 +723,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     exportToExcel(docs.map(r=>({
       "Project":            r.project||selectedProject,
       "Rig / Spread":       r.rig||"",
+      "Crossing":           r.crossing||"",
       "Date":               r.date||"",
       "Work Profile":       r.profile||"",
       "Activity":           r.activity||"",
