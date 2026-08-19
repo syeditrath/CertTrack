@@ -4,7 +4,7 @@ import { T } from "../theme.js";
 import { uid, daysUntil, fmtDate, formatSarCompact, useViewport, printPage, getInvoiceRemainingAmount, getInvoiceCollectedAmount, getInvoiceStream, getMetricTypeTheme, live } from "../utils.js";
 import { getStatus, ExportBtn, DEFAULT_MANPOWER_CATS, DEFAULT_SCORPION_CATS, MP_CERT_MAP, MP_HEADER_ROW, EQ_CERT_MAP, EQ_HEADER_ROW, parseExcelWithHeaderRow, loadNotifySettings, saveNotifySettings, buildEmailPayload, buildMaintenanceEmailPayload, sendMaintenanceEmail, EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY, NOTIFY_LAST_SENT_KEY, COMPANY_PASSWORD, AUTH_KEY, FINANCE_PASSWORD, ANALYSIS_PASSWORD, COST_PASSWORD, METHOD_STATEMENT_PASSWORD, ADMIN_PASSWORD, ADMIN_KEY, isAuthenticated, EMPTY_DATA, excelDateToStr } from "../constants.js";
 import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
-import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, BulkUploadModal, MultiPdfCertUpload } from "./UI.jsx";
+import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, BulkUploadModal, MultiPdfCertUpload, pctColor } from "./UI.jsx";
 import { FinanceLoginPage } from "./FinancePage.jsx";
 
 /* ─── HSE & Project Document Categories ─────────────────────────────────── */
@@ -36,13 +36,6 @@ const PD_TABS = [
 
 const HOURS_PER_DAY = 10;   // full working day = 10 permit hours
 const CAPACITY_OFF_DAY = 5; // Date.getDay(): 0=Sun … 5=Fri … 6=Sat — Fridays excluded from capacity
-
-/* Maps a utilization percentage to a status color (red = low, gold = mid, green = high) */
-function pctColor(pct) {
-  if (pct >= 80) return T.green;
-  if (pct >= 50) return T.gold;
-  return T.red;
-}
 
 /* Builds a styled .xlsx file from an array of plain row objects and triggers download */
 function exportToExcel(rows, filename) {
