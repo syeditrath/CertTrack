@@ -577,9 +577,14 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
     .filter(d => d.subTab === "dailyreports" && !d._deleted)
     .map(r => ({ ...r, _project: r.project || "Unassigned", _rig: r.rig || "Unassigned", _crossing: r.crossing || "", _source: "saved" }));
 
-  // Legacy: also pull from projectAnalysis.dailyReports if any exist
+  // Legacy: only pull from projectAnalysis.dailyReports for records that DON'T
+  // already exist in projectDocs — every current save mirrors into both places,
+  // so without this exclusion nearly every report would be duplicated in exports.
+  const savedIds = new Set(savedRows.map(r => r.id));
   const legacyRows = (projectAnalysis || []).flatMap(pa =>
-    (pa.dailyReports || []).map(r => ({ ...r, _project: pa.project, _rig: r.rig || "Unassigned", _source: "saved" }))
+    (pa.dailyReports || [])
+      .filter(r => !savedIds.has(r.id))
+      .map(r => ({ ...r, _project: pa.project, _rig: r.rig || "Unassigned", _crossing: r.crossing || "", _source: "saved" }))
   );
 
   // Ingested-from-drop rows
