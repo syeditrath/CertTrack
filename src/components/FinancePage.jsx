@@ -142,7 +142,1033 @@ const FIN_TABS = [
   {id:"workorders",  label:"Work Orders / Agreements", icon:"📋", color:T.purple, dim:T.purpleDim},
 ];
 
-function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelectedInvoiceYear, isAdmin }) {
+function InvoiceCard({ doc, delay, onEdit, onDel, isAdmin }) {
+  const due = daysUntil(doc.dueDate);
+  const paymentStatus = doc.paymentStatus || "Pending";
+  const isPaid = paymentStatus === "Paid";
+  const isPartial = paymentStatus === "Partial";
+
+  // Only show overdue / due-soon logic for unpaid or partial invoices
+  const showDueAlert = !isPaid && doc.dueDate && due !== null && due <= 30;
+  const dueStatus = isPaid
+    ? { color: T.green, bg: T.greenDim, label: "Paid" }
+    : getStatus(due);
+
+  return (
+    <div
+      className="fade-up"
+      style={{
+        background: T.card,
+        border: `1px solid ${showDueAlert ? dueStatus.color + "44" : T.border}`,
+        borderLeft: `4px solid ${isPaid ? T.green : isPartial ? T.gold : T.green}`,
+        borderRadius: 12,
+        padding: "16px 18px",
+        animationDelay: `${delay}s`,
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 14,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+          <span
+            style={{
+              fontFamily: "'Barlow Condensed',sans-serif",
+              fontWeight: 800,
+              fontSize: "clamp(14px,1.1vw,17px)",
+              color: T.text,
+            }}
+          >
+            {doc.name}
+          </span>
+
+          {doc.refNo && <Tag color={T.green}>#{doc.refNo}</Tag>}
+
+          {showDueAlert && (
+            <Tag color={dueStatus.color}>
+              {due < 0 ? `${Math.abs(due)}d overdue` : `Due in ${due}d`}
+            </Tag>
+          )}
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {doc.client && <Chip>Client: {doc.client}</Chip>}
+
+          {doc.dueDate && (
+            <Chip color={isPaid ? T.green : dueStatus.color}>
+              Due: {fmtDate(doc.dueDate)}
+            </Chip>
+          )}
+
+          {doc.amount && (
+            <Chip color={T.green}>
+              SAR {Number(doc.amount).toLocaleString()}
+            </Chip>
+          )}
+
+          <Chip color={getInvoiceStream(doc) === "advance" ? T.purple : T.blue}>
+            {getInvoiceStream(doc) === "advance" ? "Advance" : "Income"}
+          </Chip>
+
+          {(() => {
+            const c =
+              paymentStatus === "Paid"
+                ? T.green
+                : paymentStatus === "Partial"
+                ? T.gold
+                : T.red;
+
+            return (
+              <Tag color={c}>
+                {paymentStatus === "Paid"
+                  ? "✓ Paid"
+                  : paymentStatus === "Partial"
+                  ? "½ Partial"
+                  : "⏳ Pending"}
+              </Tag>
+            );
+          })()}
+
+          {doc.fileLink && <FileLink href={doc.fileLink} />}
+        </div>
+
+        {doc.notes && (
+          <div style={{ marginTop: 6, fontSize: 12, color: T.textMuted, fontStyle: "italic" }}>
+            {doc.notes}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        {isAdmin && <ABtn color={T.blue} onClick={onEdit}>✎</ABtn>}
+        {isAdmin && <ABtn color={T.red} onClick={onDel}>✕</ABtn>}
+      </div>
+    </div>
+  );
+}
+
+function InvoiceModal({mode,doc,projects,defaultProject,onClose,onSave}) {
+  const [f,setF]=useState(doc||{project:defaultProject||"", invoiceType:"Income", paymentStatus:"Pending"});
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} INVOICE`} color={T.green} onClose={onClose}
+      onSave={()=>{if(!f.name){alert("Invoice title required");return;}onSave({...f, invoiceType: f.invoiceType || "Income"},mode);}}>
+      <FieldRow label="Invoice Title *"><FInput value={f.name||""} onChange={set("name")} color={T.green}/></FieldRow>
+      <FieldRow label="Project *">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.green}>
+          <option value="">Select project…</option>
+          {renderProjectOptions(projects)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Invoice No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.green}/></FieldRow>
+      <FieldRow label="Job Number"><FInput value={f.jobNo||""} onChange={set("jobNo")} color={T.green} placeholder="e.g. 1, 2, 3A…"/></FieldRow>
+      <FieldRow label="Due Date"><FInput type="date" value={f.dueDate||""} onChange={set("dueDate")} color={T.green}/></FieldRow>
+      <FieldRow label="Invoice Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.green}/></FieldRow>
+      <FieldRow label="Invoice Type">
+        <div style={{display:"flex", gap:8}}>
+          {["Income","Advance"].map(s => {
+            const active = (f.invoiceType || "Income") === s;
+            const tone = s === "Income" ? T.blue : T.purple;
+            const bg = s === "Income" ? T.blueDim : T.purpleDim;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => set("invoiceType")(s)}
+                style={{
+                  flex: 1,
+                  padding: "9px 0",
+                  borderRadius: 8,
+                  border: `1px solid ${active ? tone : T.border}`,
+                  background: active ? bg : "transparent",
+                  color: active ? tone : T.textMuted,
+                  fontSize: 13,
+                  fontWeight: active ? 700 : 500,
+                  cursor: "pointer",
+                  transition: "all .15s",
+                }}
+              >
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      </FieldRow>
+      <FieldRow label="Payment Status">
+        <div style={{display:"flex", gap:8}}>
+          {["Pending","Paid","Partial"].map(s => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => set("paymentStatus")(s)}
+              style={{
+                flex: 1,
+                padding: "9px 0",
+                borderRadius: 8,
+                border: `1px solid ${
+                  f.paymentStatus === s
+                    ? s === "Paid"    ? T.green
+                    : s === "Partial" ? T.gold
+                    :                  T.red
+                    : T.border
+                }`,
+                background:
+                  f.paymentStatus === s
+                    ? s === "Paid"    ? T.greenDim
+                    : s === "Partial" ? T.goldDim
+                    :                  T.redDim
+                    : "transparent",
+                color:
+                  f.paymentStatus === s
+                    ? s === "Paid"    ? T.green
+                    : s === "Partial" ? T.gold
+                    :                  T.red
+                    : T.textMuted,
+                fontSize: 13,
+                fontWeight: f.paymentStatus === s ? 700 : 500,
+                cursor: "pointer",
+                transition: "all .15s",
+              }}
+            >
+              {s === "Paid" ? "✓ Paid" : s === "Partial" ? "½ Partial" : "⏳ Pending"}
+            </button>
+          ))}
+        </div>
+      </FieldRow>
+      {f.paymentStatus === "Partial" && (
+        <FieldRow label="Remaining Amount (SAR)">
+          <div>
+            <FInput type="number" value={f.remainingAmount || ""} onChange={set("remainingAmount")} color={T.gold}/>
+            <div style={{fontSize:11,color:T.textMuted,marginTop:6}}>
+              Enter the exact amount still remaining for this invoice.
+            </div>
+          </div>
+        </FieldRow>
+      )}
+      <FieldRow label="File Link (Google Drive / SharePoint)"><FLink value={f.fileLink||""} onChange={set("fileLink")}/></FieldRow>
+      <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.green}/></FieldRow>
+    </FormModal>
+  );
+}
+
+function WorkOrderModal({mode,doc,projects,onClose,onSave}) {
+  const initLinks = () => {
+    if (doc?.fileLinks?.length) return doc.fileLinks;
+    if (doc?.fileLink) return [{ url: doc.fileLink, label: "" }];
+    return [{ url: "", label: "" }];
+  };
+  const [f,setF]=useState(doc||{});
+  const [links,setLinks]=useState(initLinks);
+  const set=k=>v=>setF(p=>({...p,[k]:v}));
+  const setLink=(i,field)=>v=>setLinks(ls=>ls.map((l,idx)=>idx===i?{...l,[field]:v}:l));
+  const addLink=()=>setLinks(ls=>[...ls,{url:"",label:""}]);
+  const removeLink=i=>setLinks(ls=>ls.filter((_,idx)=>idx!==i));
+  return (
+    <FormModal title={`${mode==="add"?"ADD":"EDIT"} WORK ORDER / AGREEMENT`} color={T.purple} onClose={onClose}
+      onSave={()=>{
+        if(!f.name){alert("Title required");return;}
+        const cleanLinks=links.filter(l=>l.url.trim());
+        onSave({...f, fileLinks:cleanLinks, fileLink:cleanLinks[0]?.url||""},mode);
+      }}>
+      <FieldRow label="Title *"><FInput value={f.name||""} onChange={set("name")} color={T.purple}/></FieldRow>
+      <FieldRow label="Project *">
+        <FSelect value={f.project||""} onChange={set("project")} color={T.purple}>
+          <option value="">Select project…</option>
+          {renderProjectOptions(projects)}
+        </FSelect>
+      </FieldRow>
+      <FieldRow label="Reference No."><FInput value={f.refNo||""} onChange={set("refNo")} color={T.purple}/></FieldRow>
+      <FieldRow label="Client / Counterparty"><FInput value={f.supplier||""} onChange={set("supplier")} color={T.purple}/></FieldRow>
+      <FieldRow label="Contract Value (SAR)"><FInput type="number" value={f.amount||""} onChange={set("amount")} color={T.purple}/></FieldRow>
+      <FieldRow label="Date Signed"><FInput type="date" value={f.date||""} onChange={set("date")} color={T.purple}/></FieldRow>
+      <FieldRow label="Expiry / End Date"><FInput type="date" value={f.expiryDate||""} onChange={set("expiryDate")} color={T.purple}/></FieldRow>
+      <FieldRow label="File Links">
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {links.map((l,i)=>(
+            <div key={i} style={{display:"flex",gap:6,alignItems:"center"}}>
+              <FInput value={l.label||""} onChange={setLink(i,"label")} color={T.purple} placeholder="Label (optional)…" style={{width:120,flexShrink:0}}/>
+              <FLink value={l.url||""} onChange={setLink(i,"url")} style={{flex:1}}/>
+              {links.length>1&&<button type="button" onClick={()=>removeLink(i)} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:18,lineHeight:1,padding:"0 4px"}} title="Remove">✕</button>}
+            </div>
+          ))}
+          <button type="button" onClick={addLink} style={{alignSelf:"flex-start",background:T.card,border:`1px dashed ${T.purple}66`,color:T.purple,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Add Another File Link</button>
+        </div>
+      </FieldRow>
+      <FieldRow label="Notes"><FTextarea value={f.notes||""} onChange={set("notes")} color={T.purple}/></FieldRow>
+    </FormModal>
+  );
+}
+
+function BulkWorkOrderUpload({ projects, onClose, onImport }) {
+  const [rows, setRows] = useState([]); // [{file, name, project, status, url, error}]
+  const [uploading, setUploading] = useState(false);
+  const [done, setDone] = useState(false);
+  const inputRef = useRef();
+  const pNames = (projects||[]).map(p => typeof p==="string"?p:(p.name||"")).filter(Boolean);
+
+  const guessProject = filename => {
+    const lower = filename.toLowerCase();
+    return pNames.find(p => lower.includes(p.toLowerCase())) || "";
+  };
+
+  const handleFiles = files => {
+    const arr = Array.from(files).map(file => ({
+      file,
+      name: file.name.replace(/\.[^/.]+$/, ""),
+      project: guessProject(file.name),
+      status: "pending",
+      url: "",
+      error: "",
+    }));
+    setRows(prev => [...prev, ...arr]);
+  };
+
+  const setRow = (i, patch) => setRows(prev => prev.map((r, idx) => idx===i ? {...r,...patch} : r));
+
+  const upload = async () => {
+    setUploading(true);
+    const updated = [...rows];
+    for (let i = 0; i < updated.length; i++) {
+      if (updated[i].status === "done") continue;
+      setRows(r => r.map((x,idx) => idx===i ? {...x, status:"uploading"} : x));
+      try {
+        const url = await uploadFile(updated[i].file, "work-orders");
+        updated[i] = {...updated[i], url, status:"done", error:""};
+      } catch(e) {
+        updated[i] = {...updated[i], status:"error", error: e.message||"Upload failed"};
+      }
+      setRows([...updated]);
+    }
+    setUploading(false);
+    setDone(true);
+  };
+
+  const finish = () => {
+    const docs = rows.filter(r=>r.status==="done").map(r=>({
+      name: r.name,
+      project: r.project,
+      fileLinks: [{url:r.url, label:r.name}],
+      fileLink: r.url,
+    }));
+    onImport(docs);
+  };
+
+  const allDone = rows.length > 0 && rows.every(r=>r.status==="done"||r.status==="error");
+  const successCount = rows.filter(r=>r.status==="done").length;
+  const statusColor = s => s==="done"?T.green:s==="error"?T.red:s==="uploading"?T.gold:T.textMuted;
+  const statusIcon  = s => s==="done"?"✓":s==="error"?"✕":s==="uploading"?"⏳":"○";
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:T.card,borderRadius:18,padding:28,width:"min(700px,95vw)",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.4)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>
+            ⬆️ BULK WORK ORDER UPLOAD
+          </div>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:T.textMuted,fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+
+        <div
+          onClick={()=>inputRef.current.click()}
+          onDragOver={e=>e.preventDefault()}
+          onDrop={e=>{e.preventDefault();handleFiles(e.dataTransfer.files);}}
+          style={{border:`2px dashed ${T.purple}66`,borderRadius:12,padding:"28px 20px",textAlign:"center",cursor:"pointer",background:T.bg,marginBottom:18,transition:"border-color .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor=T.purple}
+          onMouseLeave={e=>e.currentTarget.style.borderColor=T.purple+"66"}
+        >
+          <div style={{fontSize:32,marginBottom:8}}>📂</div>
+          <div style={{fontWeight:700,color:T.text,fontSize:15}}>Drop files here or click to browse</div>
+          <div style={{fontSize:12,color:T.textMuted,marginTop:4}}>PDF, Word, Excel — one record created per file</div>
+          <input ref={inputRef} type="file" multiple style={{display:"none"}} onChange={e=>{handleFiles(e.target.files);e.target.value="";}}/>
+        </div>
+
+        {rows.length > 0 && (
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:18}}>
+            <div style={{fontWeight:700,fontSize:13,color:T.textSub,marginBottom:2}}>{rows.length} file{rows.length!==1?"s":""} queued</div>
+            {rows.map((r,i) => (
+              <div key={i} style={{display:"flex",gap:8,alignItems:"center",background:T.bg,borderRadius:10,padding:"10px 12px",border:`1px solid ${statusColor(r.status)}33`}}>
+                <span style={{fontSize:16,color:statusColor(r.status),flexShrink:0}}>{statusIcon(r.status)}</span>
+                <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
+                  <input
+                    value={r.name}
+                    onChange={e=>setRow(i,{name:e.target.value})}
+                    disabled={uploading||r.status==="done"}
+                    placeholder="Work order name…"
+                    style={{background:"transparent",border:"none",borderBottom:`1px solid ${T.border}`,color:T.text,fontSize:13,fontWeight:600,outline:"none",padding:"2px 0",width:"100%"}}
+                  />
+                  <select
+                    value={r.project}
+                    onChange={e=>setRow(i,{project:e.target.value})}
+                    disabled={uploading||r.status==="done"}
+                    style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:6,padding:"4px 8px",fontSize:12,color:r.project?T.text:T.textMuted,outline:"none",colorScheme:"light"}}
+                  >
+                    <option value="">Assign to project (optional)…</option>
+                    {pNames.map(p=><option key={p} value={p}>{p}</option>)}
+                  </select>
+                  {r.error && <div style={{fontSize:11,color:T.red,fontWeight:600}}>{r.error}</div>}
+                </div>
+                {r.status!=="done" && r.status!=="uploading" && (
+                  <button onClick={()=>setRows(prev=>prev.filter((_,idx)=>idx!==i))} style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:16,flexShrink:0}}>✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={onClose} style={{background:T.card,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          {!done
+            ? <button onClick={upload} disabled={uploading||rows.length===0} style={{background:uploading||rows.length===0?"#555":`linear-gradient(135deg,${T.purple},#7c3aed)`,border:"none",color:"#fff",borderRadius:9,padding:"10px 22px",fontSize:13,fontWeight:700,cursor:uploading||rows.length===0?"not-allowed":"pointer"}}>
+                {uploading?"⏳ Uploading…":"⬆️ Upload All"}
+              </button>
+            : <button onClick={finish} disabled={successCount===0} style={{background:successCount===0?"#555":`linear-gradient(135deg,${T.green},#059669)`,border:"none",color:"#fff",borderRadius:9,padding:"10px 22px",fontSize:13,fontWeight:700,cursor:successCount===0?"not-allowed":"pointer"}}>
+                ✓ Save {successCount} Work Order{successCount!==1?"s":""}
+              </button>
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MultiPdfInvoiceUpload({ project, projects, onClose, onImport }) {
+  const [files,       setFiles]       = useState([]);
+  const [uploading,   setUploading]   = useState(false);
+  const [progress,    setProgress]    = useState({});
+  const [selProj,     setSelProj]     = useState(project || "");
+  const dropRef                       = useRef();
+  const fileInputRef                  = useRef();
+
+  const STATUS_COLOR = { pending: T.textMuted, uploading: T.blue, done: T.green, error: T.red };
+  const STATUS_ICON  = { pending: "⏳", uploading: "↑", done: "✓", error: "✕" };
+
+  const cleanName = filename =>
+    filename.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+  const addFiles = newFiles => {
+    const pdfs = Array.from(newFiles).filter(f => /\.(pdf|png|jpg|jpeg|webp|doc|docx)$/i.test(f.name));
+    if (!pdfs.length) return;
+    const entries = pdfs.map(f => ({
+      id:             uid(),
+      file:           f,
+      displayName:    cleanName(f.name),
+      refNo:          "",
+      jobNo:          "",
+      amount:         "",
+      paymentStatus:  "Pending",
+      invoiceType:    "Income",
+      dueDate:        "",
+      remainingAmount:"",
+      notes:          "",
+    }));
+    setFiles(prev => [...prev, ...entries]);
+    setProgress(prev => {
+      const next = {...prev};
+      entries.forEach(e => { next[e.id] = "pending"; });
+      return next;
+    });
+  };
+
+  const removeFile = id => {
+    setFiles(prev => prev.filter(f => f.id !== id));
+    setProgress(prev => { const n={...prev}; delete n[id]; return n; });
+  };
+
+  const updateField = (id, key, val) =>
+    setFiles(prev => prev.map(f => f.id === id ? {...f, [key]: val} : f));
+
+  const onDragOver  = e => { e.preventDefault(); dropRef.current.style.borderColor = T.green; };
+  const onDragLeave = ()  => { dropRef.current.style.borderColor = `${T.green}44`; };
+  const onDrop      = e   => {
+    e.preventDefault();
+    dropRef.current.style.borderColor = `${T.green}44`;
+    addFiles(e.dataTransfer.files);
+  };
+
+  const handleUploadAll = async () => {
+    if (!selProj) { alert("Please select a project first."); return; }
+    if (!files.length) { alert("No files selected."); return; }
+    setUploading(true);
+    const results = [];
+    for (const entry of files) {
+      setProgress(prev => ({...prev, [entry.id]: "uploading"}));
+      try {
+        const url = await uploadFile(entry.file, `invoices/${selProj.replace(/\s+/g,"_")}`);
+        setProgress(prev => ({...prev, [entry.id]: "done"}));
+        results.push({
+          project:        selProj,
+          name:           entry.displayName,
+          refNo:          entry.refNo || "",
+          jobNo:          entry.jobNo || "",
+          amount:         entry.amount || "",
+          paymentStatus:  entry.paymentStatus || "Pending",
+          invoiceType:    entry.invoiceType || "Income",
+          dueDate:        entry.dueDate || "",
+          remainingAmount:entry.remainingAmount || "",
+          notes:          entry.notes || "",
+          fileLink:       url,
+        });
+      } catch (err) {
+        setProgress(prev => ({...prev, [entry.id]: "error"}));
+        console.error("Upload failed for", entry.file.name, err);
+      }
+    }
+    setUploading(false);
+    if (results.length) onImport(results);
+    else alert("All uploads failed. Check your Cloudflare Worker configuration.");
+  };
+
+  const doneCount    = Object.values(progress).filter(s => s === "done").length;
+  const errorCount   = Object.values(progress).filter(s => s === "error").length;
+  const pendingCount = Object.values(progress).filter(s => s === "pending").length;
+  const allDone      = uploading && doneCount + errorCount === files.length && files.length > 0;
+
+  return (
+    <Overlay onClose={onClose}>
+      <div className="slide-up" style={{
+        background: T.sidebar, border: `1px solid ${T.border}`, borderRadius: 18,
+        width: "100%", maxWidth: 720, maxHeight: "calc(100vh - 48px)",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+      }}>
+        <div style={{padding:"20px 24px 16px", borderBottom:`1px solid ${T.border}`, flexShrink:0}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start"}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:800, fontSize:20, color:T.text}}>
+                📄 BULK INVOICE PDF UPLOAD
+              </div>
+              <div style={{fontSize:12, color:T.textMuted, marginTop:3}}>
+                Select multiple PDFs — fill invoice details for each, then upload all at once
+              </div>
+            </div>
+            <button onClick={onClose} style={{background:T.bg, border:`1px solid ${T.border}`, color:T.textSub, borderRadius:8, width:34, height:34, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, cursor:"pointer"}}>×</button>
+          </div>
+          <div style={{marginTop:14}}>
+            <label style={{display:"block", fontSize:11, fontWeight:700, color:T.textMuted, marginBottom:5, letterSpacing:".5px"}}>PROJECT *</label>
+            <select
+              value={selProj}
+              onChange={e => setSelProj(e.target.value)}
+              style={{width:"100%", background:T.inputBg, border:`1px solid ${selProj ? T.green+"66" : T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:selProj ? T.text : T.textMuted, outline:"none", colorScheme:"light"}}
+            >
+              <option value="">Select project…</option>
+              {renderProjectOptions(projects)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{flex:1, overflowY:"auto", padding:"16px 24px"}}>
+          <div
+            ref={dropRef}
+            onClick={() => !uploading && fileInputRef.current.click()}
+            onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={!uploading ? onDrop : undefined}
+            style={{
+              border: `2px dashed ${T.green}44`, borderRadius: 12,
+              padding: files.length ? "16px" : "36px 24px",
+              textAlign: "center", cursor: uploading ? "not-allowed" : "pointer",
+              transition: "all .2s", background: `${T.green}06`, marginBottom: 14,
+            }}
+            onMouseEnter={e => { if (!uploading) { e.currentTarget.style.borderColor=T.green; e.currentTarget.style.background=`${T.green}12`; }}}
+            onMouseLeave={e => { e.currentTarget.style.borderColor=`${T.green}44`; e.currentTarget.style.background=`${T.green}06`; }}
+          >
+            {files.length === 0 ? (
+              <>
+                <div style={{fontSize:40, marginBottom:8}}>🧾</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif", fontWeight:700, fontSize:17, color:T.text, marginBottom:4}}>
+                  Drag & drop invoice PDFs here, or click to browse
+                </div>
+                <div style={{fontSize:12, color:T.textMuted}}>PDF, Word, PNG, JPG — select as many as you need</div>
+              </>
+            ) : (
+              <div style={{fontSize:13, color:T.green, fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:8}}>
+                <span>+</span> Click or drop more files ({files.length} selected)
+              </div>
+            )}
+          </div>
+          <input ref={fileInputRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx"
+            style={{display:"none"}} onChange={e => { addFiles(e.target.files); e.target.value=""; }}/>
+
+          {uploading && (
+            <div style={{background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:"12px 16px", marginBottom:14}}>
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8}}>
+                <span style={{fontSize:13, fontWeight:700, color:T.text}}>Uploading…</span>
+                <span style={{fontSize:13, color:T.textMuted}}>{doneCount + errorCount} / {files.length}</span>
+              </div>
+              <div style={{height:6, background:T.border, borderRadius:999, overflow:"hidden"}}>
+                <div style={{height:"100%", width:`${files.length ? ((doneCount + errorCount) / files.length * 100) : 0}%`, background:`linear-gradient(90deg, ${T.green}, ${T.teal})`, borderRadius:999, transition:"width .3s ease"}}/>
+              </div>
+              <div style={{display:"flex", gap:14, marginTop:8, fontSize:12}}>
+                <span style={{color:T.green}}>✓ {doneCount} done</span>
+                {errorCount > 0 && <span style={{color:T.red}}>✕ {errorCount} failed</span>}
+                <span style={{color:T.textMuted}}>{pendingCount} remaining</span>
+              </div>
+            </div>
+          )}
+
+          {files.length > 0 && (
+            <div style={{display:"grid", gap:12}}>
+              {files.map((entry, i) => {
+                const st      = progress[entry.id] || "pending";
+                const stColor = STATUS_COLOR[st];
+                const stIcon  = STATUS_ICON[st];
+                const isExp   = st === "pending" || st === "error";
+
+                return (
+                  <div key={entry.id} className="fade-up" style={{
+                    background: T.bg, border: `1px solid ${st==="done"?T.green+"44":st==="error"?T.red+"44":T.border}`,
+                    borderLeft: `4px solid ${stColor}`, borderRadius: 10, padding: "12px 14px",
+                    animationDelay: `${i * 0.03}s`,
+                  }}>
+                    <div style={{display:"flex", alignItems:"center", gap:10, marginBottom: isExp ? 10 : 0}}>
+                      <span style={{fontSize:18, flexShrink:0}}>{/\.pdf$/i.test(entry.file.name) ? "📄" : "🖼️"}</span>
+                      <div style={{flex:1, minWidth:0}}>
+                        <div style={{fontSize:13, fontWeight:700, color:T.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{entry.displayName}</div>
+                        <div style={{fontSize:11, color:T.textMuted, marginTop:1}}>{(entry.file.size/1024/1024).toFixed(2)} MB</div>
+                      </div>
+                      <div style={{background:`${stColor}18`, border:`1px solid ${stColor}44`, borderRadius:6, padding:"3px 10px", fontSize:11, fontWeight:700, color:stColor, flexShrink:0, display:"flex", alignItems:"center", gap:5}}>
+                        <span>{stIcon}</span><span style={{textTransform:"capitalize"}}>{st}</span>
+                      </div>
+                      {!uploading && (
+                        <button onClick={() => removeFile(entry.id)} style={{background:T.redDim, border:`1px solid ${T.red}33`, color:T.red, borderRadius:6, width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, cursor:"pointer", flexShrink:0}}>✕</button>
+                      )}
+                    </div>
+
+                    {isExp && !uploading && (
+                      <div style={{display:"grid", gap:8, paddingTop:8, borderTop:`1px solid ${T.border}`}}>
+                        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>INVOICE NO.</label>
+                            <input value={entry.refNo} onChange={e => updateField(entry.id,"refNo",e.target.value)} placeholder="e.g. INV-2025-01"
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                          </div>
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>JOB NO.</label>
+                            <input value={entry.jobNo} onChange={e => updateField(entry.id,"jobNo",e.target.value)} placeholder="e.g. JOB-001"
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                          </div>
+                        </div>
+                        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8}}>
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>INVOICE VALUE (SAR)</label>
+                            <input type="number" value={entry.amount} onChange={e => updateField(entry.id,"amount",e.target.value)} placeholder="0"
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                          </div>
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>DUE DATE</label>
+                            <input type="date" value={entry.dueDate} onChange={e => updateField(entry.id,"dueDate",e.target.value)}
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>PAYMENT STATUS</label>
+                          <div style={{display:"flex", gap:6}}>
+                            {["Pending","Paid","Partial"].map(s => {
+                              const active = entry.paymentStatus === s;
+                              const col = s==="Paid"?T.green:s==="Partial"?T.gold:T.red;
+                              return (
+                                <button key={s} type="button" onClick={() => updateField(entry.id,"paymentStatus",s)}
+                                  style={{flex:1, padding:"7px 0", borderRadius:7, border:`1px solid ${active?col:T.border}`, background:active?`${col}18`:"transparent", color:active?col:T.textMuted, fontSize:11, fontWeight:active?700:500, cursor:"pointer", transition:"all .15s"}}>
+                                  {s==="Paid"?"✓ Paid":s==="Partial"?"½ Partial":"⏳ Pending"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {entry.paymentStatus === "Partial" && (
+                          <div>
+                            <label style={{display:"block", fontSize:10, fontWeight:700, color:T.gold, marginBottom:4, letterSpacing:".5px"}}>REMAINING AMOUNT (SAR)</label>
+                            <input type="number" value={entry.remainingAmount} onChange={e => updateField(entry.id,"remainingAmount",e.target.value)} placeholder="Amount still outstanding"
+                              style={{width:"100%", background:T.inputBg, border:`1px solid ${T.gold}66`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                              onFocus={e=>e.target.style.borderColor=T.gold} onBlur={e=>e.target.style.borderColor=`${T.gold}66`}/>
+                          </div>
+                        )}
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>INVOICE TYPE</label>
+                          <div style={{display:"flex", gap:6}}>
+                            {["Income","Advance"].map(s => {
+                              const active = entry.invoiceType === s;
+                              const col = s==="Income"?T.blue:T.purple;
+                              return (
+                                <button key={s} type="button" onClick={() => updateField(entry.id,"invoiceType",s)}
+                                  style={{flex:1, padding:"7px 0", borderRadius:7, border:`1px solid ${active?col:T.border}`, background:active?`${col}18`:"transparent", color:active?col:T.textMuted, fontSize:11, fontWeight:active?700:500, cursor:"pointer", transition:"all .15s"}}>
+                                  {s==="Income"?"💰 Income":"⏫ Advance"}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{display:"block", fontSize:10, fontWeight:700, color:T.textMuted, marginBottom:4, letterSpacing:".5px"}}>NOTES</label>
+                          <input value={entry.notes} onChange={e => updateField(entry.id,"notes",e.target.value)} placeholder="Optional notes…"
+                            style={{width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:7, padding:"7px 10px", fontSize:12, color:T.text, outline:"none", colorScheme:"light"}}
+                            onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                        </div>
+                      </div>
+                    )}
+
+                    {st === "done" && (
+                      <div style={{marginTop:6, fontSize:11, color:T.green, display:"flex", alignItems:"center", gap:6}}>✓ Uploaded successfully</div>
+                    )}
+                    {st === "error" && (
+                      <div style={{marginTop:6, fontSize:11, color:T.red}}>✕ Upload failed — check Cloudflare Worker config or file size</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{padding:"14px 24px 22px", borderTop:`1px solid ${T.border}`, flexShrink:0, display:"flex", gap:10, alignItems:"center"}}>
+          <div style={{flex:1, fontSize:12, color:T.textMuted}}>
+            {files.length > 0
+              ? `${files.length} file${files.length!==1?"s":""} selected — each becomes one invoice record`
+              : "No files selected yet"}
+          </div>
+          <button onClick={onClose} disabled={uploading}
+            style={{background:T.bg, border:`1px solid ${T.border}`, color:T.textSub, borderRadius:10, padding:"11px 20px", fontSize:14, fontWeight:600, cursor:uploading?"not-allowed":"pointer", opacity:uploading?0.5:1}}>
+            {allDone ? "Close" : "Cancel"}
+          </button>
+          {!uploading && files.length > 0 && (
+            <button onClick={handleUploadAll} style={{
+              background: `linear-gradient(135deg, ${T.green}, ${T.teal})`,
+              border: "none", color: "#000", borderRadius: 10,
+              padding: "11px 28px", fontSize: 14, fontWeight: 800, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 8,
+              boxShadow: `0 4px 16px ${T.green}44`,
+            }}>
+              ⬆ Upload {files.length} Invoice{files.length!==1?"s":""}
+            </button>
+          )}
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+function BulkInvoiceUpload({ projects, onClose, onImport }) {
+  const [step, setStep]         = useState(1); // 1=upload, 2=preview
+  const [rows, setRows]         = useState([]);
+  const [errors, setErrors]     = useState([]);
+  const [fileName, setFileName] = useState("");
+  const fileRef                 = useRef();
+  const pNames = (projects||[]).map(p => typeof p==="string" ? p : (p.name||"")).filter(Boolean);
+
+  const COL_MAP = {
+    "INVOICE TITLE":"name","INVOICE NAME":"name","TITLE":"name","NAME":"name","DESCRIPTION":"name","DESC":"name",
+    "PROJECT":"project","PROJECT NAME":"project",
+    "INVOICE NO":"refNo","INVOICE NO.":"refNo","INVOICE NUMBER":"refNo","INV NO":"refNo","REF NO":"refNo","REF NO.":"refNo","REFERENCE":"refNo","REF":"refNo",
+    "JOB NO":"jobNo","JOB NO.":"jobNo","JOB NUMBER":"jobNo","JOB":"jobNo","PHASE":"jobNo",
+    "AMOUNT":"amount","AMOUNT (SAR)":"amount","VALUE":"amount","INVOICE VALUE":"amount","INVOICE VALUE (SAR)":"amount","SAR":"amount","TOTAL":"amount","TOTAL (SAR)":"amount",
+    "DUE DATE":"dueDate","DUE":"dueDate","PAYMENT DATE":"dueDate","DATE DUE":"dueDate",
+    "DATE":"date","INVOICE DATE":"date","ISSUED DATE":"date","ISSUE DATE":"date",
+    "TYPE":"invoiceType","INVOICE TYPE":"invoiceType","KIND":"invoiceType",
+    "STATUS":"paymentStatus","PAYMENT STATUS":"paymentStatus","PAYMENT":"paymentStatus",
+    "NOTES":"notes","REMARKS":"notes","COMMENT":"notes","COMMENTS":"notes",
+    "FILE":"fileLink","FILE LINK":"fileLink","LINK":"fileLink","URL":"fileLink","ATTACHMENT":"fileLink",
+  };
+
+  const parseFile = file => {
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type:"binary", cellDates:true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
+        if (!raw.length) { setErrors(["File appears to be empty."]); return; }
+
+        let headerRowIdx = 0;
+        for (let r = 0; r < Math.min(6, raw.length); r++) {
+          const upper = raw[r].map(c => String(c).toUpperCase().trim());
+          if (upper.some(u => COL_MAP[u])) { headerRowIdx = r; break; }
+        }
+
+        const headers = raw[headerRowIdx].map(c => String(c).toUpperCase().trim());
+        const colIdx  = {};
+        headers.forEach((h, i) => { if (COL_MAP[h]) colIdx[COL_MAP[h]] = i; });
+
+        if (!colIdx.amount && !colIdx.name) {
+          setErrors(["Could not find required columns. Make sure your file has columns like: Invoice Title, Amount, Due Date, Project."]);
+          return;
+        }
+
+        const parsed = [];
+        const errs   = [];
+        for (let r = headerRowIdx + 1; r < raw.length; r++) {
+          const row = raw[r];
+          if (row.every(c => String(c).trim() === "")) continue;
+
+          const get = key => {
+            const i = colIdx[key];
+            return i !== undefined ? String(row[i] ?? "").trim() : "";
+          };
+
+          const dateVal = v => {
+            if (!v) return "";
+            if (v instanceof Date) return v.toISOString().slice(0, 10);
+            if (typeof v === "number") {
+              const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+              return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+            }
+            const s = String(v).trim();
+            const d = new Date(s);
+            return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+          };
+
+          const rawDate = colIdx.dueDate !== undefined ? row[colIdx.dueDate] : "";
+          const rawInvoiceDate = colIdx.date !== undefined ? row[colIdx.date] : "";
+
+          const name    = get("name")   || `Invoice ${r - headerRowIdx}`;
+          const project = get("project") || "";
+          const amount  = parseFloat(get("amount").replace(/[^0-9.-]/g, "")) || "";
+          const dueDate = dateVal(rawDate);
+          const date    = dateVal(rawInvoiceDate);
+          const refNo   = get("refNo");
+          const jobNo   = get("jobNo");
+          const notes   = get("notes");
+          const fileLink= get("fileLink");
+
+          const rawType = get("invoiceType").toLowerCase();
+          const invoiceType = rawType.includes("adv") ? "Advance" : "Income";
+
+          const rawStatus = get("paymentStatus").toLowerCase();
+          const paymentStatus = rawStatus.includes("paid") && !rawStatus.includes("partial") ? "Paid"
+            : rawStatus.includes("partial") ? "Partial"
+            : "Pending";
+
+          if (!amount && amount !== 0) errs.push(`Row ${r - headerRowIdx}: No amount found`);
+
+          parsed.push({ name, project, amount, dueDate, date, refNo, jobNo, invoiceType, paymentStatus, notes, fileLink });
+        }
+
+        setRows(parsed);
+        setErrors(errs);
+        if (parsed.length) setStep(2);
+      } catch(err) {
+        setErrors(["Failed to parse file: " + (err.message || "unknown error")]);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleFilePick = e => { if (e.target.files[0]) { parseFile(e.target.files[0]); e.target.value=""; } };
+  const onDrop = e => { e.preventDefault(); if (e.dataTransfer.files[0]) parseFile(e.dataTransfer.files[0]); };
+
+  const updateRow = (i, key, val) => setRows(prev => prev.map((r, idx) => idx===i ? {...r, [key]:val} : r));
+
+  const confirm = () => onImport(rows);
+
+  const statusColor = s => s==="Paid"?T.green:s==="Partial"?T.gold:T.red;
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:T.card,borderRadius:20,width:"min(860px,96vw)",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(0,0,0,0.5)"}} onClick={e=>e.stopPropagation()}>
+
+        <div style={{padding:"20px 26px 16px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:T.text}}>
+                ⬆ BULK INVOICE IMPORT
+              </div>
+              <div style={{fontSize:12,color:T.textMuted,marginTop:3}}>
+                Upload an Excel or CSV file — one row per invoice
+              </div>
+            </div>
+            <button onClick={onClose} style={{background:"transparent",border:"none",color:T.textMuted,fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
+          </div>
+
+          <div style={{display:"flex",gap:6,marginTop:14,alignItems:"center"}}>
+            {["Upload File","Preview & Confirm"].map((label,i) => (
+              <Fragment key={label}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",background:step>i?T.green:step===i+1?T.greenDim:T.border,border:`2px solid ${step>i?T.green:step===i+1?T.green:T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:step>i?"#000":step===i+1?T.green:T.textMuted}}>
+                    {step>i+1?"✓":i+1}
+                  </div>
+                  <span style={{fontSize:12,fontWeight:step===i+1?700:500,color:step===i+1?T.text:T.textMuted}}>{label}</span>
+                </div>
+                {i<1&&<div style={{width:24,height:2,background:step>1?T.green:T.border,borderRadius:1}}/>}
+              </Fragment>
+            ))}
+          </div>
+        </div>
+
+        <div style={{flex:1,overflowY:"auto",padding:"20px 26px"}}>
+
+          {step===1 && (
+            <div>
+              <div
+                onDragOver={e=>e.preventDefault()} onDrop={onDrop}
+                onClick={()=>fileRef.current.click()}
+                style={{border:`2px dashed ${T.green}55`,borderRadius:14,padding:"44px 24px",textAlign:"center",cursor:"pointer",background:`${T.green}06`,marginBottom:20,transition:"all .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background=`${T.green}12`;e.currentTarget.style.borderColor=T.green;}}
+                onMouseLeave={e=>{e.currentTarget.style.background=`${T.green}06`;e.currentTarget.style.borderColor=`${T.green}55`;}}
+              >
+                <div style={{fontSize:40,marginBottom:10}}>📊</div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,marginBottom:6}}>
+                  Drag & drop your Excel or CSV file here
+                </div>
+                <div style={{fontSize:13,color:T.textMuted}}>or click to browse · .xlsx, .xls, .csv supported</div>
+                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}} onChange={handleFilePick}/>
+              </div>
+
+              {errors.length > 0 && (
+                <div style={{background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:10,padding:"12px 16px",marginBottom:16}}>
+                  {errors.map((e,i) => <div key={i} style={{fontSize:13,color:T.red,fontWeight:600}}>⚠ {e}</div>)}
+                </div>
+              )}
+
+              <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"16px 20px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,color:T.textSub,marginBottom:10,letterSpacing:".5px"}}>EXPECTED COLUMNS (flexible — headers are auto-detected)</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:6}}>
+                  {[
+                    {col:"Invoice Title",req:true,note:"Required"},
+                    {col:"Project",req:false,note:"Match project name"},
+                    {col:"Amount (SAR)",req:true,note:"Required"},
+                    {col:"Due Date",req:false,note:"YYYY-MM-DD or DD/MM/YYYY"},
+                    {col:"Invoice No.",req:false,note:"Reference number"},
+                    {col:"Job No.",req:false,note:"Phase / job grouping"},
+                    {col:"Invoice Type",req:false,note:"Income or Advance"},
+                    {col:"Payment Status",req:false,note:"Pending / Paid / Partial"},
+                    {col:"Invoice Date",req:false,note:"Date of issue"},
+                    {col:"Notes",req:false,note:"Optional remarks"},
+                  ].map(({col,req,note}) => (
+                    <div key={col} style={{display:"flex",alignItems:"flex-start",gap:6}}>
+                      <span style={{color:req?T.green:T.textMuted,fontWeight:700,fontSize:12,flexShrink:0,marginTop:1}}>{req?"●":"○"}</span>
+                      <div>
+                        <div style={{fontSize:12,fontWeight:700,color:T.text}}>{col}</div>
+                        <div style={{fontSize:10,color:T.textMuted}}>{note}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step===2 && (
+            <div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
+                <div>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>{rows.length} invoice{rows.length!==1?"s":""} detected</span>
+                  <span style={{fontSize:12,color:T.textMuted,marginLeft:10}}>from {fileName}</span>
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>{setStep(1);setRows([]);setErrors([]);}} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>← Re-upload</button>
+                  <span style={{fontSize:12,color:T.textMuted,alignSelf:"center"}}>Review and edit before confirming</span>
+                </div>
+              </div>
+
+              {errors.length > 0 && (
+                <div style={{background:T.goldDim,border:`1px solid ${T.gold}44`,borderRadius:10,padding:"10px 14px",marginBottom:12}}>
+                  {errors.map((e,i) => <div key={i} style={{fontSize:12,color:T.gold}}>⚠ {e}</div>)}
+                </div>
+              )}
+
+              <div style={{display:"grid",gap:8}}>
+                {rows.map((row,i) => (
+                  <div key={i} className="fade-up" style={{background:T.bg,border:`1px solid ${T.border}`,borderLeft:`4px solid ${T.green}`,borderRadius:10,padding:"12px 16px",animationDelay:`${i*.02}s`}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>INVOICE TITLE *</label>
+                        <input value={row.name} onChange={e=>updateRow(i,"name",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>PROJECT</label>
+                        <select value={row.project} onChange={e=>updateRow(i,"project",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:row.project?T.text:T.textMuted,outline:"none",colorScheme:"light"}}>
+                          <option value="">— select —</option>
+                          {pNames.map(p=><option key={p} value={p}>{p}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>AMOUNT (SAR) *</label>
+                        <input type="number" value={row.amount} onChange={e=>updateRow(i,"amount",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${!row.amount?T.red+"88":T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=row.amount?T.border:T.red+"88"}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>DUE DATE</label>
+                        <input type="date" value={row.dueDate} onChange={e=>updateRow(i,"dueDate",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>INVOICE NO.</label>
+                        <input value={row.refNo} onChange={e=>updateRow(i,"refNo",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,fontWeight:700,color:T.textMuted,letterSpacing:".5px",display:"block",marginBottom:3}}>JOB NO.</label>
+                        <input value={row.jobNo} onChange={e=>updateRow(i,"jobNo",e.target.value)}
+                          style={{width:"100%",background:T.card,border:`1px solid ${T.border}`,borderRadius:7,padding:"6px 10px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+                          onFocus={e=>e.target.style.borderColor=T.green} onBlur={e=>e.target.style.borderColor=T.border}/>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                      <div style={{display:"flex",gap:4,background:T.card,borderRadius:8,padding:3,border:`1px solid ${T.border}`}}>
+                        {["Income","Advance"].map(t=>(
+                          <button key={t} onClick={()=>updateRow(i,"invoiceType",t)}
+                            style={{padding:"4px 10px",borderRadius:6,border:"none",fontSize:11,fontWeight:700,cursor:"pointer",background:row.invoiceType===t?(t==="Income"?T.blueDim:T.purpleDim):"transparent",color:row.invoiceType===t?(t==="Income"?T.blue:T.purple):T.textMuted,transition:"all .15s"}}>
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{display:"flex",gap:4,background:T.card,borderRadius:8,padding:3,border:`1px solid ${T.border}`}}>
+                        {["Pending","Paid","Partial"].map(s=>(
+                          <button key={s} onClick={()=>updateRow(i,"paymentStatus",s)}
+                            style={{padding:"4px 10px",borderRadius:6,border:"none",fontSize:11,fontWeight:700,cursor:"pointer",background:row.paymentStatus===s?`${statusColor(s)}22`:"transparent",color:row.paymentStatus===s?statusColor(s):T.textMuted,transition:"all .15s"}}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                      {row.amount && (
+                        <span style={{fontSize:13,fontWeight:700,color:T.green,marginLeft:"auto"}}>
+                          SAR {Number(row.amount).toLocaleString()}
+                        </span>
+                      )}
+                      <button onClick={()=>setRows(prev=>prev.filter((_,idx)=>idx!==i))}
+                        style={{background:T.redDim,border:`1px solid ${T.red}33`,color:T.red,borderRadius:6,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,cursor:"pointer",flexShrink:0}}>✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {rows.length > 0 && (
+                <div style={{background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:10,padding:"10px 16px",marginTop:14,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                  <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.green}}>{rows.length} invoice{rows.length!==1?"s":""}</span>
+                  <span style={{fontSize:13,color:T.textMuted}}>·</span>
+                  <span style={{fontSize:14,fontWeight:700,color:T.green}}>SAR {rows.reduce((s,r)=>s+(parseFloat(r.amount)||0),0).toLocaleString()} total value</span>
+                  <span style={{fontSize:13,color:T.textMuted}}>·</span>
+                  <span style={{fontSize:12,color:T.textMuted}}>{rows.filter(r=>r.dueDate).length} have due dates</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div style={{padding:"14px 26px 22px",borderTop:`1px solid ${T.border}`,flexShrink:0,display:"flex",gap:10,justifyContent:"flex-end",alignItems:"center"}}>
+          <button onClick={onClose} style={{background:T.bg,border:`1px solid ${T.border}`,color:T.textSub,borderRadius:10,padding:"11px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancel</button>
+          {step===2 && rows.length>0 && (
+            <button onClick={confirm}
+              disabled={rows.some(r=>!r.name||!r.amount)}
+              style={{background:`linear-gradient(135deg,${T.green},#059669)`,border:"none",color:"#000",borderRadius:10,padding:"11px 28px",fontSize:14,fontWeight:800,cursor:rows.some(r=>!r.name||!r.amount)?"not-allowed":"pointer",opacity:rows.some(r=>!r.name||!r.amount)?0.6:1,display:"flex",alignItems:"center",gap:8,boxShadow:`0 4px 16px ${T.green}44`}}>
+              ✓ Import {rows.length} Invoice{rows.length!==1?"s":""}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FinancePage({ data, setData, showToast, selectedInvoiceYear, setSelectedInvoiceYear, isAdmin, onManageProjects }) {
   const [finTab, setFinTab] = useState("overview");
   const [invoiceDetailView, setInvoiceDetailView] = useState(null);
   const [modal, setModal] = useState(null);
@@ -800,4 +1826,4 @@ const PD_TABS = [
    PROJECT DOCS
 ════════════════════════════════════════════════════════════════════════════ */
 
-export { LoginPage, FinanceLoginPage, FinancePage, AlertRow, PD_TABS, PROJDOC_CATEGORIES };
+export { LoginPage, FinanceLoginPage, FinancePage, AlertRow };
