@@ -7,6 +7,68 @@ import { uploadFile, saveAppData, getPreviewUrl, isCloudflareConfigured } from "
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, FInput, FTextarea, FSelect, PageHeader, Empty, daysLeft, pctColor, deriveProjectStats } from "./UI.jsx";
 import { RiskAlertsBar, ProjectAnalysisProNav, AnalyticsTab, TimelineTab, BudgetTab, ReportsTab, computeRiskInsights, costSheetsByProject } from "./ProjectAnalysisPro.jsx";
 
+/* Flexible column-header mapping for generic/legacy daily report Excel files
+   (non-Scorpion-template). Header text is upper-cased before matching. */
+const DR_COL_MAP = {
+  "PROJECT": "project", "PROJECT NAME": "project",
+  "RIG": "rig", "RIG / SPREAD": "rig", "RIG/SPREAD": "rig", "SPREAD": "rig",
+  "CROSSING": "crossing",
+  "DATE": "date", "REPORT DATE": "date",
+  "PROFILE": "profile", "WORK PROFILE": "profile",
+  "ACTIVITY": "activity",
+  "PERMIT RECEIVED": "permitReceived", "PERMIT": "permitReceived",
+  "PERMIT HOURS": "permitHours", "PERMIT HRS": "permitHours",
+  "STANDBY REASON": "standbyReason", "STANDBY": "standbyReason",
+  "PROGRESS TODAY": "progressToday", "PROGRESS TODAY (M)": "progressToday", "PROGRESS (M)": "progressToday",
+  "ACCUMULATED": "accumulated", "ACCUMULATED (M)": "accumulated",
+  "ACTIVITY SUMMARY": "activities", "ACTIVITIES": "activities",
+  "NOTES": "notes", "REMARKS": "notes",
+};
+
+/* Builds a styled .xlsx file from an array of plain row objects and triggers download */
+function exportToExcel(rows, filename) {
+  if (!rows || !rows.length) return;
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const headers = Object.keys(rows[0]);
+  headers.forEach((_, colIdx) => {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+    if (!ws[cellRef]) return;
+    ws[cellRef].s = {
+      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+      fill: { fgColor: { rgb: "B8860B" } },
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border: {
+        top: { style: "thin", color: { rgb: "8B6914" } }, bottom: { style: "thin", color: { rgb: "8B6914" } },
+        left: { style: "thin", color: { rgb: "8B6914" } }, right: { style: "thin", color: { rgb: "8B6914" } },
+      },
+    };
+  });
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  for (let r = 1; r <= range.e.r; r++) {
+    for (let c = 0; c <= range.e.c; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r, c });
+      if (!ws[cellRef]) continue;
+      ws[cellRef].s = {
+        font: { sz: 10, color: { rgb: "1A0A00" } },
+        fill: { fgColor: { rgb: r % 2 === 0 ? "FDF8F0" : "FFFFFF" } },
+        alignment: { vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "E8D5B7" } }, bottom: { style: "thin", color: { rgb: "E8D5B7" } },
+          left: { style: "thin", color: { rgb: "E8D5B7" } }, right: { style: "thin", color: { rgb: "E8D5B7" } },
+        },
+      };
+    }
+  }
+  ws["!cols"] = headers.map((h) => {
+    const maxLen = Math.max(h.length, ...rows.map((row) => String(row[h] ?? "").length));
+    return { wch: Math.min(Math.max(maxLen + 2, 10), 50) };
+  });
+  ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Export");
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
 function dprReadRange(ws, rangeStr) {
   try {
     const range = XLSX.utils.decode_range(rangeStr);
@@ -112,17 +174,6 @@ function parseScorpionDprSheet(wb) {
     activities:     get("today_summary",  "A27") || dprReadRange(ws, "A27:I29"),
   };
 }
-/* ── Excel column map for daily report import ───────────────────────────── */
-const DR_COL_MAP = {
-  "DATE":"date","REPORT DATE":"date","DAY":"date",
-  "WEATHER":"weather","WEATHER CONDITIONS":"weather","CONDITIONS":"weather",
-  "ACTIVITIES":"activities","WORK DONE":"activities","WORK":"activities","ACTIVITY":"activities","DESCRIPTION":"activities","WORK DESCRIPTION":"activities",
-  "MANPOWER":"manpower","MANPOWER COUNT":"manpower","WORKERS":"manpower","NO. OF WORKERS":"manpower","HEADCOUNT":"manpower","NO OF WORKERS":"manpower",
-  "EQUIPMENT":"equipment","EQUIPMENT USED":"equipment","PLANT":"equipment","PLANT & EQUIPMENT":"equipment","MACHINERY":"equipment",
-  "ISSUES":"issues","DELAYS":"issues","ISSUES / DELAYS":"issues","PROBLEMS":"issues","REMARKS":"issues",
-  "NOTES":"notes","ADDITIONAL NOTES":"notes","COMMENTS":"notes","SUPERVISOR NOTES":"notes",
-};
-
 function parseDailyReportExcel(arrayBuffer) {
   const wb = XLSX.read(arrayBuffer, { type:"array", cellDates:true });
 
@@ -156,43 +207,45 @@ function parseDailyReportExcel(arrayBuffer) {
     .filter(rec => Object.keys(rec).filter(k => k !== "id").length > 0);
 }
 
-/* ── Bulk Daily Report Import (multiple rows from one Excel) ── */
 function BulkDailyReportImport({ projectName, onImport }) {
-  const [status, setStatus] = useState(null); // null | "parsing" | {count,skipped}  | "error"
+  const [importing, setImporting] = useState(false);
+  const [msg, setMsg] = useState("");
   const fileRef = useRef();
 
-  const handleFile = (file) => {
+  const handleFile = async (file) => {
     if (!file) return;
-    setStatus("parsing");
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const rows = parseDailyReportExcel(e.target.result);
-        if (!rows.length) { setStatus("error"); return; }
-        onImport(rows);
-        setStatus({ count: rows.length });
-        setTimeout(() => setStatus(null), 3000);
-      } catch(err) {
-        console.error(err);
-        setStatus("error");
-        setTimeout(() => setStatus(null), 3000);
+    setImporting(true);
+    setMsg("");
+    try {
+      const buffer = await file.arrayBuffer();
+      const rows = parseDailyReportExcel(buffer);
+      if (!rows.length) {
+        setMsg("No rows found in this file.");
+      } else {
+        const withProject = rows.map(r => ({ ...r, id: r.id || uid(), project: r.project || projectName }));
+        onImport(withProject);
+        setMsg(`✓ Imported ${rows.length} report${rows.length !== 1 ? "s" : ""}`);
       }
-    };
-    reader.readAsArrayBuffer(file);
+    } catch (err) {
+      console.error(err);
+      setMsg("Could not read this file.");
+    }
+    setImporting(false);
   };
 
   return (
-    <div style={{display:"flex",alignItems:"center",gap:8}}>
-      <button onClick={()=>fileRef.current.click()} disabled={status==="parsing"}
-        style={{background:T.goldDim,border:`1px solid ${T.gold}44`,color:T.gold,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:status==="parsing"?"wait":"pointer",display:"flex",alignItems:"center",gap:6}}>
-        {status==="parsing"?"⏳ Importing…":"📊 Bulk Import Excel"}
+    <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
+      <button
+        type="button"
+        onClick={()=>fileRef.current.click()}
+        disabled={importing}
+        style={{background:T.purpleDim,border:`1px solid ${T.purple}44`,color:T.purple,borderRadius:9,padding:"8px 16px",fontSize:13,fontWeight:700,cursor:importing?"not-allowed":"pointer"}}
+      >
+        {importing ? "Importing…" : "📥 Bulk Import"}
       </button>
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:"none"}}
-        onChange={e=>{if(e.target.files[0]){handleFile(e.target.files[0]);e.target.value="";}}}/>
-      {status&&status!=="parsing"&&status!=="error"&&(
-        <span style={{fontSize:12,color:T.green,fontWeight:700}}>✓ {status.count} row{status.count!==1?"s":""} imported</span>
-      )}
-      {status==="error"&&<span style={{fontSize:12,color:T.red,fontWeight:700}}>✕ Parse failed</span>}
+        onChange={e=>{ if (e.target.files[0]) handleFile(e.target.files[0]); e.target.value=""; }}/>
+      {msg && <span style={{fontSize:11,color:msg.startsWith("✓")?T.green:T.red}}>{msg}</span>}
     </div>
   );
 }
@@ -441,18 +494,88 @@ function DailyReportModal({ report, projectName, rigs, onSave, onClose }) {
    Reports are organised by Project → Rig. Each rig gets its own sheet.
    Also lets the user drop multiple DPR Excel files directly to parse them.
 ════════════════════════════════════════════════════════════════════════════ */
-function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
+/* ─── Day classification & analysis helpers ──────────────────────────────
+   Classifies each daily report into exactly one operational bucket, and
+   computes hours-worked utilization for a set of reports. */
+
+const DAY_CATEGORIES = [
+  { key: "preparation", label: "Preparation / Set-up",     color: "#38bdf8" },
+  { key: "mobilization", label: "Mobilization",            color: "#a78bfa" },
+  { key: "pilot",        label: "Pilot",                   color: "#2dd4bf" },
+  { key: "reaming",      label: "Reaming",                 color: "#fbbf24" },
+  { key: "pullpipe",     label: "Pull Pipe / Clean Pass",  color: "#fb923c" },
+  { key: "standby",      label: "Standby",                 color: "#f87171" },
+  { key: "other",        label: "Other / Unclassified",    color: "#9ca3af" },
+];
+
+// Standby (no permit) always takes priority over whatever activity was logged,
+// since a day with no permit received is a standby day regardless of what
+// activity text a supervisor may have typed.
+function classifyDay(r) {
+  const permit = (r.permitReceived || "").trim().toLowerCase();
+  if (permit === "no") return "standby";
+  const act = (r.activity || "").trim().toLowerCase();
+  if (act === "preparation") return "preparation";
+  if (act === "mob" || act === "demob") return "mobilization";
+  if (act === "pilot") return "pilot";
+  if (act === "reaming") return "reaming";
+  if (act === "pull pipe" || act === "clean pass") return "pullpipe";
+  return "other";
+}
+
+// A record is "flagged" (data-quality issue) when permit was NOT received
+// (standby day) but permit hours were still logged as worked — these need
+// manual review/correction before they're trusted in analysis.
+function isFlaggedRow(r) {
+  const permit = (r.permitReceived || "").trim().toLowerCase();
+  const hrs = parseFloat(r.permitHours);
+  return permit === "no" && !isNaN(hrs) && hrs > 0;
+}
+
+const ANALYSIS_HOURS_PER_DAY = 10;
+const ANALYSIS_OFF_DAY = 5; // Date.getDay(): 5 = Friday, excluded from capacity
+
+function computeGroupStats(reports) {
+  const counts = Object.fromEntries(DAY_CATEGORIES.map(c => [c.key, 0]));
+  let workedHours = 0;
+  reports.forEach(r => {
+    counts[classifyDay(r)]++;
+    const h = parseFloat(r.permitHours);
+    if (!isNaN(h)) workedHours += h;
+  });
+  const dates = reports.map(r => r.date).filter(Boolean).sort();
+  let capacityHours = 0;
+  if (dates.length) {
+    const start = new Date(dates[0]), end = new Date(dates[dates.length - 1]);
+    let workingDays = 0;
+    const cur = new Date(start);
+    while (cur <= end) { if (cur.getDay() !== ANALYSIS_OFF_DAY) workingDays++; cur.setDate(cur.getDate() + 1); }
+    capacityHours = workingDays * ANALYSIS_HOURS_PER_DAY;
+  }
+  const utilization = capacityHours > 0 ? Math.round((workedHours / capacityHours) * 100) : 0;
+  return {
+    counts,
+    totalDays: reports.length,
+    workedHours,
+    capacityHours,
+    utilization,
+    flaggedCount: reports.filter(isFlaggedRow).length,
+  };
+}
+
+function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, setData, showToast, onClose }) {
   const [dropping, setDropping]         = useState(false);
   const [ingestStatus, setIngestStatus] = useState([]); // [{name, ok, rec}]
   const [ingesting, setIngesting]       = useState(false);
   const [filterProj, setFilterProj]     = useState("");
   const [filterRig,  setFilterRig]      = useState("");
+  const [viewMode, setViewMode]         = useState("data"); // "data" | "analysis"
   const fileRef = useRef();
 
   // Saved daily reports come from projectDocs (subTab=dailyreports) — enriched with rig
   const savedRows = (projectDocs || [])
-    .filter(d => d.subTab === "dailyreports")
-    .map(r => ({ ...r, _project: r.project || "Unassigned", _rig: r.rig || "Unassigned", _source: "saved" }));
+    .filter(d => d.subTab === "dailyreports" && !d._deleted)
+    .map(r => ({ ...r, _project: r.project || "Unassigned", _rig: r.rig || "Unassigned", _crossing: r.crossing || "", _source: "saved" }));
 
   // Legacy: also pull from projectAnalysis.dailyReports if any exist
   const legacyRows = (projectAnalysis || []).flatMap(pa =>
@@ -466,6 +589,33 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
 
   const allRows = [...savedRows, ...legacyRows, ...droppedRows]
     .sort((a,b) => (a._project).localeCompare(b._project) || (a._rig).localeCompare(b._rig) || (b.date||"").localeCompare(a.date||""));
+
+  // ── Data-cleansing: edit a single report's Permit Hours (persists to projectDocs + mirrors into projectAnalysis) ──
+  const updatePermitHours = (reportId, newVal) => {
+    setData(prev => ({
+      ...prev,
+      projectDocs: (prev.projectDocs || []).map(d => d.id === reportId ? { ...d, permitHours: newVal } : d),
+      projectAnalysis: (prev.projectAnalysis || []).map(p => ({
+        ...p,
+        dailyReports: (p.dailyReports || []).map(r => r.id === reportId ? { ...r, permitHours: newVal } : r),
+      })),
+    }));
+  };
+
+  // Zero out Permit Hours for every flagged (standby-but-hours-logged) row in the given set
+  const bulkFixFlagged = (rowsToFix) => {
+    const ids = new Set(rowsToFix.map(r => r.id));
+    if (!ids.size) return;
+    setData(prev => ({
+      ...prev,
+      projectDocs: (prev.projectDocs || []).map(d => ids.has(d.id) ? { ...d, permitHours: "0" } : d),
+      projectAnalysis: (prev.projectAnalysis || []).map(p => ({
+        ...p,
+        dailyReports: (p.dailyReports || []).map(r => ids.has(r.id) ? { ...r, permitHours: "0" } : r),
+      })),
+    }));
+    showToast(`✓ Fixed ${ids.size} flagged record${ids.size !== 1 ? "s" : ""}`);
+  };
 
   const handleFiles = async (files) => {
     const xlsxFiles = [...files].filter(f => /\.xlsx?$/i.test(f.name));
@@ -496,14 +646,14 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
   const exportMaster = () => {
     if (!allRows.length) return;
     const headers = [
-      "Project", "Rig / Spread", "Date", "Work Profile", "Activity",
+      "Project", "Rig / Spread", "Crossing", "Date", "Work Profile", "Activity",
       "Permit Start Time", "Permit End Time",
       "Permit Received", "Permit Hours", "Standby Reason",
       "Progress Today (m)", "Accumulated (m)", "Activity Summary", "Issues / Delays", "Notes",
     ];
     const safe = str => String(str||"").replace(/[\\/?*[\]:]/g,"").slice(0,28);
     const toRow = r => [
-      r._project||r.project||"", r._rig||r.rig||"", r.date||"",
+      r._project||r.project||"", r._rig||r.rig||"", r._crossing||r.crossing||"", r.date||"",
       r.profile||"", r.activity||"",
       r.permitStartTime||"",
       r.permitEndTime||"",
@@ -514,7 +664,7 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
       r.accumulated!=null?String(r.accumulated):"",
       r.activities||"", r.issues||"", r.notes||"",
     ];
-    const colWidths = [26,18,12,20,24,16,16,14,13,30,16,14,48,30,30];
+    const colWidths = [26,18,20,12,20,24,16,16,14,13,30,16,14,48,30,30];
     const makeSheet = rows => {
       const ws = XLSX.utils.aoa_to_sheet([headers, ...rows.map(toRow)]);
       ws["!cols"] = colWidths.map(w=>({wch:w}));
@@ -622,8 +772,25 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
             </div>
           )}
 
-          {/* Preview table - filtered, grouped by project+rig */}
-          {(() => {
+          {/* View mode tabs */}
+          {allRows.length > 0 && (
+            <div style={{display:"flex",gap:6,background:T.card2,borderRadius:10,padding:4,width:"fit-content"}}>
+              {[
+                {id:"data", label:"📝 Data Cleansing"},
+                {id:"analysis", label:"📊 Analysis"},
+              ].map(v => (
+                <button key={v.id} onClick={()=>setViewMode(v.id)}
+                  style={{padding:"8px 16px",borderRadius:8,border:"none",fontSize:13,fontWeight:700,cursor:"pointer",
+                    background:viewMode===v.id?T.card:"transparent",color:viewMode===v.id?T.text:T.textMuted,
+                    boxShadow:viewMode===v.id?T.shadow:"none",transition:"all .15s"}}>
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ══ DATA CLEANSING VIEW ══ */}
+          {viewMode==="data" && (() => {
             const visRows = allRows.filter(r =>
               (!filterProj || r._project === filterProj) &&
               (!filterRig  || r._rig    === filterRig)
@@ -635,7 +802,9 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
               </div>
             );
 
-            // Group by project → rig for display
+            const totalFlagged = visRows.filter(isFlaggedRow);
+
+            // Group by project → rig → crossing for display
             const groups = {};
             visRows.forEach(r => {
               const k = r._project;
@@ -647,7 +816,18 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
 
             return (
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                <div style={{fontSize:12,color:T.textMuted,fontWeight:700}}>{visRows.length} REPORT{visRows.length!==1?"S":""} {filterProj||filterRig?"(FILTERED)":"TOTAL"}</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+                  <div style={{fontSize:12,color:T.textMuted,fontWeight:700}}>{visRows.length} REPORT{visRows.length!==1?"S":""} {filterProj||filterRig?"(FILTERED)":"TOTAL"}</div>
+                  {totalFlagged.length>0 && (
+                    <div style={{display:"flex",alignItems:"center",gap:8,background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:9,padding:"6px 12px"}}>
+                      <span style={{fontSize:12,color:T.red,fontWeight:700}}>⚠ {totalFlagged.length} record{totalFlagged.length!==1?"s":""} flagged — permit not received but hours logged</span>
+                      <button onClick={()=>bulkFixFlagged(totalFlagged.filter(r=>r._source==="saved"))}
+                        style={{background:T.red,border:"none",color:"#fff",borderRadius:6,padding:"4px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                        Fix All ({totalFlagged.filter(r=>r._source==="saved").length})
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {Object.entries(groups).map(([proj, rigMap]) => (
                   <div key={proj} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
                     {/* Project header */}
@@ -656,27 +836,29 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
                       <span style={{fontSize:12,color:T.textMuted,fontWeight:500,fontFamily:"inherit"}}>{Object.values(rigMap).flat().length} report{Object.values(rigMap).flat().length!==1?"s":""}</span>
                     </div>
                     {/* Per-rig sections */}
-                    {Object.entries(rigMap).map(([rig, rigRows], ri) => (
-                      <div key={rig}>
-                        {/* Rig sub-header */}
-                        <div style={{background:`${T.gold}0e`,padding:"8px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,borderTop: ri>0?`1px solid ${T.border}`:"none"}}>
-                          <span style={{fontSize:13}}>🔩</span>
-                          <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.gold}}>{rig}</span>
-                          <span style={{fontSize:11,color:T.textMuted}}>{rigRows.length} report{rigRows.length!==1?"s":""}</span>
-                        </div>
-                        {/* Reports table */}
+                    {Object.entries(rigMap).map(([rig, rigRows], ri) => {
+                      const rigCrossings = (crossings||[]).filter(c=>c.project===proj && c.rig===rig);
+                      const crossingGroups = rigCrossings.map(c => ({
+                        crossing: c,
+                        reports: rigRows.filter(r=>r._crossing===c.name),
+                      })).filter(g=>g.reports.length>0);
+                      const noCrossingRows = rigRows.filter(r=>!r._crossing || !rigCrossings.some(c=>c.name===r._crossing));
+
+                      const renderTable = (rows) => (
                         <div style={{overflowX:"auto"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead>
                               <tr style={{background:T.card2}}>
-                                {["Date","Work Profile","Activity","Permit","Permit Hrs","Progress Today","Accumulated","Issues","Source"].map(h=>(
+                                {["Date","Work Profile","Activity","Permit","Permit Hrs","Progress Today","Accumulated","Source"].map(h=>(
                                   <th key={h} style={{padding:"6px 10px",textAlign:"left",fontWeight:700,fontSize:10,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
                                 ))}
                               </tr>
                             </thead>
                             <tbody>
-                              {rigRows.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map((r,i)=>(
-                                <tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
+                              {rows.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map((r,i)=>{
+                                const flagged = isFlaggedRow(r);
+                                return (
+                                <tr key={r.id||i} style={{borderBottom:`1px solid ${T.border}`,background:flagged?T.redDim:(i%2===0?T.card:T.card2)}}>
                                   <td style={{padding:"7px 10px",color:T.textSub,whiteSpace:"nowrap"}}>{r.date?fmtDate(r.date):"—"}</td>
                                   <td style={{padding:"7px 10px",color:T.textSub,whiteSpace:"nowrap"}}>{r.profile||"—"}</td>
                                   <td style={{padding:"7px 10px",color:T.textSub,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.activity||"—"}</td>
@@ -685,28 +867,169 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, onClose }) {
                                       ? <span style={{background:r.permitReceived.toLowerCase()==="yes"?T.greenDim:T.redDim,color:r.permitReceived.toLowerCase()==="yes"?T.green:T.red,fontWeight:700,borderRadius:5,padding:"1px 7px",fontSize:11}}>{r.permitReceived}</span>
                                       : <span style={{color:T.textMuted}}>—</span>}
                                   </td>
-                                  <td style={{padding:"7px 10px",color:T.textSub,textAlign:"center"}}>{r.permitHours||"—"}</td>
+                                  <td style={{padding:"7px 10px",textAlign:"center"}}>
+                                    {r._source==="saved" ? (
+                                      <div style={{display:"flex",alignItems:"center",gap:4,justifyContent:"center"}}>
+                                        <input
+                                          type="number"
+                                          defaultValue={r.permitHours||""}
+                                          onBlur={e=>{ const v=e.target.value; if (v!==String(r.permitHours||"")) updatePermitHours(r.id, v); }}
+                                          style={{width:52,background:flagged?"#fff":T.inputBg,border:`1px solid ${flagged?T.red:T.border}`,borderRadius:5,padding:"3px 5px",fontSize:12,color:T.text,outline:"none",textAlign:"center"}}
+                                        />
+                                        {flagged && <span title="Permit not received but hours logged" style={{color:T.red,fontSize:12}}>⚠</span>}
+                                      </div>
+                                    ) : (r.permitHours||"—")}
+                                  </td>
                                   <td style={{padding:"7px 10px",textAlign:"center"}}>
                                     {r.progressToday
                                       ? <span style={{background:T.blueDim,color:T.blue,fontWeight:700,borderRadius:5,padding:"1px 7px",fontSize:11}}>{r.progressToday}m</span>
                                       : <span style={{color:T.textMuted}}>—</span>}
                                   </td>
                                   <td style={{padding:"7px 10px",color:T.textSub,textAlign:"center"}}>{r.accumulated||"—"}</td>
-                                  <td style={{padding:"7px 10px",color:T.textSub,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.issues||"—"}</td>
                                   <td style={{padding:"7px 10px",color:T.textMuted,fontSize:11}}>
                                     {r._fromFile
                                       ? <span style={{background:T.goldDim,color:T.gold,borderRadius:5,padding:"1px 7px",fontWeight:600}}>📂 File</span>
                                       : <span style={{background:T.greenDim,color:T.green,borderRadius:5,padding:"1px 7px",fontWeight:600}}>✓ Saved</span>}
                                   </td>
                                 </tr>
-                              ))}
+                              );})}
                             </tbody>
                           </table>
                         </div>
+                      );
+
+                      return (
+                        <div key={rig}>
+                          {/* Rig sub-header */}
+                          <div style={{background:`${T.gold}0e`,padding:"8px 16px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,borderTop: ri>0?`1px solid ${T.border}`:"none"}}>
+                            <span style={{fontSize:13}}>🔩</span>
+                            <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.gold}}>{rig}</span>
+                            <span style={{fontSize:11,color:T.textMuted}}>{rigRows.length} report{rigRows.length!==1?"s":""}</span>
+                          </div>
+                          {crossingGroups.length===0 ? renderTable(rigRows) : (
+                            <>
+                              {crossingGroups.map(({crossing, reports}) => (
+                                <div key={crossing.id}>
+                                  <div style={{background:T.bg,padding:"6px 16px",display:"flex",alignItems:"center",gap:8}}>
+                                    <span style={{fontSize:12}}>🛤️</span>
+                                    <span style={{fontSize:12,fontWeight:700,color:T.textSub}}>{crossing.name}</span>
+                                    <span style={{fontSize:11,color:T.textMuted}}>{reports.length} report{reports.length!==1?"s":""}</span>
+                                    {crossing.status==="Completed" && <span style={{fontSize:10,color:T.green,fontWeight:700}}>✓ Completed</span>}
+                                  </div>
+                                  {renderTable(reports)}
+                                </div>
+                              ))}
+                              {noCrossingRows.length>0 && (
+                                <div>
+                                  <div style={{background:T.bg,padding:"6px 16px",fontSize:12,fontWeight:700,color:T.textMuted}}>No Crossing Assigned · {noCrossingRows.length} report{noCrossingRows.length!==1?"s":""}</div>
+                                  {renderTable(noCrossingRows)}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* ══ ANALYSIS VIEW ══ */}
+          {viewMode==="analysis" && (() => {
+            const visRows = allRows.filter(r =>
+              (!filterProj || r._project === filterProj) &&
+              (!filterRig  || r._rig    === filterRig)
+            );
+            if (!visRows.length) return (
+              <div style={{textAlign:"center",padding:"40px 20px",color:T.textMuted}}>
+                <div style={{fontSize:48,marginBottom:12}}>📊</div>
+                <div style={{fontSize:14}}>No reports to analyze yet.</div>
+              </div>
+            );
+
+            const groups = {};
+            visRows.forEach(r => {
+              const k = r._project;
+              if (!groups[k]) groups[k] = {};
+              const rk = r._rig;
+              if (!groups[k][rk]) groups[k][rk] = [];
+              groups[k][rk].push(r);
+            });
+
+            const StatBlock = ({title, reports, accent}) => {
+              const stats = computeGroupStats(reports);
+              return (
+                <div style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${accent}`,borderRadius:12,padding:"14px 16px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text}}>{title}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      {stats.flaggedCount>0 && <span style={{fontSize:11,color:T.red,fontWeight:700}}>⚠ {stats.flaggedCount} flagged</span>}
+                      <span style={{fontSize:11,color:T.textMuted}}>{stats.totalDays} total days</span>
+                    </div>
+                  </div>
+                  {/* Hours utilization */}
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:pctColor(stats.utilization)}}>{stats.utilization}%</div>
+                    <div style={{fontSize:11,color:T.textMuted}}>utilization</div>
+                    <div style={{flex:1,minWidth:100,height:6,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${Math.min(stats.utilization,100)}%`,background:pctColor(stats.utilization),borderRadius:999}}/>
+                    </div>
+                    <div style={{fontSize:11,color:T.textMuted,whiteSpace:"nowrap"}}>{Math.round(stats.workedHours)}h / {stats.capacityHours}h</div>
+                  </div>
+                  {/* Day-type breakdown */}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8}}>
+                    {DAY_CATEGORIES.map(cat => (
+                      <div key={cat.key} style={{background:`${cat.color}18`,border:`1px solid ${cat.color}44`,borderRadius:9,padding:"8px 10px"}}>
+                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:800,color:cat.color,lineHeight:1}}>{stats.counts[cat.key]}</div>
+                        <div style={{fontSize:10,color:T.textSub,marginTop:3,fontWeight:600}}>{cat.label}</div>
                       </div>
                     ))}
                   </div>
-                ))}
+                </div>
+              );
+            };
+
+            return (
+              <div style={{display:"flex",flexDirection:"column",gap:20}}>
+                {Object.entries(groups).map(([proj, rigMap]) => {
+                  const allProjRows = Object.values(rigMap).flat();
+                  return (
+                    <div key={proj} style={{display:"flex",flexDirection:"column",gap:10}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,display:"flex",alignItems:"center",gap:8}}>
+                        <span>◆</span> {proj}
+                      </div>
+                      <StatBlock title="Project Total" reports={allProjRows} accent={T.blue}/>
+                      {Object.entries(rigMap).map(([rig, rigRows]) => {
+                        const rigCrossings = (crossings||[]).filter(c=>c.project===proj && c.rig===rig);
+                        const crossingGroups = rigCrossings.map(c => ({
+                          crossing: c,
+                          reports: rigRows.filter(r=>r._crossing===c.name),
+                        })).filter(g=>g.reports.length>0);
+                        const noCrossingRows = rigRows.filter(r=>!r._crossing || !rigCrossings.some(c=>c.name===r._crossing));
+                        return (
+                          <div key={rig} style={{marginLeft:16,display:"flex",flexDirection:"column",gap:8}}>
+                            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.gold,display:"flex",alignItems:"center",gap:6}}>
+                              <span>🔩</span> {rig}
+                            </div>
+                            <StatBlock title={`${rig} — Total`} reports={rigRows} accent={T.gold}/>
+                            {crossingGroups.map(({crossing,reports}) => (
+                              <div key={crossing.id} style={{marginLeft:16}}>
+                                <StatBlock title={`🛤️ ${crossing.name}`} reports={reports} accent={crossing.status==="Completed"?T.green:T.purple}/>
+                              </div>
+                            ))}
+                            {noCrossingRows.length>0 && (
+                              <div style={{marginLeft:16}}>
+                                <StatBlock title="No Crossing Assigned" reports={noCrossingRows} accent={T.textMuted}/>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
               </div>
             );
           })()}
@@ -1532,6 +1855,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
                 reports.map(r=>({
                   "Project":            proj.project,
                   "Rig / Spread":       r.rig||"",
+                  "Crossing":           r.crossing||"",
                   "Date":               r.date||"",
                   "Work Profile":       r.profile||"",
                   "Activity":           r.activity||"",
@@ -1571,6 +1895,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
             exportToExcel(rigReports.map(r=>({
               "Project":            proj.project,
               "Rig / Spread":       r.rig||rigName||"",
+              "Crossing":           r.crossing||"",
               "Date":               r.date||"",
               "Work Profile":       r.profile||"",
               "Activity":           r.activity||"",
@@ -2013,7 +2338,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
       {proTab==="budget"    && <BudgetTab enriched={enriched} data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onOpenProject={setDetail} />}
       {proTab==="reports"   && <ReportsTab enriched={enriched} fStat={fStat} search={search} risk={computeRiskInsights(enriched, costSheetsByProject(data.costSheets))} />}
 
-      {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} projectDocs={data.projectDocs||[]} rigs={data.rigs||[]} onClose={()=>setShowDprConsolidate(false)}/>}
+      {showDprConsolidate&&<DprConsolidateModal projectAnalysis={analysis} projectDocs={data.projectDocs||[]} rigs={data.rigs||[]} crossings={data.crossings||[]} setData={setData} showToast={showToast} onClose={()=>setShowDprConsolidate(false)}/>}
       {modal&&<ProjectAnalysisModal proj={modal==="new"?null:modal} projectNames={projects} workOrders={workOrders} onSave={save} onClose={()=>setModal(null)}/>}
     </div>
   );
@@ -2021,4 +2346,4 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
 
 
 
-export { ProjectAnalysisPage, parseDailyReportExcel };
+export { ProjectAnalysisPage };
