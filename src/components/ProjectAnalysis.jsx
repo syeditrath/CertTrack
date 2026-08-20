@@ -996,8 +996,46 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
               );
             };
 
+            const exportAnalysis = () => {
+              const rows = [];
+              Object.entries(groups).forEach(([proj, rigMap]) => {
+                Object.entries(rigMap).forEach(([rig, rigRows]) => {
+                  const rigCrossings = (crossings||[]).filter(c=>c.project===proj && c.rig===rig);
+                  const crossingGroups = rigCrossings.map(c => ({
+                    crossing: c,
+                    reports: rigRows.filter(r=>r._crossing===c.name),
+                  })).filter(g=>g.reports.length>0);
+                  const noCrossingRows = rigRows.filter(r=>!r._crossing || !rigCrossings.some(c=>c.name===r._crossing));
+
+                  const pushRow = (crossingName, reports, status) => {
+                    const s = computeGroupStats(reports);
+                    rows.push({
+                      "Project": proj, "Rig / Spread": rig, "Crossing": crossingName, "Status": status||"",
+                      "Total Days": s.totalDays, "Hours Worked": Math.round(s.workedHours*10)/10,
+                      "Capacity Hours": s.capacityHours, "Utilization %": s.utilization,
+                      "Preparation Days": s.counts.preparation, "Mobilization Days": s.counts.mobilization,
+                      "Pilot Days": s.counts.pilot, "Reaming Days": s.counts.reaming,
+                      "Pull Pipe/Clean Pass Days": s.counts.pullpipe, "Standby Days": s.counts.standby,
+                      "Other Days": s.counts.other, "Flagged Records": s.flaggedCount,
+                    });
+                  };
+
+                  crossingGroups.forEach(({crossing, reports}) => pushRow(crossing.name, reports, crossing.status||"Active"));
+                  if (noCrossingRows.length) pushRow("", noCrossingRows, "");
+                });
+              });
+              if (!rows.length) { showToast && showToast("Nothing to export","del"); return; }
+              exportToExcel(rows, `DPR_Crossing_Analysis_${new Date().toISOString().slice(0,10)}`);
+            };
+
             return (
               <div style={{display:"flex",flexDirection:"column",gap:20}}>
+                <div style={{display:"flex",justifyContent:"flex-end"}}>
+                  <button onClick={exportAnalysis}
+                    style={{background:`${T.green}18`,border:`1px solid ${T.green}44`,color:T.green,borderRadius:9,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                    ⬇ Export Analysis to Excel
+                  </button>
+                </div>
                 {Object.entries(groups).map(([proj, rigMap]) => {
                   const allProjRows = Object.values(rigMap).flat();
                   return (
