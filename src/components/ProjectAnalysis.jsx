@@ -563,6 +563,88 @@ function computeGroupStats(reports) {
   };
 }
 
+/* ─── Activity donut chart: animated, hoverable breakdown of days by category ── */
+function ActivityDonutChart({ counts, totalDays, size=176, strokeWidth=24 }) {
+  const [hovered, setHovered] = useState(null);
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => { const t = setTimeout(()=>setAnimated(true), 60); return ()=>clearTimeout(t); }, []);
+
+  const r = (size - strokeWidth) / 2;
+  const cx = size/2, cy = size/2;
+  const circumference = 2 * Math.PI * r;
+
+  const segments = DAY_CATEGORIES.map(c => ({ ...c, value: counts[c.key]||0 })).filter(s => s.value > 0);
+  let cumulative = 0;
+  const arcs = segments.map(s => {
+    const pct = totalDays>0 ? s.value/totalDays : 0;
+    const len = pct * circumference;
+    const arc = { ...s, pct, offset: cumulative };
+    cumulative += len;
+    return arc;
+  });
+
+  if (!totalDays) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:size,height:size,color:T.textMuted,fontSize:12}}>No data</div>
+  );
+
+  const hoveredArc = hovered ? arcs.find(a=>a.key===hovered) : null;
+
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
+      <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+        <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke={T.border} strokeWidth={strokeWidth}/>
+          {arcs.map((a,i) => {
+            const len = a.pct * circumference;
+            return (
+              <circle
+                key={a.key}
+                cx={cx} cy={cy} r={r} fill="none"
+                stroke={a.color}
+                strokeWidth={hovered===a.key ? strokeWidth+5 : strokeWidth}
+                strokeLinecap="butt"
+                strokeDasharray={animated ? `${len} ${circumference-len}` : `0 ${circumference}`}
+                strokeDashoffset={-a.offset}
+                style={{transition:`stroke-dasharray .9s cubic-bezier(.22,1,.36,1) ${i*0.07}s, stroke-width .18s, opacity .18s`, cursor:"pointer", opacity: hovered && hovered!==a.key ? 0.35 : 1}}
+                onMouseEnter={()=>setHovered(a.key)}
+                onMouseLeave={()=>setHovered(null)}
+              >
+                <title>{`${a.label}: ${a.value} day${a.value!==1?"s":""} (${Math.round(a.pct*100)}%)`}</title>
+              </circle>
+            );
+          })}
+        </svg>
+        <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",pointerEvents:"none",textAlign:"center"}}>
+          {hoveredArc ? (
+            <>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:hoveredArc.color,lineHeight:1}}>{hoveredArc.value}</div>
+              <div style={{fontSize:9.5,color:T.textSub,fontWeight:700,marginTop:4,maxWidth:size*0.62,lineHeight:1.2}}>{hoveredArc.label}</div>
+              <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>{Math.round(hoveredArc.pct*100)}%</div>
+            </>
+          ) : (
+            <>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:26,color:T.text,lineHeight:1}}>{totalDays}</div>
+              <div style={{fontSize:9.5,color:T.textMuted,fontWeight:700,marginTop:4,letterSpacing:".5px"}}>TOTAL DAYS</div>
+            </>
+          )}
+        </div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:150}}>
+        {arcs.map(a => (
+          <div key={a.key}
+            onMouseEnter={()=>setHovered(a.key)}
+            onMouseLeave={()=>setHovered(null)}
+            style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"4px 7px",borderRadius:7,background:hovered===a.key?`${a.color}18`:"transparent",transition:"background .15s"}}>
+            <span style={{width:10,height:10,borderRadius:3,background:a.color,flexShrink:0}}/>
+            <span style={{fontSize:12,color:T.textSub,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label}</span>
+            <span style={{fontSize:11,color:T.textMuted,marginLeft:"auto",flexShrink:0,fontWeight:600}}>{a.value}d · {Math.round(a.pct*100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, setData, showToast, onClose }) {
   const [dropping, setDropping]         = useState(false);
   const [ingestStatus, setIngestStatus] = useState([]); // [{name, ok, rec}]
@@ -963,7 +1045,7 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
               groups[k][rk].push(r);
             });
 
-            const StatBlock = ({title, reports, accent}) => {
+            const StatBlock = ({title, reports, accent, showChart}) => {
               const stats = computeGroupStats(reports);
               return (
                 <div style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${accent}`,borderRadius:12,padding:"14px 16px"}}>
@@ -983,15 +1065,21 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
                     </div>
                     <div style={{fontSize:11,color:T.textMuted,whiteSpace:"nowrap"}}>{Math.round(stats.workedHours)}h / {stats.capacityHours}h</div>
                   </div>
-                  {/* Day-type breakdown */}
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8}}>
-                    {DAY_CATEGORIES.map(cat => (
-                      <div key={cat.key} style={{background:`${cat.color}18`,border:`1px solid ${cat.color}44`,borderRadius:9,padding:"8px 10px"}}>
-                        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:800,color:cat.color,lineHeight:1}}>{stats.counts[cat.key]}</div>
-                        <div style={{fontSize:10,color:T.textSub,marginTop:3,fontWeight:600}}>{cat.label}</div>
-                      </div>
-                    ))}
-                  </div>
+                  {showChart ? (
+                    <div style={{paddingTop:4}}>
+                      <ActivityDonutChart counts={stats.counts} totalDays={stats.totalDays}/>
+                    </div>
+                  ) : (
+                    /* Day-type breakdown (compact, no chart) */
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8}}>
+                      {DAY_CATEGORIES.map(cat => (
+                        <div key={cat.key} style={{background:`${cat.color}18`,border:`1px solid ${cat.color}44`,borderRadius:9,padding:"8px 10px"}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:20,fontWeight:800,color:cat.color,lineHeight:1}}>{stats.counts[cat.key]}</div>
+                          <div style={{fontSize:10,color:T.textSub,marginTop:3,fontWeight:600}}>{cat.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             };
@@ -1043,7 +1131,7 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
                       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text,display:"flex",alignItems:"center",gap:8}}>
                         <span>◆</span> {proj}
                       </div>
-                      <StatBlock title="Project Total" reports={allProjRows} accent={T.blue}/>
+                      <StatBlock title="Project Total" reports={allProjRows} accent={T.blue} showChart/>
                       {Object.entries(rigMap).map(([rig, rigRows]) => {
                         const rigCrossings = (crossings||[]).filter(c=>c.project===proj && c.rig===rig);
                         const crossingGroups = rigCrossings.map(c => ({
@@ -1056,7 +1144,7 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
                             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:14,color:T.gold,display:"flex",alignItems:"center",gap:6}}>
                               <span>🔩</span> {rig}
                             </div>
-                            <StatBlock title={`${rig} — Total`} reports={rigRows} accent={T.gold}/>
+                            <StatBlock title={`${rig} — Total`} reports={rigRows} accent={T.gold} showChart/>
                             {crossingGroups.map(({crossing,reports}) => (
                               <div key={crossing.id} style={{marginLeft:16}}>
                                 <StatBlock title={`🛤️ ${crossing.name}`} reports={reports} accent={crossing.status==="Completed"?T.green:T.purple}/>
