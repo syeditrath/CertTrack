@@ -1791,6 +1791,33 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         ))}
       </div>
 
+      {/* ── Activity Breakdown (day-type composition, animated & hoverable) ── */}
+      {reports.length > 0 && (() => {
+        const dayStats = computeGroupStats(reports);
+        return (
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 24px",marginBottom:16,boxShadow:T.shadow}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>📊 Activity Breakdown</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>How site days were spent — hover the chart for details</div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+                {dayStats.flaggedCount>0 && (
+                  <span style={{fontSize:12,color:T.red,fontWeight:700,background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:8,padding:"5px 12px"}}>
+                    ⚠ {dayStats.flaggedCount} flagged record{dayStats.flaggedCount!==1?"s":""}
+                  </span>
+                )}
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:pctColor(dayStats.utilization)}}>{dayStats.utilization}%</div>
+                  <div style={{fontSize:10,color:T.textMuted,fontWeight:700}}>UTILIZATION</div>
+                </div>
+              </div>
+            </div>
+            <ActivityDonutChart counts={dayStats.counts} totalDays={dayStats.totalDays} size={200} strokeWidth={26}/>
+          </div>
+        );
+      })()}
+
       {/* ── Timeline / Duration Visual ── */}
       {proj.startDate && (proj.estEndDate || proj.actualEndDate) && (
         <ProjectDurationChart proj={proj} reports={reports} />
