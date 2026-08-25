@@ -1818,6 +1818,51 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         );
       })()}
 
+      {/* ── Breakdown by Rig / Location (only when project has multiple rigs) ── */}
+      {reports.length > 0 && (() => {
+        const rigGroups = {};
+        reports.forEach(r => {
+          const rig = r.rig || "Unassigned";
+          (rigGroups[rig] = rigGroups[rig] || []).push(r);
+        });
+        const rigNames = Object.keys(rigGroups).sort();
+        if (rigNames.length <= 1) return null; // single-rig projects already covered by the panel above
+
+        return (
+          <div style={{marginBottom:16}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text,marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+              🔩 Breakdown by Rig / Location
+              <span style={{fontSize:11,color:T.textMuted,fontWeight:500,fontFamily:"inherit"}}>{rigNames.length} rigs</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14}}>
+              {rigNames.map((rig,i) => {
+                const rigReports = rigGroups[rig];
+                const rs = computeGroupStats(rigReports);
+                return (
+                  <div key={rig} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"18px 20px",boxShadow:T.shadow,animationDelay:`${i*.06}s`}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:T.gold}}>🔩 {rig}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        {rs.flaggedCount>0 && (
+                          <span style={{fontSize:11,color:T.red,fontWeight:700,background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:6,padding:"3px 8px"}}>
+                            ⚠ {rs.flaggedCount}
+                          </span>
+                        )}
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:pctColor(rs.utilization)}}>{rs.utilization}%</div>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700}}>UTIL</div>
+                        </div>
+                      </div>
+                    </div>
+                    <ActivityDonutChart counts={rs.counts} totalDays={rs.totalDays} size={160} strokeWidth={20}/>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Timeline / Duration Visual ── */}
       {proj.startDate && (proj.estEndDate || proj.actualEndDate) && (
         <ProjectDurationChart proj={proj} reports={reports} />
