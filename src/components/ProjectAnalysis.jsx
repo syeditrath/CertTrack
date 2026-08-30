@@ -1136,11 +1136,29 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
               })), `Permit_Hours_Utilization_${new Date().toISOString().slice(0,10)}`);
             };
 
+            const exportPermitHoursDetail = () => {
+              if (!visRows.length) { showToast && showToast("Nothing to export","del"); return; }
+              const sorted = [...visRows].sort((a,b)=>
+                a._project.localeCompare(b._project) || a._rig.localeCompare(b._rig) ||
+                (a._crossing||"").localeCompare(b._crossing||"") || (a.date||"").localeCompare(b.date||"")
+              );
+              exportToExcel(sorted.map(r => ({
+                "Project": r._project, "Rig / Spread": r._rig, "Crossing": r._crossing||"",
+                "Date": r.date||"", "Work Profile": r.profile||"", "Activity": r.activity||"",
+                "Permit Received": r.permitReceived||"", "Permit Hours": r.permitHours!=null?String(r.permitHours):"",
+                "Standby Reason": r.standbyReason||"", "Progress Today (m)": r.progressToday!=null?String(r.progressToday):"",
+              })), `Permit_Hours_Detail_${new Date().toISOString().slice(0,10)}`);
+            };
+
             const utilRows = buildAnalysisRows();
 
             return (
               <div style={{display:"flex",flexDirection:"column",gap:20}}>
                 <div style={{display:"flex",justifyContent:"flex-end",gap:10,flexWrap:"wrap"}}>
+                  <button onClick={exportPermitHoursDetail}
+                    style={{background:`${T.purple}18`,border:`1px solid ${T.purple}44`,color:T.purple,borderRadius:9,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                    ⬇ Export Permit Hours Detail (Daily)
+                  </button>
                   <button onClick={exportUtilization}
                     style={{background:`${T.blue}18`,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:9,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
                     ⬇ Export Permit Hours / Utilization
@@ -1902,15 +1920,33 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
           })), `${proj.project.replace(/\s+/g,"_")}_Utilization_${new Date().toISOString().slice(0,10)}`);
         };
 
+        const exportProjectPermitDetail = () => {
+          const sorted = [...reports].sort((a,b)=>
+            (a.rig||"").localeCompare(b.rig||"") || (a.crossing||"").localeCompare(b.crossing||"") || (a.date||"").localeCompare(b.date||"")
+          );
+          exportToExcel(sorted.map(r => ({
+            "Project": proj.project, "Rig / Spread": r.rig||"", "Crossing": r.crossing||"",
+            "Date": r.date||"", "Work Profile": r.profile||"", "Activity": r.activity||"",
+            "Permit Received": r.permitReceived||"", "Permit Hours": r.permitHours!=null?String(r.permitHours):"",
+            "Standby Reason": r.standbyReason||"", "Progress Today (m)": r.progressToday!=null?String(r.progressToday):"",
+          })), `${proj.project.replace(/\s+/g,"_")}_Permit_Hours_Detail_${new Date().toISOString().slice(0,10)}`);
+        };
+
         return (
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden",marginBottom:16}}>
             <div style={{padding:"12px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
               <span style={{fontSize:15}}>⏱</span>
               <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text}}>Permit Hours &amp; Utilization</span>
-              <button onClick={exportProjectUtilization}
-                style={{marginLeft:"auto",background:`${T.blue}18`,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-                ⬇ Export
-              </button>
+              <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={exportProjectPermitDetail}
+                  style={{background:`${T.purple}18`,border:`1px solid ${T.purple}44`,color:T.purple,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                  ⬇ Export Daily Detail
+                </button>
+                <button onClick={exportProjectUtilization}
+                  style={{background:`${T.blue}18`,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                  ⬇ Export Summary
+                </button>
+              </div>
             </div>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
