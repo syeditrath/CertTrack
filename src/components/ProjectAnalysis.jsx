@@ -1084,7 +1084,7 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
               );
             };
 
-            const exportAnalysis = () => {
+            const buildAnalysisRows = () => {
               const rows = [];
               Object.entries(groups).forEach(([proj, rigMap]) => {
                 Object.entries(rigMap).forEach(([rig, rigRows]) => {
@@ -1098,13 +1098,10 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
                   const pushRow = (crossingName, reports, status) => {
                     const s = computeGroupStats(reports);
                     rows.push({
-                      "Project": proj, "Rig / Spread": rig, "Crossing": crossingName, "Status": status||"",
-                      "Total Days": s.totalDays, "Hours Worked": Math.round(s.workedHours*10)/10,
-                      "Capacity Hours": s.capacityHours, "Utilization %": s.utilization,
-                      "Preparation Days": s.counts.preparation, "Mobilization Days": s.counts.mobilization,
-                      "Pilot Days": s.counts.pilot, "Reaming Days": s.counts.reaming,
-                      "Pull Pipe/Clean Pass Days": s.counts.pullpipe, "Standby Days": s.counts.standby,
-                      "Other Days": s.counts.other, "Flagged Records": s.flaggedCount,
+                      project: proj, rig, crossing: crossingName, status: status||"",
+                      totalDays: s.totalDays, hoursWorked: Math.round(s.workedHours*10)/10,
+                      capacityHours: s.capacityHours, utilization: s.utilization,
+                      counts: s.counts, flaggedCount: s.flaggedCount,
                     });
                   };
 
@@ -1112,18 +1109,84 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
                   if (noCrossingRows.length) pushRow("", noCrossingRows, "");
                 });
               });
-              if (!rows.length) { showToast && showToast("Nothing to export","del"); return; }
-              exportToExcel(rows, `DPR_Crossing_Analysis_${new Date().toISOString().slice(0,10)}`);
+              return rows;
             };
+
+            const exportAnalysis = () => {
+              const rows = buildAnalysisRows();
+              if (!rows.length) { showToast && showToast("Nothing to export","del"); return; }
+              exportToExcel(rows.map(r => ({
+                "Project": r.project, "Rig / Spread": r.rig, "Crossing": r.crossing, "Status": r.status,
+                "Total Days": r.totalDays, "Hours Worked": r.hoursWorked,
+                "Capacity Hours": r.capacityHours, "Utilization %": r.utilization,
+                "Preparation Days": r.counts.preparation, "Mobilization Days": r.counts.mobilization,
+                "Pilot Days": r.counts.pilot, "Reaming Days": r.counts.reaming,
+                "Pull Pipe/Clean Pass Days": r.counts.pullpipe, "Standby Days": r.counts.standby,
+                "Other Days": r.counts.other, "Flagged Records": r.flaggedCount,
+              })), `DPR_Crossing_Analysis_${new Date().toISOString().slice(0,10)}`);
+            };
+
+            const exportUtilization = () => {
+              const rows = buildAnalysisRows();
+              if (!rows.length) { showToast && showToast("Nothing to export","del"); return; }
+              exportToExcel(rows.map(r => ({
+                "Project": r.project, "Rig / Spread": r.rig, "Crossing": r.crossing, "Status": r.status,
+                "Total Days": r.totalDays, "Hours Worked": r.hoursWorked,
+                "Capacity Hours": r.capacityHours, "Utilization %": r.utilization,
+              })), `Permit_Hours_Utilization_${new Date().toISOString().slice(0,10)}`);
+            };
+
+            const utilRows = buildAnalysisRows();
 
             return (
               <div style={{display:"flex",flexDirection:"column",gap:20}}>
-                <div style={{display:"flex",justifyContent:"flex-end"}}>
+                <div style={{display:"flex",justifyContent:"flex-end",gap:10,flexWrap:"wrap"}}>
+                  <button onClick={exportUtilization}
+                    style={{background:`${T.blue}18`,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:9,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                    ⬇ Export Permit Hours / Utilization
+                  </button>
                   <button onClick={exportAnalysis}
                     style={{background:`${T.green}18`,border:`1px solid ${T.green}44`,color:T.green,borderRadius:9,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
                     ⬇ Export Analysis to Excel
                   </button>
                 </div>
+
+                {/* ── Compact Permit Hours / Utilization summary table ── */}
+                {utilRows.length > 0 && (
+                  <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden"}}>
+                    <div style={{padding:"12px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:15}}>⏱</span>
+                      <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text}}>Permit Hours &amp; Utilization Summary</span>
+                      <span style={{fontSize:11,color:T.textMuted,marginLeft:"auto"}}>{utilRows.length} crossing{utilRows.length!==1?"s":""}</span>
+                    </div>
+                    <div style={{overflowX:"auto"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+                        <thead>
+                          <tr style={{background:T.card2}}>
+                            {["Project","Rig","Crossing","Days","Hours Worked","Capacity","Utilization"].map(h=>(
+                              <th key={h} style={{padding:"8px 12px",textAlign:h==="Days"||h==="Hours Worked"||h==="Capacity"||h==="Utilization"?"right":"left",fontWeight:700,fontSize:10.5,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {utilRows.sort((a,b)=>a.project.localeCompare(b.project)||a.rig.localeCompare(b.rig)).map((r,i)=>(
+                            <tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
+                              <td style={{padding:"7px 12px",color:T.textSub,whiteSpace:"nowrap"}}>{r.project}</td>
+                              <td style={{padding:"7px 12px",color:T.textSub,whiteSpace:"nowrap"}}>{r.rig}</td>
+                              <td style={{padding:"7px 12px",color:T.textSub}}>{r.crossing||<span style={{color:T.textMuted}}>—</span>}</td>
+                              <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.totalDays}</td>
+                              <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.hoursWorked}h</td>
+                              <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.capacityHours}h</td>
+                              <td style={{padding:"7px 12px",textAlign:"right"}}>
+                                <span style={{fontWeight:700,color:pctColor(r.utilization)}}>{r.utilization}%</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 {Object.entries(groups).map(([proj, rigMap]) => {
                   const allProjRows = Object.values(rigMap).flat();
                   return (
@@ -1814,6 +1877,65 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
               </div>
             </div>
             <ActivityDonutChart counts={dayStats.counts} totalDays={dayStats.totalDays} size={200} strokeWidth={26}/>
+          </div>
+        );
+      })()}
+
+      {/* ── Permit Hours & Utilization report (per rig, this project only) ── */}
+      {reports.length > 0 && (() => {
+        const rigGroups = {};
+        reports.forEach(r => {
+          const rig = r.rig || "Unassigned";
+          (rigGroups[rig] = rigGroups[rig] || []).push(r);
+        });
+        const rigNames = Object.keys(rigGroups).sort();
+        const utilRows = rigNames.map(rig => {
+          const s = computeGroupStats(rigGroups[rig]);
+          return { rig, totalDays: s.totalDays, hoursWorked: Math.round(s.workedHours*10)/10, capacityHours: s.capacityHours, utilization: s.utilization };
+        });
+
+        const exportProjectUtilization = () => {
+          exportToExcel(utilRows.map(r => ({
+            "Project": proj.project, "Rig / Spread": r.rig,
+            "Total Days": r.totalDays, "Hours Worked": r.hoursWorked,
+            "Capacity Hours": r.capacityHours, "Utilization %": r.utilization,
+          })), `${proj.project.replace(/\s+/g,"_")}_Utilization_${new Date().toISOString().slice(0,10)}`);
+        };
+
+        return (
+          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden",marginBottom:16}}>
+            <div style={{padding:"12px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:15}}>⏱</span>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text}}>Permit Hours &amp; Utilization</span>
+              <button onClick={exportProjectUtilization}
+                style={{marginLeft:"auto",background:`${T.blue}18`,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                ⬇ Export
+              </button>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+                <thead>
+                  <tr style={{background:T.card2}}>
+                    {["Rig / Spread","Days","Hours Worked","Capacity","Utilization"].map(h=>(
+                      <th key={h} style={{padding:"8px 12px",textAlign:h==="Rig / Spread"?"left":"right",fontWeight:700,fontSize:10.5,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {utilRows.map((r,i)=>(
+                    <tr key={r.rig} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
+                      <td style={{padding:"7px 12px",color:T.textSub,fontWeight:600}}>🔩 {r.rig}</td>
+                      <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.totalDays}</td>
+                      <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.hoursWorked}h</td>
+                      <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.capacityHours}h</td>
+                      <td style={{padding:"7px 12px",textAlign:"right"}}>
+                        <span style={{fontWeight:700,color:pctColor(r.utilization)}}>{r.utilization}%</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         );
       })()}
