@@ -173,6 +173,9 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   const [bulkModal, setBulkModal] = useState(false);
   const [multiPdfModal, setMultiPdfModal] = useState(null);
   const [rigInput, setRigInput] = useState("");
+  const [crossingPanelRig, setCrossingPanelRig] = useState("");
+  const [crossingPanelName, setCrossingPanelName] = useState("");
+  const [crossingPanelEst, setCrossingPanelEst] = useState("");
   const [msAuthed, setMsAuthed] = useState(false);
   const docs     = live(data.projectDocs);
   const projects = data.projects    || [];
@@ -282,7 +285,9 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   (data.projectAnalysis || []).map(p => [p.project, p.status || "Active"])
 );
   const STATUS_OPTS = ["All", "In Progress", "Not Started", "On Hold", "Completed", "Cancelled"];
+  const crossings = live(data.crossings);
   const projRigs = selectedProject ? rigs.filter(r=>r.project===selectedProject) : [];
+  const projCrossings = selectedProject ? crossings.filter(c=>c.project===selectedProject) : [];
 
   const addRig = () => {
     const name = rigInput.trim();
@@ -298,17 +303,21 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     showToast("Rig removed","del");
   };
 
-  const crossings = live(data.crossings);
-
-  const addCrossing = (project, rig, name) => {
+  const addCrossing = (project, rig, name, estimatedDays) => {
     if (!name || !name.trim()) return;
     const trimmed = name.trim();
     if (crossings.some(c=>c.project===project && c.rig===rig && c.name===trimmed)) {
       showToast("Crossing already exists","del");
       return;
     }
-    setData(prev=>({...prev, crossings:[...(prev.crossings||[]), {id:uid(), project, rig, name:trimmed, status:"Active"}]}));
+    const est = estimatedDays!=null && estimatedDays!=="" ? Number(estimatedDays) : null;
+    setData(prev=>({...prev, crossings:[...(prev.crossings||[]), {id:uid(), project, rig, name:trimmed, status:"Active", estimatedDays: est}]}));
     showToast("Crossing added ✓");
+  };
+
+  const updateCrossingEstimate = (id, estimatedDays) => {
+    const est = estimatedDays!=null && estimatedDays!=="" ? Number(estimatedDays) : null;
+    setData(prev=>({...prev, crossings:(prev.crossings||[]).map(c=>c.id===id?{...c,estimatedDays:est}:c)}));
   };
 
   const toggleCrossingStatus = (id) => {
@@ -497,6 +506,86 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     })}
   </div>
 )}
+
+      {/* ── Crossings panel ── */}
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 18px",marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text}}>
+            🛤️ CROSSINGS
+            <span style={{marginLeft:8,fontSize:12,color:T.textMuted,fontWeight:500,fontFamily:"inherit"}}>{projCrossings.filter(c=>!c._deleted).length} defined</span>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <select
+              value={crossingPanelRig}
+              onChange={e=>setCrossingPanelRig(e.target.value)}
+              style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.text,outline:"none",colorScheme:"light"}}
+            >
+              <option value="">Select rig…</option>
+              {projRigs.map(r=><option key={r.id} value={r.name}>{r.name}</option>)}
+            </select>
+            <input
+              value={crossingPanelName}
+              onChange={e=>setCrossingPanelName(e.target.value)}
+              placeholder="Crossing name…"
+              style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.text,outline:"none",width:170}}
+            />
+            <input
+              type="number"
+              value={crossingPanelEst}
+              onChange={e=>setCrossingPanelEst(e.target.value)}
+              placeholder="Est. days"
+              title="Estimated days (budget estimate) — optional"
+              style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.text,outline:"none",width:90}}
+            />
+            <button type="button" onClick={()=>{
+              if (!crossingPanelRig) { showToast("Select a rig first","del"); return; }
+              addCrossing(selectedProject, crossingPanelRig, crossingPanelName, crossingPanelEst);
+              setCrossingPanelName(""); setCrossingPanelEst("");
+            }}
+              style={{background:T.gold,border:"none",color:"#000",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+              + Add Crossing
+            </button>
+          </div>
+        </div>
+        {projCrossings.filter(c=>!c._deleted).length > 0 && (
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>
+            {projCrossings.filter(c=>!c._deleted).map(c => {
+              const isCompleted = c.status === "Completed";
+              const actualDays = drAll.filter(d=>d.project===selectedProject && d.rig===c.rig && d.crossing===c.name && !d._deleted).length;
+              return (
+                <span
+                  key={c.id}
+                  style={{
+                    display:"inline-flex", alignItems:"center", gap:6,
+                    background: isCompleted ? T.greenDim : T.card2,
+                    border: `1px solid ${isCompleted ? T.green+"44" : T.border}`,
+                    borderRadius: 8, padding: "4px 6px 4px 10px", fontSize: 11,
+                    color: isCompleted ? T.green : T.textMuted, fontWeight: 600,
+                  }}
+                >
+                  🛤️ {c.name} <span style={{opacity:.7}}>({c.rig})</span>
+                  <span style={{display:"inline-flex",alignItems:"center",gap:3,background:T.bg,border:`1px solid ${T.border}`,borderRadius:5,padding:"1px 5px"}}>
+                    <span style={{fontSize:10,opacity:.7}}>Est</span>
+                    <input
+                      type="number"
+                      defaultValue={c.estimatedDays ?? ""}
+                      onBlur={e=>{ const v=e.target.value; if (v!==String(c.estimatedDays??"")) updateCrossingEstimate(c.id, v); }}
+                      placeholder="—"
+                      style={{width:34,background:"transparent",border:"none",outline:"none",color:T.text,fontSize:11,fontWeight:700,textAlign:"center"}}
+                    />
+                    <span style={{fontSize:10,opacity:.7}}>/ {actualDays}d</span>
+                  </span>
+                  <button onClick={()=>toggleCrossingStatus(c.id)} title={isCompleted?"Mark Active":"Mark Completed"}
+                    style={{background:"transparent",border:"none",color:"inherit",cursor:"pointer",fontSize:12,padding:0,opacity:.75}}>
+                    {isCompleted?"✓":"○"}
+                  </button>
+                  {isAdmin && <button onClick={()=>delCrossing(c.id)} title="Remove" style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:12,padding:0}}>✕</button>}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* ══ INVOICES ════════════════════════════════════════════════════ */}
       {/* ══ CERTIFICATES ════════════════════════════════════════════════ */}
