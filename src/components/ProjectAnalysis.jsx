@@ -1045,15 +1045,24 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
               groups[k][rk].push(r);
             });
 
-            const StatBlock = ({title, reports, accent, showChart}) => {
+            const StatBlock = ({title, reports, accent, showChart, estimatedDays}) => {
               const stats = computeGroupStats(reports);
+              const est = estimatedDays!=null ? Number(estimatedDays) : null;
+              const variance = est!=null ? stats.totalDays - est : null;
+              const onBudget = variance!=null && variance<=0;
               return (
                 <div style={{background:T.card,border:`1px solid ${T.border}`,borderLeft:`4px solid ${accent}`,borderRadius:12,padding:"14px 16px"}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
                     <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text}}>{title}</div>
                     <div style={{display:"flex",alignItems:"center",gap:10}}>
                       {stats.flaggedCount>0 && <span style={{fontSize:11,color:T.red,fontWeight:700}}>⚠ {stats.flaggedCount} flagged</span>}
-                      <span style={{fontSize:11,color:T.textMuted}}>{stats.totalDays} total days</span>
+                      {est!=null ? (
+                        <span style={{fontSize:11,fontWeight:700,color:onBudget?T.green:T.red,background:onBudget?T.greenDim:T.redDim,border:`1px solid ${onBudget?T.green:T.red}44`,borderRadius:6,padding:"2px 8px"}}>
+                          {stats.totalDays}d / {est}d est {onBudget?"":`(+${variance}d)`}
+                        </span>
+                      ) : (
+                        <span style={{fontSize:11,color:T.textMuted}}>{stats.totalDays} total days</span>
+                      )}
                     </div>
                   </div>
                   {/* Hours utilization */}
@@ -1095,17 +1104,19 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
                   })).filter(g=>g.reports.length>0);
                   const noCrossingRows = rigRows.filter(r=>!r._crossing || !rigCrossings.some(c=>c.name===r._crossing));
 
-                  const pushRow = (crossingName, reports, status) => {
+                  const pushRow = (crossingName, reports, status, estimatedDays) => {
                     const s = computeGroupStats(reports);
+                    const est = estimatedDays!=null ? Number(estimatedDays) : null;
                     rows.push({
                       project: proj, rig, crossing: crossingName, status: status||"",
                       totalDays: s.totalDays, hoursWorked: Math.round(s.workedHours*10)/10,
                       capacityHours: s.capacityHours, utilization: s.utilization,
                       counts: s.counts, flaggedCount: s.flaggedCount,
+                      estimatedDays: est, variance: est!=null ? s.totalDays - est : null,
                     });
                   };
 
-                  crossingGroups.forEach(({crossing, reports}) => pushRow(crossing.name, reports, crossing.status||"Active"));
+                  crossingGroups.forEach(({crossing, reports}) => pushRow(crossing.name, reports, crossing.status||"Active", crossing.estimatedDays));
                   if (noCrossingRows.length) pushRow("", noCrossingRows, "");
                 });
               });
@@ -1117,7 +1128,8 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
               if (!rows.length) { showToast && showToast("Nothing to export","del"); return; }
               exportToExcel(rows.map(r => ({
                 "Project": r.project, "Rig / Spread": r.rig, "Crossing": r.crossing, "Status": r.status,
-                "Total Days": r.totalDays, "Hours Worked": r.hoursWorked,
+                "Total Days": r.totalDays, "Estimated Days": r.estimatedDays!=null?r.estimatedDays:"", "Variance": r.variance!=null?r.variance:"",
+                "Hours Worked": r.hoursWorked,
                 "Capacity Hours": r.capacityHours, "Utilization %": r.utilization,
                 "Preparation Days": r.counts.preparation, "Mobilization Days": r.counts.mobilization,
                 "Pilot Days": r.counts.pilot, "Reaming Days": r.counts.reaming,
@@ -1131,7 +1143,8 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
               if (!rows.length) { showToast && showToast("Nothing to export","del"); return; }
               exportToExcel(rows.map(r => ({
                 "Project": r.project, "Rig / Spread": r.rig, "Crossing": r.crossing, "Status": r.status,
-                "Total Days": r.totalDays, "Hours Worked": r.hoursWorked,
+                "Total Days": r.totalDays, "Estimated Days": r.estimatedDays!=null?r.estimatedDays:"", "Variance": r.variance!=null?r.variance:"",
+                "Hours Worked": r.hoursWorked,
                 "Capacity Hours": r.capacityHours, "Utilization %": r.utilization,
               })), `Permit_Hours_Utilization_${new Date().toISOString().slice(0,10)}`);
             };
@@ -1181,8 +1194,8 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
                         <thead>
                           <tr style={{background:T.card2}}>
-                            {["Project","Rig","Crossing","Days","Hours Worked","Capacity","Utilization"].map(h=>(
-                              <th key={h} style={{padding:"8px 12px",textAlign:h==="Days"||h==="Hours Worked"||h==="Capacity"||h==="Utilization"?"right":"left",fontWeight:700,fontSize:10.5,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                            {["Project","Rig","Crossing","Days","Est. Days","Variance","Hours Worked","Capacity","Utilization"].map(h=>(
+                              <th key={h} style={{padding:"8px 12px",textAlign:h==="Project"||h==="Rig"||h==="Crossing"?"left":"right",fontWeight:700,fontSize:10.5,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1193,6 +1206,12 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
                               <td style={{padding:"7px 12px",color:T.textSub,whiteSpace:"nowrap"}}>{r.rig}</td>
                               <td style={{padding:"7px 12px",color:T.textSub}}>{r.crossing||<span style={{color:T.textMuted}}>—</span>}</td>
                               <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.totalDays}</td>
+                              <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.estimatedDays!=null?`${r.estimatedDays}d`:"—"}</td>
+                              <td style={{padding:"7px 12px",textAlign:"right"}}>
+                                {r.variance!=null ? (
+                                  <span style={{fontWeight:700,color:r.variance<=0?T.green:T.red}}>{r.variance<=0?`${Math.abs(r.variance)}d under`:`+${r.variance}d`}</span>
+                                ) : <span style={{color:T.textMuted}}>—</span>}
+                              </td>
                               <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.hoursWorked}h</td>
                               <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.capacityHours}h</td>
                               <td style={{padding:"7px 12px",textAlign:"right"}}>
@@ -1228,7 +1247,7 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
                             <StatBlock title={`${rig} — Total`} reports={rigRows} accent={T.gold} showChart/>
                             {crossingGroups.map(({crossing,reports}) => (
                               <div key={crossing.id} style={{marginLeft:16}}>
-                                <StatBlock title={`🛤️ ${crossing.name}`} reports={reports} accent={crossing.status==="Completed"?T.green:T.purple}/>
+                                <StatBlock title={`🛤️ ${crossing.name}`} reports={reports} accent={crossing.status==="Completed"?T.green:T.purple} estimatedDays={crossing.estimatedDays}/>
                               </div>
                             ))}
                             {noCrossingRows.length>0 && (
@@ -1267,7 +1286,7 @@ function DprConsolidateModal({ projectAnalysis, projectDocs, rigs, crossings, se
 
 /* ── Project Analysis Form Modal (PO details, dates, etc.) ── */
 function ProjectAnalysisModal({ proj, projectNames, workOrders, onSave, onClose }) {
-  const blank = { id: uid(), project:"", poValue:"", poNumber:"", quotationRef:"", clientName:"", startDate:"", estEndDate:"", status:"In Progress", description:"", dailyReports:[] };
+  const blank = { id: uid(), project:"", poValue:"", poNumber:"", quotationRef:"", clientName:"", startDate:"", estEndDate:"", estimatedDays:"", status:"In Progress", description:"", dailyReports:[] };
   const [f, setF] = useState(proj ? { dailyReports:[], ...proj } : blank);
   const upd = (k,v) => setF(p=>({...p,[k]:v}));
   const IS = { width:"100%", background:T.inputBg, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 12px", fontSize:13, color:T.text, outline:"none" };
@@ -1313,6 +1332,10 @@ function ProjectAnalysisModal({ proj, projectNames, workOrders, onSave, onClose 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div><label style={LS}>START DATE</label><input type="date" value={f.startDate} onChange={e=>upd("startDate",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
             <div><label style={LS}>ESTIMATED END DATE</label><input type="date" value={f.estEndDate} onChange={e=>upd("estEndDate",e.target.value)} style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/></div>
+          </div>
+          <div>
+            <label style={LS}>ESTIMATED DAYS (BUDGET) <span style={{color:T.textMuted,fontWeight:400,textTransform:"none"}}>— optional; overrides the start/estimated-end date calculation if set</span></label>
+            <input type="number" value={f.estimatedDays||""} onChange={e=>upd("estimatedDays",e.target.value)} placeholder="e.g. 45" style={IS} onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div>
@@ -1872,6 +1895,65 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
         ))}
       </div>
 
+      {/* ── Estimated vs Actual (Days Logged) ── */}
+      {reports.length > 0 && (() => {
+        const manualEst = proj.estimatedDays ? Number(proj.estimatedDays) : null;
+        const start = proj.startDate ? new Date(proj.startDate) : null;
+        const estEnd = proj.estEndDate ? new Date(proj.estEndDate) : null;
+        const dateEst = (start && estEnd) ? Math.ceil((estEnd - start) / 86400000) : null;
+        const resolvedEst = manualEst != null ? manualEst : dateEst;
+        const estSource = manualEst != null ? "manual entry" : (dateEst != null ? "start/est. end dates" : null);
+        const actualDays = reports.length;
+        if (resolvedEst == null) return null; // nothing to compare against yet
+
+        const variance = actualDays - resolvedEst;
+        const onBudget = variance <= 0;
+        const maxVal = Math.max(resolvedEst, actualDays, 1) * 1.1;
+        const estPct = Math.min(100, (resolvedEst/maxVal)*100);
+        const actPct = Math.min(100, (actualDays/maxVal)*100);
+
+        return (
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 24px",marginBottom:16,boxShadow:T.shadow}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>🎯 Estimated vs Actual (Days Logged)</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Budget estimate vs actual daily reports recorded{estSource?` · from ${estSource}`:""}</div>
+              </div>
+              <div style={{background:onBudget?T.greenDim:T.redDim,border:`1px solid ${onBudget?T.green:T.red}44`,borderRadius:12,padding:"8px 16px",textAlign:"center"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:onBudget?T.green:T.red,lineHeight:1}}>
+                  {onBudget ? `${Math.abs(variance)}d under` : `${variance}d over`}
+                </div>
+                <div style={{fontSize:11,color:onBudget?T.green:T.red,fontWeight:600,marginTop:2}}>{onBudget?"WITHIN BUDGET":"OVER BUDGET"}</div>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:18}}>
+              <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.gold}}>{resolvedEst}d</div>
+                <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700}}>ESTIMATED DAYS</div>
+              </div>
+              <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:22,fontWeight:800,color:T.blue}}>{actualDays}d</div>
+                <div style={{fontSize:10,color:T.textMuted,marginTop:4,fontWeight:700}}>ACTUAL DAYS LOGGED</div>
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:9}}>
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted,marginBottom:3}}><span>Estimated</span><span>{resolvedEst}d</span></div>
+                <div style={{height:14,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${estPct}%`,background:T.gold,borderRadius:999,transition:"width .8s cubic-bezier(.22,1,.36,1)"}}/>
+                </div>
+              </div>
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:T.textMuted,marginBottom:3}}><span>Actual</span><span>{actualDays}d</span></div>
+                <div style={{height:14,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${actPct}%`,background:onBudget?T.green:T.red,borderRadius:999,transition:"width .8s cubic-bezier(.22,1,.36,1) .1s"}}/>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Activity Breakdown (day-type composition, animated & hoverable) ── */}
       {reports.length > 0 && (() => {
         const dayStats = computeGroupStats(reports);
@@ -1907,15 +1989,20 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
           (rigGroups[rig] = rigGroups[rig] || []).push(r);
         });
         const rigNames = Object.keys(rigGroups).sort();
+        const projCrossingsForEst = (data.crossings||[]).filter(c=>c.project===proj.project && !c._deleted);
         const utilRows = rigNames.map(rig => {
           const s = computeGroupStats(rigGroups[rig]);
-          return { rig, totalDays: s.totalDays, hoursWorked: Math.round(s.workedHours*10)/10, capacityHours: s.capacityHours, utilization: s.utilization };
+          const rigCrossingEstimates = projCrossingsForEst.filter(c=>c.rig===rig && c.estimatedDays!=null);
+          const estimatedDays = rigCrossingEstimates.length ? rigCrossingEstimates.reduce((sum,c)=>sum+Number(c.estimatedDays),0) : null;
+          const variance = estimatedDays!=null ? s.totalDays - estimatedDays : null;
+          return { rig, totalDays: s.totalDays, hoursWorked: Math.round(s.workedHours*10)/10, capacityHours: s.capacityHours, utilization: s.utilization, estimatedDays, variance };
         });
 
         const exportProjectUtilization = () => {
           exportToExcel(utilRows.map(r => ({
             "Project": proj.project, "Rig / Spread": r.rig,
-            "Total Days": r.totalDays, "Hours Worked": r.hoursWorked,
+            "Total Days": r.totalDays, "Estimated Days": r.estimatedDays!=null?r.estimatedDays:"", "Variance": r.variance!=null?r.variance:"",
+            "Hours Worked": r.hoursWorked,
             "Capacity Hours": r.capacityHours, "Utilization %": r.utilization,
           })), `${proj.project.replace(/\s+/g,"_")}_Utilization_${new Date().toISOString().slice(0,10)}`);
         };
@@ -1952,7 +2039,7 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
                 <thead>
                   <tr style={{background:T.card2}}>
-                    {["Rig / Spread","Days","Hours Worked","Capacity","Utilization"].map(h=>(
+                    {["Rig / Spread","Days","Est. Days","Variance","Hours Worked","Capacity","Utilization"].map(h=>(
                       <th key={h} style={{padding:"8px 12px",textAlign:h==="Rig / Spread"?"left":"right",fontWeight:700,fontSize:10.5,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
                     ))}
                   </tr>
@@ -1962,6 +2049,12 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
                     <tr key={r.rig} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
                       <td style={{padding:"7px 12px",color:T.textSub,fontWeight:600}}>🔩 {r.rig}</td>
                       <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.totalDays}</td>
+                      <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.estimatedDays!=null?`${r.estimatedDays}d`:"—"}</td>
+                      <td style={{padding:"7px 12px",textAlign:"right"}}>
+                        {r.variance!=null ? (
+                          <span style={{fontWeight:700,color:r.variance<=0?T.green:T.red}}>{r.variance<=0?`${Math.abs(r.variance)}d under`:`+${r.variance}d`}</span>
+                        ) : <span style={{color:T.textMuted}}>—</span>}
+                      </td>
                       <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.hoursWorked}h</td>
                       <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.capacityHours}h</td>
                       <td style={{padding:"7px 12px",textAlign:"right"}}>
