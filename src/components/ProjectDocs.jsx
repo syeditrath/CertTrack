@@ -7,6 +7,30 @@ import { uploadFile, saveAppData, getPreviewUrl } from "../cloudflare.js";
 import { pName, renderProjectOptions, Btn, Chip, Tag, ABtn, Overlay, FormModal, FieldRow, SectionDivider, FInput, FSelect, FTextarea, FLink, FileLink, FilePreviewModal, PageHeader, Empty, CatManagerModal, BulkUploadModal, MultiPdfCertUpload, pctColor } from "./UI.jsx";
 import { FinanceLoginPage } from "./FinancePage.jsx";
 
+/* ─── Estimate categories (mirrors ProjectAnalysis.jsx's DAY_CATEGORIES classification) ── */
+const EST_CATEGORIES = [
+  { key:"preparation", label:"Preparation",  short:"Prep",  color:"#5b9bd5" },
+  { key:"mobilization", label:"Mobilization", short:"Mob",   color:"#a78bfa" },
+  { key:"pilot",        label:"Pilot",        short:"Pilot", color:"#2dd4bf" },
+  { key:"reaming",      label:"Reaming",      short:"Ream",  color:"#f2a93b" },
+  { key:"cleanpass",    label:"Clean Pass",   short:"Clean", color:"#f472b6" },
+  { key:"pullpipe",     label:"Pull Pipe",    short:"Pull",  color:"#fb923c" },
+];
+
+// Standby (no permit) always takes priority over whatever activity was logged.
+function classifyDayForEstimate(r) {
+  const permit = (r.permitReceived || "").trim().toLowerCase();
+  if (permit === "no") return "standby";
+  const act = (r.activity || "").trim().toLowerCase();
+  if (act === "preparation") return "preparation";
+  if (act === "mob" || act === "demob") return "mobilization";
+  if (act === "pilot") return "pilot";
+  if (act === "reaming") return "reaming";
+  if (act === "clean pass") return "cleanpass";
+  if (act === "pull pipe") return "pullpipe";
+  return "other";
+}
+
 /* ─── HSE & Project Document Categories ─────────────────────────────────── */
 const HSE_CATEGORIES = [
   "Pre-Mobilization Checklist","NAPD Certification","Risk Assessment",
@@ -175,7 +199,6 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   const [rigInput, setRigInput] = useState("");
   const [crossingPanelRig, setCrossingPanelRig] = useState("");
   const [crossingPanelName, setCrossingPanelName] = useState("");
-  const [crossingPanelEst, setCrossingPanelEst] = useState("");
   const [msAuthed, setMsAuthed] = useState(false);
   const docs     = live(data.projectDocs);
   const projects = data.projects    || [];
@@ -303,21 +326,20 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
     showToast("Rig removed","del");
   };
 
-  const addCrossing = (project, rig, name, estimatedDays) => {
+  const addCrossing = (project, rig, name) => {
     if (!name || !name.trim()) return;
     const trimmed = name.trim();
     if (crossings.some(c=>c.project===project && c.rig===rig && c.name===trimmed)) {
       showToast("Crossing already exists","del");
       return;
     }
-    const est = estimatedDays!=null && estimatedDays!=="" ? Number(estimatedDays) : null;
-    setData(prev=>({...prev, crossings:[...(prev.crossings||[]), {id:uid(), project, rig, name:trimmed, status:"Active", estimatedDays: est}]}));
+    setData(prev=>({...prev, crossings:[...(prev.crossings||[]), {id:uid(), project, rig, name:trimmed, status:"Active", estimates:{}}]}));
     showToast("Crossing added ✓");
   };
 
-  const updateCrossingEstimate = (id, estimatedDays) => {
-    const est = estimatedDays!=null && estimatedDays!=="" ? Number(estimatedDays) : null;
-    setData(prev=>({...prev, crossings:(prev.crossings||[]).map(c=>c.id===id?{...c,estimatedDays:est}:c)}));
+  const updateCrossingEstimate = (id, category, value) => {
+    const num = value!=null && value!=="" ? Number(value) : null;
+    setData(prev=>({...prev, crossings:(prev.crossings||[]).map(c=>c.id===id?{...c, estimates:{...(c.estimates||{}), [category]: num}}:c)}));
   };
 
   const toggleCrossingStatus = (id) => {
@@ -526,61 +548,63 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
             <input
               value={crossingPanelName}
               onChange={e=>setCrossingPanelName(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter" && crossingPanelRig){ addCrossing(selectedProject, crossingPanelRig, crossingPanelName); setCrossingPanelName(""); } }}
               placeholder="Crossing name…"
-              style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.text,outline:"none",width:170}}
-            />
-            <input
-              type="number"
-              value={crossingPanelEst}
-              onChange={e=>setCrossingPanelEst(e.target.value)}
-              placeholder="Est. days"
-              title="Estimated days (budget estimate) — optional"
-              style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.text,outline:"none",width:90}}
+              style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:T.text,outline:"none",width:190}}
             />
             <button type="button" onClick={()=>{
               if (!crossingPanelRig) { showToast("Select a rig first","del"); return; }
-              addCrossing(selectedProject, crossingPanelRig, crossingPanelName, crossingPanelEst);
-              setCrossingPanelName(""); setCrossingPanelEst("");
+              addCrossing(selectedProject, crossingPanelRig, crossingPanelName);
+              setCrossingPanelName("");
             }}
               style={{background:T.gold,border:"none",color:"#000",borderRadius:8,padding:"7px 16px",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
               + Add Crossing
             </button>
           </div>
         </div>
+        <div style={{fontSize:11,color:T.textMuted,marginTop:8}}>Set per-activity day estimates below — actual counts update automatically from daily reports.</div>
         {projCrossings.filter(c=>!c._deleted).length > 0 && (
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:12}}>
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:12}}>
             {projCrossings.filter(c=>!c._deleted).map(c => {
               const isCompleted = c.status === "Completed";
-              const actualDays = drAll.filter(d=>d.project===selectedProject && d.rig===c.rig && d.crossing===c.name && !d._deleted).length;
+              const estimates = c.estimates || {};
+              const crossingReports = drAll.filter(d=>d.project===selectedProject && d.rig===c.rig && d.crossing===c.name && !d._deleted);
               return (
-                <span
-                  key={c.id}
-                  style={{
-                    display:"inline-flex", alignItems:"center", gap:6,
-                    background: isCompleted ? T.greenDim : T.card2,
-                    border: `1px solid ${isCompleted ? T.green+"44" : T.border}`,
-                    borderRadius: 8, padding: "4px 6px 4px 10px", fontSize: 11,
-                    color: isCompleted ? T.green : T.textMuted, fontWeight: 600,
-                  }}
-                >
-                  🛤️ {c.name} <span style={{opacity:.7}}>({c.rig})</span>
-                  <span style={{display:"inline-flex",alignItems:"center",gap:3,background:T.bg,border:`1px solid ${T.border}`,borderRadius:5,padding:"1px 5px"}}>
-                    <span style={{fontSize:10,opacity:.7}}>Est</span>
-                    <input
-                      type="number"
-                      defaultValue={c.estimatedDays ?? ""}
-                      onBlur={e=>{ const v=e.target.value; if (v!==String(c.estimatedDays??"")) updateCrossingEstimate(c.id, v); }}
-                      placeholder="—"
-                      style={{width:34,background:"transparent",border:"none",outline:"none",color:T.text,fontSize:11,fontWeight:700,textAlign:"center"}}
-                    />
-                    <span style={{fontSize:10,opacity:.7}}>/ {actualDays}d</span>
-                  </span>
-                  <button onClick={()=>toggleCrossingStatus(c.id)} title={isCompleted?"Mark Active":"Mark Completed"}
-                    style={{background:"transparent",border:"none",color:"inherit",cursor:"pointer",fontSize:12,padding:0,opacity:.75}}>
-                    {isCompleted?"✓":"○"}
-                  </button>
-                  {isAdmin && <button onClick={()=>delCrossing(c.id)} title="Remove" style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:12,padding:0}}>✕</button>}
-                </span>
+                <div key={c.id} style={{background: isCompleted ? T.greenDim : T.card2, border:`1px solid ${isCompleted?T.green+"44":T.border}`, borderRadius:10, padding:"10px 12px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:9,flexWrap:"wrap"}}>
+                    <span style={{fontSize:13,fontWeight:700,color:isCompleted?T.green:T.text}}>🛤️ {c.name}</span>
+                    <span style={{fontSize:11,color:T.textMuted}}>({c.rig})</span>
+                    <span style={{fontSize:11,color:T.textMuted,marginLeft:"auto"}}>{crossingReports.length} report{crossingReports.length!==1?"s":""}</span>
+                    <button onClick={()=>toggleCrossingStatus(c.id)} title={isCompleted?"Mark Active":"Mark Completed"}
+                      style={{background:isCompleted?T.green:"transparent",border:`1px solid ${isCompleted?T.green:T.border}`,color:isCompleted?"#000":T.textMuted,borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                      {isCompleted?"✓ Completed":"Mark Completed"}
+                    </button>
+                    {isAdmin && <button onClick={()=>delCrossing(c.id)} title="Remove" style={{background:"transparent",border:"none",color:T.red,cursor:"pointer",fontSize:13,padding:0}}>✕</button>}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6}}>
+                    {EST_CATEGORIES.map(cat => {
+                      const actual = crossingReports.filter(r=>classifyDayForEstimate(r)===cat.key).length;
+                      const est = estimates[cat.key];
+                      const over = est!=null && actual > est;
+                      return (
+                        <div key={cat.key} style={{background:T.bg,border:`1px solid ${over?T.red+"55":T.border}`,borderRadius:7,padding:"5px 6px",textAlign:"center"}}>
+                          <div style={{fontSize:9.5,color:cat.color,fontWeight:700,marginBottom:3}}>{cat.short}</div>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2}}>
+                            <input
+                              type="number"
+                              defaultValue={est ?? ""}
+                              onBlur={e=>{ const v=e.target.value; if (v!==String(est??"")) updateCrossingEstimate(c.id, cat.key, v); }}
+                              placeholder="—"
+                              style={{width:26,background:"transparent",border:"none",outline:"none",color:T.text,fontSize:11,fontWeight:700,textAlign:"center"}}
+                            />
+                            <span style={{fontSize:10,color:T.textMuted}}>/</span>
+                            <span style={{fontSize:11,fontWeight:700,color:over?T.red:T.textSub}}>{actual}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
