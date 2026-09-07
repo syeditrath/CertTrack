@@ -2854,7 +2854,7 @@ function ProjectAnalysisPage({ data, setData, showToast, go, isAdmin }) {
 
       </>)}
 
-      {proTab==="analytics" && <AnalyticsTab enriched={enriched} />}
+      {proTab==="analytics" && <AnalyticsTab enriched={enriched} data={data}/>}
       {proTab==="timeline"  && <TimelineTab enriched={enriched} onOpenProject={setDetail} />}
       {proTab==="budget"    && <BudgetTab enriched={enriched} data={data} setData={setData} showToast={showToast} isAdmin={isAdmin} onOpenProject={setDetail} />}
       {proTab==="reports"   && <ReportsTab enriched={enriched} fStat={fStat} search={search} risk={computeRiskInsights(enriched, costSheetsByProject(data.costSheets))} />}
