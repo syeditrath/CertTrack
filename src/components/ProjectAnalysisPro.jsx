@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { T } from "../theme.js";
 import { fmtDate, formatSarCompact, printPage, getInvoiceCollectedAmount, getInvoiceRemainingAmount } from "../utils.js";
 import { deriveProjectStats } from "./UI.jsx";
@@ -53,6 +53,167 @@ const STATUS_COLOR = (T) => ({
   "Not Started": T.textMuted, "Active": T.blue, "In Progress": T.blue,
   "On Hold": T.gold, "Completed": T.green, "Cancelled": T.red,
 });
+
+/* ── Estimated vs Actual (by activity) — classification + animation helpers ── */
+const EST_DAY_CATEGORIES = [
+  { key:"preparation", label:"Preparation",  color:"#38bdf8" },
+  { key:"mobilization", label:"Mobilization", color:"#a78bfa" },
+  { key:"pilot",        label:"Pilot",        color:"#2dd4bf" },
+  { key:"reaming",      label:"Reaming",      color:"#fbbf24" },
+  { key:"cleanpass",    label:"Clean Pass",   color:"#f472b6" },
+  { key:"pullpipe",     label:"Pull Pipe",    color:"#fb923c" },
+];
+
+// Standby (no permit) always takes priority over whatever activity was logged.
+function classifyEstDay(r) {
+  const permit = (r.permitReceived || "").trim().toLowerCase();
+  if (permit === "no") return "standby";
+  const act = (r.activity || "").trim().toLowerCase();
+  if (act === "preparation") return "preparation";
+  if (act === "mob" || act === "demob") return "mobilization";
+  if (act === "pilot") return "pilot";
+  if (act === "reaming") return "reaming";
+  if (act === "clean pass") return "cleanpass";
+  if (act === "pull pipe") return "pullpipe";
+  return "other";
+}
+
+// Eased count-up: animates a number from 0 to `target` once `active` becomes true.
+function useCountUp(target, duration=1000, active=true) {
+  const [val, setVal] = useState(active ? 0 : target);
+  useEffect(() => {
+    if (!active) { setVal(target); return; }
+    let raf, start;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const progress = Math.min(1, (ts - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setVal(Math.round(eased * target));
+      if (progress < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => raf && cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, active, duration]);
+  return val;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ESTIMATED VS ACTUAL — BY ACTIVITY (fleet-wide, animated)
+   Estimates come from data.crossings[].estimates (set in the Crossings panel
+   of each project). Actuals are classified live from data.projectDocs daily
+   reports. Nothing is duplicated or re-entered — this is a pure rollup.
+════════════════════════════════════════════════════════════════════════════ */
+function EstimatedVsActualPanel({ data }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setMounted(true), 90); return () => clearTimeout(t); }, []);
+
+  const crossings = useMemo(() => (data?.crossings || []).filter(c => !c._deleted), [data?.crossings]);
+  const reports = useMemo(() => (data?.projectDocs || []).filter(d => d.subTab === "dailyreports" && !d._deleted), [data?.projectDocs]);
+
+  const catRows = useMemo(() => EST_DAY_CATEGORIES.map(cat => {
+    const hasEst = crossings.some(c => c.estimates && c.estimates[cat.key] != null);
+    const est = hasEst ? crossings.reduce((sum,c) => sum + (c.estimates && c.estimates[cat.key]!=null ? Number(c.estimates[cat.key]) : 0), 0) : 0;
+    const actual = reports.filter(r => classifyEstDay(r) === cat.key).length;
+    return { ...cat, est, hasEst, actual, variance: hasEst ? actual - est : null };
+  }), [crossings, reports]);
+
+  const anyEstimates = catRows.some(c => c.hasEst);
+  const totalEst = catRows.reduce((s,c) => s + c.est, 0);
+  const totalActual = catRows.reduce((s,c) => s + c.actual, 0);
+  const totalVariance = totalActual - totalEst;
+  const onBudget = totalVariance <= 0;
+
+  const animEst = useCountUp(totalEst, 1100, mounted);
+  const animActual = useCountUp(totalActual, 1100, mounted);
+  const animVar = useCountUp(Math.abs(totalVariance), 1100, mounted);
+
+  if (!anyEstimates) {
+    return (
+      <div style={{textAlign:"center",padding:"48px 20px",background:T.card,border:`1px dashed ${T.border}`,borderRadius:16}}>
+        <div style={{fontSize:36,marginBottom:12}}>🎯</div>
+        <div style={{fontSize:13,color:T.textMuted,fontWeight:600,maxWidth:460,margin:"0 auto"}}>
+          No activity estimates set yet. Open a project → <strong>Crossings</strong> panel to enter Estimated Days per activity (Preparation, Mobilization, Pilot, Reaming, Clean Pass, Pull Pipe) — they'll roll up here automatically across your whole portfolio.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"22px 24px",boxShadow:T.shadow}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18,flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:19,color:T.text}}>🎯 Estimated vs Actual — by Activity</div>
+          <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Budget estimate (from crossing planning) vs actual days recorded, across the whole portfolio</div>
+        </div>
+      </div>
+
+      {/* Fleet-wide KPI row, count-up animated */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:22}}>
+        <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.gold}}>{animEst}d</div>
+          <div style={{fontSize:10.5,color:T.textMuted,marginTop:4,fontWeight:700,letterSpacing:.3}}>TOTAL ESTIMATED</div>
+        </div>
+        <div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"14px 16px"}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:T.blue}}>{animActual}d</div>
+          <div style={{fontSize:10.5,color:T.textMuted,marginTop:4,fontWeight:700,letterSpacing:.3}}>TOTAL ACTUAL</div>
+        </div>
+        <div style={{background:onBudget?T.greenDim:T.redDim,border:`1px solid ${onBudget?T.green:T.red}44`,borderRadius:12,padding:"14px 16px"}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:28,fontWeight:800,color:onBudget?T.green:T.red}}>{onBudget?"−":"+"}{animVar}d</div>
+          <div style={{fontSize:10.5,color:onBudget?T.green:T.red,marginTop:4,fontWeight:700,letterSpacing:.3}}>{onBudget?"UNDER BUDGET":"OVER BUDGET"}</div>
+        </div>
+      </div>
+
+      {/* Per-category animated comparison bars */}
+      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+        {catRows.map((cat, i) => {
+          const maxVal = Math.max(cat.est, cat.actual, 1) * 1.15;
+          const estPct = mounted ? Math.min(100, (cat.est / maxVal) * 100) : 0;
+          const actPct = mounted ? Math.min(100, (cat.actual / maxVal) * 100) : 0;
+          const over = cat.hasEst && cat.actual > cat.est;
+          return (
+            <div key={cat.key} className="fade-up" style={{animationDelay:`${i * 0.08}s`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:6}}>
+                <span style={{fontSize:13,fontWeight:700,color:cat.color}}>{cat.label}</span>
+                <span style={{fontSize:11,color:T.textMuted}}>
+                  {cat.hasEst ? (
+                    <>Est <b style={{color:T.text}}>{cat.est}d</b> · Actual <b style={{color:over?T.red:T.text}}>{cat.actual}d</b>{" "}
+                      {over
+                        ? <span style={{color:T.red,fontWeight:700}}>(+{cat.actual - cat.est}d over)</span>
+                        : <span style={{color:T.green,fontWeight:700}}>({cat.est - cat.actual}d under)</span>}
+                    </>
+                  ) : (
+                    <>No estimate set · {cat.actual}d actual</>
+                  )}
+                </span>
+              </div>
+              <div style={{position:"relative",height:16,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                <div style={{
+                  position:"absolute", inset:0, width:`${actPct}%`,
+                  background: over ? T.red : cat.color, borderRadius:999, opacity:.92,
+                  transition:"width 1s cubic-bezier(.22,1,.36,1)",
+                }}/>
+                {cat.hasEst && (
+                  <div style={{
+                    position:"absolute", top:-3, bottom:-3, left:`${estPct}%`, width:3,
+                    background:T.text, borderRadius:2, opacity:.7,
+                    transition:"left 1s cubic-bezier(.22,1,.36,1)",
+                    boxShadow:"0 0 0 1px rgba(0,0,0,0.15)",
+                  }} title={`Estimate: ${cat.est}d`}/>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{fontSize:10.5,color:T.textMuted,marginTop:16,display:"flex",alignItems:"center",gap:7}}>
+        <span style={{display:"inline-block",width:3,height:12,background:T.text,opacity:.7,borderRadius:2}}/>
+        vertical marker = estimated days &nbsp;·&nbsp; colored fill = actual days recorded
+      </div>
+    </div>
+  );
+}
 
 /* ════════════════════════════════════════════════════════════════════════════
    RISK INSIGHTS
@@ -257,7 +418,7 @@ export function TrendChart({ series, height=200 }) {
 /* ════════════════════════════════════════════════════════════════════════════
    ANALYTICS TAB
 ════════════════════════════════════════════════════════════════════════════ */
-export function AnalyticsTab({ enriched }) {
+export function AnalyticsTab({ enriched, data }) {
   const statusData = useMemo(() => {
     const colors = STATUS_COLOR(T);
     const counts = {};
@@ -312,6 +473,8 @@ export function AnalyticsTab({ enriched }) {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <EstimatedVsActualPanel data={data}/>
+
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
         {[
           {label:"Total PO Value", v:formatSarCompact(totalPO), color:T.gold},
