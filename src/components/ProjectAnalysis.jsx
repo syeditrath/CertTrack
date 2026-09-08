@@ -1709,11 +1709,12 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
       <div style={{display:"flex",gap:6,marginBottom:20,flexWrap:"wrap"}}>
         {[
           {id:"overview",   label:"Overview",   icon:"◐"},
+          {id:"analysis",   label:"Analysis",   icon:"🎯"},
           {id:"costsheet",  label:"Cost Sheet",  icon:"💰"},
           {id:"quotation",  label:"Quotation",   icon:"📄"},
         ].map(t=>{
           const active = detailTab===t.id;
-          const accentColor = t.id==="costsheet"?T.teal:t.id==="quotation"?T.purple:T.blue;
+          const accentColor = t.id==="costsheet"?T.teal:t.id==="quotation"?T.purple:t.id==="analysis"?T.gold:T.blue;
           return (
             <button key={t.id} onClick={()=>setDetailTab(t.id)}
               style={{background:active?`${accentColor}18`:T.card, border:`1px solid ${active?accentColor+"66":T.border}`, color:active?accentColor:T.textMuted, borderRadius:10, padding:"9px 18px", fontSize:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:6, transition:"all .15s"}}>
@@ -1949,237 +1950,6 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
           </div>
         ))}
       </div>
-
-      {/* ── Estimated vs Actual — by Activity ── */}
-      {reports.length > 0 && (() => {
-        const projCrossingsForEst = (data.crossings||[]).filter(c=>c.project===proj.project && !c._deleted);
-        const catRows = ESTIMATABLE_CATEGORIES.map(cat => {
-          const hasEst = projCrossingsForEst.some(c=>c.estimates && c.estimates[cat.key]!=null);
-          const est = hasEst ? projCrossingsForEst.reduce((sum,c)=> sum + (c.estimates && c.estimates[cat.key]!=null ? Number(c.estimates[cat.key]) : 0), 0) : null;
-          const actual = reports.filter(r=>classifyDay(r)===cat.key).length;
-          const variance = hasEst ? actual - est : null;
-          return { ...cat, est, actual, variance };
-        });
-        const anyEstimates = catRows.some(r=>r.est!=null);
-        if (!anyEstimates) return null; // no crossing estimates set yet for this project
-
-        const totalEst = catRows.reduce((s,r)=>s+(r.est||0),0);
-        const totalActual = catRows.reduce((s,r)=>s+r.actual,0);
-        const totalVariance = totalActual - totalEst;
-        const onBudget = totalVariance <= 0;
-
-        return (
-          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 24px",marginBottom:16,boxShadow:T.shadow}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
-              <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>🎯 Estimated vs Actual — by Activity</div>
-                <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Budget estimate (from crossing planning) vs actual days recorded, per activity type</div>
-              </div>
-              <div style={{background:onBudget?T.greenDim:T.redDim,border:`1px solid ${onBudget?T.green:T.red}44`,borderRadius:12,padding:"8px 16px",textAlign:"center"}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:onBudget?T.green:T.red,lineHeight:1}}>
-                  {onBudget ? `${Math.abs(totalVariance)}d under` : `+${totalVariance}d over`}
-                </div>
-                <div style={{fontSize:11,color:onBudget?T.green:T.red,fontWeight:600,marginTop:2}}>TOTAL PLANNED WORK</div>
-              </div>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              {catRows.map(cat => {
-                const maxVal = Math.max(cat.est||0, cat.actual, 1) * 1.15;
-                const estPct = cat.est!=null ? Math.min(100,(cat.est/maxVal)*100) : 0;
-                const actPct = Math.min(100,(cat.actual/maxVal)*100);
-                const over = cat.variance!=null && cat.variance>0;
-                return (
-                  <div key={cat.key}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5,flexWrap:"wrap",gap:6}}>
-                      <span style={{fontSize:12.5,fontWeight:700,color:cat.color}}>{cat.label}</span>
-                      <span style={{fontSize:11,color:T.textMuted}}>
-                        {cat.est!=null ? (
-                          <>Est <b style={{color:T.text}}>{cat.est}d</b> · Actual <b style={{color:over?T.red:T.text}}>{cat.actual}d</b>{cat.variance!=null && <span style={{color:over?T.red:T.green,fontWeight:700}}> ({over?"+":""}{cat.variance}d)</span>}</>
-                        ) : (
-                          <>No estimate set · {cat.actual}d actual</>
-                        )}
-                      </span>
-                    </div>
-                    <div style={{position:"relative",height:11,background:T.border,borderRadius:999,overflow:"hidden"}}>
-                      <div style={{position:"absolute",inset:0,width:`${actPct}%`,background:over?T.red:cat.color,borderRadius:999,opacity:.9,transition:"width .8s cubic-bezier(.22,1,.36,1)"}}/>
-                      {cat.est!=null && (
-                        <div style={{position:"absolute",top:-2,bottom:-2,left:`${estPct}%`,width:2,background:T.text,opacity:.65}} title={`Estimate: ${cat.est}d`}/>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{fontSize:10,color:T.textMuted,marginTop:12,display:"flex",alignItems:"center",gap:6}}>
-              <span style={{display:"inline-block",width:2,height:10,background:T.text,opacity:.65}}/> vertical marker = estimated days
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Activity Breakdown (day-type composition, animated & hoverable) ── */}
-      {reports.length > 0 && (() => {
-        const dayStats = computeGroupStats(reports);
-        return (
-          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 24px",marginBottom:16,boxShadow:T.shadow}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
-              <div>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>📊 Activity Breakdown</div>
-                <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>How site days were spent — hover the chart for details</div>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
-                {dayStats.flaggedCount>0 && (
-                  <span style={{fontSize:12,color:T.red,fontWeight:700,background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:8,padding:"5px 12px"}}>
-                    ⚠ {dayStats.flaggedCount} flagged record{dayStats.flaggedCount!==1?"s":""}
-                  </span>
-                )}
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:pctColor(dayStats.utilization)}}>{dayStats.utilization}%</div>
-                  <div style={{fontSize:10,color:T.textMuted,fontWeight:700}}>UTILIZATION</div>
-                </div>
-              </div>
-            </div>
-            <ActivityDonutChart counts={dayStats.counts} totalDays={dayStats.totalDays} size={200} strokeWidth={26}/>
-          </div>
-        );
-      })()}
-
-      {/* ── Permit Hours & Utilization report (per rig, this project only) ── */}
-      {reports.length > 0 && (() => {
-        const rigGroups = {};
-        reports.forEach(r => {
-          const rig = r.rig || "Unassigned";
-          (rigGroups[rig] = rigGroups[rig] || []).push(r);
-        });
-        const rigNames = Object.keys(rigGroups).sort();
-        const projCrossingsForEst = (data.crossings||[]).filter(c=>c.project===proj.project && !c._deleted);
-        const utilRows = rigNames.map(rig => {
-          const rigReports = rigGroups[rig];
-          const s = computeGroupStats(rigReports);
-          const rigCrossings = projCrossingsForEst.filter(c=>c.rig===rig);
-          const hasEst = rigCrossings.some(c=>c.estimates && ESTIMATABLE_CATEGORIES.some(cat=>c.estimates[cat.key]!=null));
-          const estimatedDays = hasEst ? ESTIMATABLE_CATEGORIES.reduce((catSum,cat)=>
-            catSum + rigCrossings.reduce((sum,c)=>sum+(c.estimates && c.estimates[cat.key]!=null ? Number(c.estimates[cat.key]) : 0), 0), 0) : null;
-          const plannedActual = ESTIMATABLE_CATEGORIES.reduce((sum,cat)=>sum+rigReports.filter(r=>classifyDay(r)===cat.key).length, 0);
-          const variance = estimatedDays!=null ? plannedActual - estimatedDays : null;
-          return { rig, totalDays: s.totalDays, hoursWorked: Math.round(s.workedHours*10)/10, capacityHours: s.capacityHours, utilization: s.utilization, estimatedDays, variance };
-        });
-
-        const exportProjectUtilization = () => {
-          exportToExcel(utilRows.map(r => ({
-            "Project": proj.project, "Rig / Spread": r.rig,
-            "Total Days": r.totalDays, "Estimated Days": r.estimatedDays!=null?r.estimatedDays:"", "Variance": r.variance!=null?r.variance:"",
-            "Hours Worked": r.hoursWorked,
-            "Capacity Hours": r.capacityHours, "Utilization %": r.utilization,
-          })), `${proj.project.replace(/\s+/g,"_")}_Utilization_${new Date().toISOString().slice(0,10)}`);
-        };
-
-        const exportProjectPermitDetail = () => {
-          const sorted = [...reports].sort((a,b)=>
-            (a.rig||"").localeCompare(b.rig||"") || (a.crossing||"").localeCompare(b.crossing||"") || (a.date||"").localeCompare(b.date||"")
-          );
-          exportToExcel(sorted.map(r => ({
-            "Project": proj.project, "Rig / Spread": r.rig||"", "Crossing": r.crossing||"",
-            "Date": r.date||"", "Work Profile": r.profile||"", "Activity": r.activity||"",
-            "Permit Received": r.permitReceived||"", "Permit Hours": r.permitHours!=null?String(r.permitHours):"",
-            "Standby Reason": r.standbyReason||"", "Progress Today (m)": r.progressToday!=null?String(r.progressToday):"",
-          })), `${proj.project.replace(/\s+/g,"_")}_Permit_Hours_Detail_${new Date().toISOString().slice(0,10)}`);
-        };
-
-        return (
-          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden",marginBottom:16}}>
-            <div style={{padding:"12px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              <span style={{fontSize:15}}>⏱</span>
-              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text}}>Permit Hours &amp; Utilization</span>
-              <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
-                <button onClick={exportProjectPermitDetail}
-                  style={{background:`${T.purple}18`,border:`1px solid ${T.purple}44`,color:T.purple,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-                  ⬇ Export Daily Detail
-                </button>
-                <button onClick={exportProjectUtilization}
-                  style={{background:`${T.blue}18`,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-                  ⬇ Export Summary
-                </button>
-              </div>
-            </div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
-                <thead>
-                  <tr style={{background:T.card2}}>
-                    {["Rig / Spread","Days","Est. Days","Variance","Hours Worked","Capacity","Utilization"].map(h=>(
-                      <th key={h} style={{padding:"8px 12px",textAlign:h==="Rig / Spread"?"left":"right",fontWeight:700,fontSize:10.5,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {utilRows.map((r,i)=>(
-                    <tr key={r.rig} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
-                      <td style={{padding:"7px 12px",color:T.textSub,fontWeight:600}}>🔩 {r.rig}</td>
-                      <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.totalDays}</td>
-                      <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.estimatedDays!=null?`${r.estimatedDays}d`:"—"}</td>
-                      <td style={{padding:"7px 12px",textAlign:"right"}}>
-                        {r.variance!=null ? (
-                          <span style={{fontWeight:700,color:r.variance<=0?T.green:T.red}}>{r.variance<=0?`${Math.abs(r.variance)}d under`:`+${r.variance}d`}</span>
-                        ) : <span style={{color:T.textMuted}}>—</span>}
-                      </td>
-                      <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.hoursWorked}h</td>
-                      <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.capacityHours}h</td>
-                      <td style={{padding:"7px 12px",textAlign:"right"}}>
-                        <span style={{fontWeight:700,color:pctColor(r.utilization)}}>{r.utilization}%</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Breakdown by Rig / Location (only when project has multiple rigs) ── */}
-      {reports.length > 0 && (() => {
-        const rigGroups = {};
-        reports.forEach(r => {
-          const rig = r.rig || "Unassigned";
-          (rigGroups[rig] = rigGroups[rig] || []).push(r);
-        });
-        const rigNames = Object.keys(rigGroups).sort();
-        if (rigNames.length <= 1) return null; // single-rig projects already covered by the panel above
-
-        return (
-          <div style={{marginBottom:16}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text,marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-              🔩 Breakdown by Rig / Location
-              <span style={{fontSize:11,color:T.textMuted,fontWeight:500,fontFamily:"inherit"}}>{rigNames.length} rigs</span>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14}}>
-              {rigNames.map((rig,i) => {
-                const rigReports = rigGroups[rig];
-                const rs = computeGroupStats(rigReports);
-                return (
-                  <div key={rig} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"18px 20px",boxShadow:T.shadow,animationDelay:`${i*.06}s`}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
-                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:T.gold}}>🔩 {rig}</div>
-                      <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        {rs.flaggedCount>0 && (
-                          <span style={{fontSize:11,color:T.red,fontWeight:700,background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:6,padding:"3px 8px"}}>
-                            ⚠ {rs.flaggedCount}
-                          </span>
-                        )}
-                        <div style={{textAlign:"right"}}>
-                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:pctColor(rs.utilization)}}>{rs.utilization}%</div>
-                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700}}>UTIL</div>
-                        </div>
-                      </div>
-                    </div>
-                    <ActivityDonutChart counts={rs.counts} totalDays={rs.totalDays} size={160} strokeWidth={20}/>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Timeline / Duration Visual ── */}
       {proj.startDate && (proj.estEndDate || proj.actualEndDate) && (
@@ -2583,6 +2353,252 @@ function ProjectAnalysisDetail({ proj, projectDocs, projectNames, data, setData,
       {editProj&&<ProjectAnalysisModal proj={proj} projectNames={projectNames} workOrders={(data.projectDocs||[]).filter(d=>d.subTab==="workorders")} onSave={p=>{onUpdate(p);setEditProj(false);}} onClose={()=>setEditProj(false)}/>}
       {drModal&&<DailyReportModal report={drModal==="new"?null:drModal} projectName={proj.project} rigs={(data.rigs||[]).filter(r=>r.project===proj.project)} onSave={saveReport} onClose={()=>setDrModal(null)}/>}
       </> /* end detailTab===overview */}
+
+      {detailTab==="analysis" && <>
+      {/* ── Estimated vs Actual — by Activity ── */}
+      {reports.length > 0 && (() => {
+        const projCrossingsForEst = (data.crossings||[]).filter(c=>c.project===proj.project && !c._deleted);
+        const catRows = ESTIMATABLE_CATEGORIES.map(cat => {
+          const hasEst = projCrossingsForEst.some(c=>c.estimates && c.estimates[cat.key]!=null);
+          const est = hasEst ? projCrossingsForEst.reduce((sum,c)=> sum + (c.estimates && c.estimates[cat.key]!=null ? Number(c.estimates[cat.key]) : 0), 0) : null;
+          const actual = reports.filter(r=>classifyDay(r)===cat.key).length;
+          const variance = hasEst ? actual - est : null;
+          return { ...cat, est, actual, variance };
+        });
+        const anyEstimates = catRows.some(r=>r.est!=null);
+        if (!anyEstimates) return (
+          <div style={{textAlign:"center",padding:"48px 20px",background:T.card,border:`1px dashed ${T.border}`,borderRadius:16,marginBottom:16}}>
+            <div style={{fontSize:36,marginBottom:12}}>🎯</div>
+            <div style={{fontSize:13,color:T.textMuted,fontWeight:600,maxWidth:440,margin:"0 auto"}}>
+              No activity estimates set yet for this project. Open the <strong>Crossings</strong> panel (in Project Docs → Daily Reports) to enter Estimated Days per activity — they'll appear here automatically.
+            </div>
+          </div>
+        );
+
+        const totalEst = catRows.reduce((s,r)=>s+(r.est||0),0);
+        const totalActual = catRows.reduce((s,r)=>s+r.actual,0);
+        const totalVariance = totalActual - totalEst;
+        const onBudget = totalVariance <= 0;
+
+        return (
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 24px",marginBottom:16,boxShadow:T.shadow}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>🎯 Estimated vs Actual — by Activity</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>Budget estimate (from crossing planning) vs actual days recorded, per activity type</div>
+              </div>
+              <div style={{background:onBudget?T.greenDim:T.redDim,border:`1px solid ${onBudget?T.green:T.red}44`,borderRadius:12,padding:"8px 16px",textAlign:"center"}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:22,color:onBudget?T.green:T.red,lineHeight:1}}>
+                  {onBudget ? `${Math.abs(totalVariance)}d under` : `+${totalVariance}d over`}
+                </div>
+                <div style={{fontSize:11,color:onBudget?T.green:T.red,fontWeight:600,marginTop:2}}>TOTAL PLANNED WORK</div>
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {catRows.map(cat => {
+                const maxVal = Math.max(cat.est||0, cat.actual, 1) * 1.15;
+                const estPct = cat.est!=null ? Math.min(100,(cat.est/maxVal)*100) : 0;
+                const actPct = Math.min(100,(cat.actual/maxVal)*100);
+                const over = cat.variance!=null && cat.variance>0;
+                return (
+                  <div key={cat.key}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5,flexWrap:"wrap",gap:6}}>
+                      <span style={{fontSize:12.5,fontWeight:700,color:cat.color}}>{cat.label}</span>
+                      <span style={{fontSize:11,color:T.textMuted}}>
+                        {cat.est!=null ? (
+                          <>Est <b style={{color:T.text}}>{cat.est}d</b> · Actual <b style={{color:over?T.red:T.text}}>{cat.actual}d</b>{cat.variance!=null && <span style={{color:over?T.red:T.green,fontWeight:700}}> ({over?"+":""}{cat.variance}d)</span>}</>
+                        ) : (
+                          <>No estimate set · {cat.actual}d actual</>
+                        )}
+                      </span>
+                    </div>
+                    <div style={{position:"relative",height:11,background:T.border,borderRadius:999,overflow:"hidden"}}>
+                      <div style={{position:"absolute",inset:0,width:`${actPct}%`,background:over?T.red:cat.color,borderRadius:999,opacity:.9,transition:"width .8s cubic-bezier(.22,1,.36,1)"}}/>
+                      {cat.est!=null && (
+                        <div style={{position:"absolute",top:-2,bottom:-2,left:`${estPct}%`,width:2,background:T.text,opacity:.65}} title={`Estimate: ${cat.est}d`}/>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{fontSize:10,color:T.textMuted,marginTop:12,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{display:"inline-block",width:2,height:10,background:T.text,opacity:.65}}/> vertical marker = estimated days
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Activity Breakdown (day-type composition, animated & hoverable) ── */}
+      {reports.length > 0 && (() => {
+        const dayStats = computeGroupStats(reports);
+        return (
+          <div className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:18,padding:"20px 24px",marginBottom:16,boxShadow:T.shadow}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:18,color:T.text}}>📊 Activity Breakdown</div>
+                <div style={{fontSize:12,color:T.textMuted,marginTop:2}}>How site days were spent — hover the chart for details</div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+                {dayStats.flaggedCount>0 && (
+                  <span style={{fontSize:12,color:T.red,fontWeight:700,background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:8,padding:"5px 12px"}}>
+                    ⚠ {dayStats.flaggedCount} flagged record{dayStats.flaggedCount!==1?"s":""}
+                  </span>
+                )}
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:24,fontWeight:800,color:pctColor(dayStats.utilization)}}>{dayStats.utilization}%</div>
+                  <div style={{fontSize:10,color:T.textMuted,fontWeight:700}}>UTILIZATION</div>
+                </div>
+              </div>
+            </div>
+            <ActivityDonutChart counts={dayStats.counts} totalDays={dayStats.totalDays} size={200} strokeWidth={26}/>
+          </div>
+        );
+      })()}
+
+      {/* ── Permit Hours & Utilization report (per rig, this project only) ── */}
+      {reports.length > 0 && (() => {
+        const rigGroups = {};
+        reports.forEach(r => {
+          const rig = r.rig || "Unassigned";
+          (rigGroups[rig] = rigGroups[rig] || []).push(r);
+        });
+        const rigNames = Object.keys(rigGroups).sort();
+        const projCrossingsForEst = (data.crossings||[]).filter(c=>c.project===proj.project && !c._deleted);
+        const utilRows = rigNames.map(rig => {
+          const rigReports = rigGroups[rig];
+          const s = computeGroupStats(rigReports);
+          const rigCrossings = projCrossingsForEst.filter(c=>c.rig===rig);
+          const hasEst = rigCrossings.some(c=>c.estimates && ESTIMATABLE_CATEGORIES.some(cat=>c.estimates[cat.key]!=null));
+          const estimatedDays = hasEst ? ESTIMATABLE_CATEGORIES.reduce((catSum,cat)=>
+            catSum + rigCrossings.reduce((sum,c)=>sum+(c.estimates && c.estimates[cat.key]!=null ? Number(c.estimates[cat.key]) : 0), 0), 0) : null;
+          const plannedActual = ESTIMATABLE_CATEGORIES.reduce((sum,cat)=>sum+rigReports.filter(r=>classifyDay(r)===cat.key).length, 0);
+          const variance = estimatedDays!=null ? plannedActual - estimatedDays : null;
+          return { rig, totalDays: s.totalDays, hoursWorked: Math.round(s.workedHours*10)/10, capacityHours: s.capacityHours, utilization: s.utilization, estimatedDays, variance };
+        });
+
+        const exportProjectUtilization = () => {
+          exportToExcel(utilRows.map(r => ({
+            "Project": proj.project, "Rig / Spread": r.rig,
+            "Total Days": r.totalDays, "Estimated Days": r.estimatedDays!=null?r.estimatedDays:"", "Variance": r.variance!=null?r.variance:"",
+            "Hours Worked": r.hoursWorked,
+            "Capacity Hours": r.capacityHours, "Utilization %": r.utilization,
+          })), `${proj.project.replace(/\s+/g,"_")}_Utilization_${new Date().toISOString().slice(0,10)}`);
+        };
+
+        const exportProjectPermitDetail = () => {
+          const sorted = [...reports].sort((a,b)=>
+            (a.rig||"").localeCompare(b.rig||"") || (a.crossing||"").localeCompare(b.crossing||"") || (a.date||"").localeCompare(b.date||"")
+          );
+          exportToExcel(sorted.map(r => ({
+            "Project": proj.project, "Rig / Spread": r.rig||"", "Crossing": r.crossing||"",
+            "Date": r.date||"", "Work Profile": r.profile||"", "Activity": r.activity||"",
+            "Permit Received": r.permitReceived||"", "Permit Hours": r.permitHours!=null?String(r.permitHours):"",
+            "Standby Reason": r.standbyReason||"", "Progress Today (m)": r.progressToday!=null?String(r.progressToday):"",
+          })), `${proj.project.replace(/\s+/g,"_")}_Permit_Hours_Detail_${new Date().toISOString().slice(0,10)}`);
+        };
+
+        return (
+          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,overflow:"hidden",marginBottom:16}}>
+            <div style={{padding:"12px 18px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:15}}>⏱</span>
+              <span style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:T.text}}>Permit Hours &amp; Utilization</span>
+              <div style={{marginLeft:"auto",display:"flex",gap:8,flexWrap:"wrap"}}>
+                <button onClick={exportProjectPermitDetail}
+                  style={{background:`${T.purple}18`,border:`1px solid ${T.purple}44`,color:T.purple,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                  ⬇ Export Daily Detail
+                </button>
+                <button onClick={exportProjectUtilization}
+                  style={{background:`${T.blue}18`,border:`1px solid ${T.blue}44`,color:T.blue,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+                  ⬇ Export Summary
+                </button>
+              </div>
+            </div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12.5}}>
+                <thead>
+                  <tr style={{background:T.card2}}>
+                    {["Rig / Spread","Days","Est. Days","Variance","Hours Worked","Capacity","Utilization"].map(h=>(
+                      <th key={h} style={{padding:"8px 12px",textAlign:h==="Rig / Spread"?"left":"right",fontWeight:700,fontSize:10.5,color:T.textMuted,borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {utilRows.map((r,i)=>(
+                    <tr key={r.rig} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?T.card:T.card2}}>
+                      <td style={{padding:"7px 12px",color:T.textSub,fontWeight:600}}>🔩 {r.rig}</td>
+                      <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.totalDays}</td>
+                      <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.estimatedDays!=null?`${r.estimatedDays}d`:"—"}</td>
+                      <td style={{padding:"7px 12px",textAlign:"right"}}>
+                        {r.variance!=null ? (
+                          <span style={{fontWeight:700,color:r.variance<=0?T.green:T.red}}>{r.variance<=0?`${Math.abs(r.variance)}d under`:`+${r.variance}d`}</span>
+                        ) : <span style={{color:T.textMuted}}>—</span>}
+                      </td>
+                      <td style={{padding:"7px 12px",color:T.textSub,textAlign:"right"}}>{r.hoursWorked}h</td>
+                      <td style={{padding:"7px 12px",color:T.textMuted,textAlign:"right"}}>{r.capacityHours}h</td>
+                      <td style={{padding:"7px 12px",textAlign:"right"}}>
+                        <span style={{fontWeight:700,color:pctColor(r.utilization)}}>{r.utilization}%</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Breakdown by Rig / Location (only when project has multiple rigs) ── */}
+      {reports.length > 0 && (() => {
+        const rigGroups = {};
+        reports.forEach(r => {
+          const rig = r.rig || "Unassigned";
+          (rigGroups[rig] = rigGroups[rig] || []).push(r);
+        });
+        const rigNames = Object.keys(rigGroups).sort();
+        if (rigNames.length <= 1) return null; // single-rig projects already covered by the panel above
+
+        return (
+          <div style={{marginBottom:16}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:T.text,marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+              🔩 Breakdown by Rig / Location
+              <span style={{fontSize:11,color:T.textMuted,fontWeight:500,fontFamily:"inherit"}}>{rigNames.length} rigs</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))",gap:14}}>
+              {rigNames.map((rig,i) => {
+                const rigReports = rigGroups[rig];
+                const rs = computeGroupStats(rigReports);
+                return (
+                  <div key={rig} className="fade-up" style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"18px 20px",boxShadow:T.shadow,animationDelay:`${i*.06}s`}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:T.gold}}>🔩 {rig}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        {rs.flaggedCount>0 && (
+                          <span style={{fontSize:11,color:T.red,fontWeight:700,background:T.redDim,border:`1px solid ${T.red}44`,borderRadius:6,padding:"3px 8px"}}>
+                            ⚠ {rs.flaggedCount}
+                          </span>
+                        )}
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontSize:18,fontWeight:800,color:pctColor(rs.utilization)}}>{rs.utilization}%</div>
+                          <div style={{fontSize:9,color:T.textMuted,fontWeight:700}}>UTIL</div>
+                        </div>
+                      </div>
+                    </div>
+                    <ActivityDonutChart counts={rs.counts} totalDays={rs.totalDays} size={160} strokeWidth={20}/>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Timeline / Duration Visual ── */}
+      {proj.startDate && (proj.estEndDate || proj.actualEndDate) && (
+        <ProjectDurationChart proj={proj} reports={reports} />
+      )}
+      </> /* end detailTab===analysis */}
+
     </div>
   );
 }
