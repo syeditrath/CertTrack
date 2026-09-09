@@ -200,7 +200,7 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   const [crossingPanelRig, setCrossingPanelRig] = useState("");
   const [crossingPanelName, setCrossingPanelName] = useState("");
   const [msAuthed, setMsAuthed] = useState(false);
-  const docs     = live(data.projectDocs);
+  const docs     = live(data.projectDocs).filter(d=>!d._deleted);
   const projects = data.projects    || [];
   const cur      = PD_TABS.find(t=>t.id===subTab);
   const counts   = Object.fromEntries(PD_TABS.map(t=>[t.id,
@@ -303,12 +303,12 @@ function ProjectDocs({data,setData,showToast,onManageProjects,isAdmin}) {
   };
 
   // ── Rig management ──────────────────────────────────────────────────
-  const rigs = live(data.rigs);
+  const rigs = live(data.rigs).filter(r=>!r._deleted);
   const analysisMap = Object.fromEntries(
   (data.projectAnalysis || []).map(p => [p.project, p.status || "Active"])
 );
   const STATUS_OPTS = ["All", "In Progress", "Not Started", "On Hold", "Completed", "Cancelled"];
-  const crossings = live(data.crossings);
+  const crossings = live(data.crossings).filter(c=>!c._deleted);
   const projRigs = selectedProject ? rigs.filter(r=>r.project===selectedProject) : [];
   const projCrossings = selectedProject ? crossings.filter(c=>c.project===selectedProject) : [];
 
